@@ -77,11 +77,58 @@
 
   /* Motion: one ease for the authored moments */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Added for the UI primitives (components/ui). */
+  --color-text-muted: #6b655d;
+  --color-surface-hover: #ede8e0;
+  --color-scrim-soft: rgb(28 26 23 / 0.42);
+  --color-match-pill: rgb(28 26 23 / 0.55);
+  --color-photo-shade: rgb(15 12 9 / 0.82);
+  --color-glass-strong: rgb(241 237 230 / 0.72);
+
+  --text-ui: 14px;
+  --text-ui--line-height: 18px;
+  --text-ui-sm: 13px;
+  --text-ui-sm--line-height: 17px;
+  --text-meta: 12px;
+  --text-meta--line-height: 16px;
+  --text-micro: 11px;
+  --text-micro--line-height: 14px;
+  --text-action: 15px;
+  --text-action--line-height: 20px;
+  --text-empty: 30px;
+  --text-empty--line-height: 36px;
+  --text-empty--letter-spacing: -0.02em;
+  --text-initials: 40px;
+  --text-initials--line-height: 40px;
+  --text-section: 34px;
+  --text-section--line-height: 40px;
+  --text-section--letter-spacing: -0.025em;
+
+  --radius-row: 14px;
+  --radius-photo: 24px;
+  --radius-menu: 24px;
+  --radius-dock: 30px;
+  --radius-panel: 32px;
+
+  --shadow-card: 0 10px 30px rgb(22 19 15 / 0.12);
+  --shadow-menu: 0 24px 48px rgb(28 26 23 / 0.28);
+  --shadow-dock: 0 24px 60px rgb(22 19 15 / 0.22), 0 2px 6px rgb(22 19 15 / 0.08);
+  --shadow-panel: 0 30px 90px rgb(22 19 15 / 0.35);
+  --shadow-pin: 0 3px 8px rgb(28 26 23 / 0.14);
+  --shadow-pin-photo: 0 6px 16px rgb(28 26 23 / 0.22);
 }
 
 :root {
   color-scheme: light;
   --glass-blur: 18px;
+  /*
+    Backdrop filters go through custom properties: the CSS pipeline rewrites a
+    literal backdrop-filter to only -webkit-backdrop-filter, which Chrome ignores.
+  */
+  --glass-filter: blur(var(--glass-blur));
+  --glass-dock-filter: blur(26px) saturate(160%);
+  --glass-control-filter: blur(14px);
 }
 
 html,
@@ -111,6 +158,23 @@ body {
   border-radius: 4px;
 }
 
+/* Keep pill and card shapes when focused: the 4px above is for bare text links. */
+[class*="rounded"]:focus-visible {
+  border-radius: revert-layer;
+}
+
+/*
+  Let a component swap the ring for its own focus style (focus-visible:outline-none
+  plus a fill or an amber underline). The rule above is unlayered, so it would
+  otherwise beat the utility.
+*/
+[class*="outline-none"]:focus-visible {
+  outline: revert-layer;
+}
+[class*="outline-offset"]:focus-visible {
+  outline-offset: revert-layer;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: rgb(28 26 23 / 0.2) transparent;
@@ -138,8 +202,8 @@ textarea {
 
 @utility glass {
   background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
 }
 
 @utility film {
@@ -180,4 +244,34 @@ textarea {
   .rise-in {
     animation: none;
   }
+}
+
+/* Added for the UI primitives (components/ui). */
+
+/* The bottom chat dock: stronger frost than `glass`, as in the designs. */
+@utility glass-dock {
+  background: var(--color-glass);
+  backdrop-filter: var(--glass-dock-filter);
+  -webkit-backdrop-filter: var(--glass-dock-filter);
+}
+
+/* Small frosted controls that sit on photos or the map (Board / Map toggle). */
+@utility glass-control {
+  background: var(--color-glass-strong);
+  backdrop-filter: var(--glass-control-filter);
+  -webkit-backdrop-filter: var(--glass-control-filter);
+}
+
+/* Darkens the lower part of a photo so white type reads on it. */
+@utility photo-shade {
+  background-image: linear-gradient(180deg, transparent 40%, var(--color-photo-shade) 100%);
+}
+
+/*
+  A true half circle on top at any width. `arch-top` uses 999px radii, which
+  the browser scales down together with the 24px bottom corners. This one
+  reads the width from the nearest container (`@container` on the parent).
+*/
+@utility arch-top-fluid {
+  border-radius: 50cqi 50cqi 24px 24px;
 }

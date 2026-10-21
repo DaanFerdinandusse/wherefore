@@ -13,7 +13,7 @@ const bodoni = Bodoni_Moda({
 
 const hanken = Hanken_Grotesk({
   subsets: ["latin"],
-  weight: ["300", "400", "500"],
+  weight: ["300", "400", "500", "600"],
   variable: "--font-hanken",
   display: "swap",
 });
