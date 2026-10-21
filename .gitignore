@@ -35,3 +35,7 @@ next-env.d.ts
 
 # design scratch
 /.impeccable/
+/.swc
+
+# workflow devkit local world
+/.workflow-data/

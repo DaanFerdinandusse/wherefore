@@ -13,10 +13,12 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "copy:audit": "sh scripts/copy-audit.sh"
+    "copy:audit": "sh scripts/copy-audit.sh",
+    "codex:import": "tsx --conditions=react-server scripts/codex-import-auth.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.99",
+    "@ai-sdk/react": "^4.0.152",
     "@ai-sdk/workflow": "^2.0.80",
     "@neondatabase/auth": "^0.7.0-beta",
     "@neondatabase/serverless": "^1.2.0",
