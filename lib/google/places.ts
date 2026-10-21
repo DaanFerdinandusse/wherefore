@@ -24,10 +24,18 @@ export const BASIC_FIELDS = [
   "location",
 ] as const;
 
+// Field mask tiers (Place Details, Places API New): BASIC_FIELDS stay within
+// Essentials and Pro; rating, userRatingCount, both opening hours fields,
+// websiteUri, nationalPhoneNumber and priceLevel are Enterprise; reviews and
+// editorialSummary are Enterprise + Atmosphere. Only the full tier pays for
+// those.
 export const FULL_FIELDS = [
   ...BASIC_FIELDS,
   "rating",
   "userRatingCount",
+  // currentOpeningHours knows today's exceptions (holidays), so it decides
+  // "open now"; regularOpeningHours gives the usual weekly table.
+  "currentOpeningHours",
   "regularOpeningHours",
   "websiteUri",
   "nationalPhoneNumber",
@@ -62,6 +70,9 @@ export function createPlaceDetails(deps: { fetch?: typeof fetch; now?: () => num
   const doFetch = deps.fetch ?? fetch;
   const now = deps.now ?? Date.now;
   const cache = new Map<string, { value: GooglePlaceDetails; expiresAt: number }>();
+  // Concurrent misses for the same place and tier share one request (within
+  // this instance).
+  const inflight = new Map<string, Promise<GooglePlaceDetails>>();
 
   function fresh(key: string): GooglePlaceDetails | undefined {
     const entry = cache.get(key);
@@ -78,7 +89,16 @@ export function createPlaceDetails(deps: { fetch?: typeof fetch; now?: () => num
     // A full answer also covers a basic request.
     const hit = fresh(`${placeId}:${tier}`) ?? (tier === "basic" ? fresh(`${placeId}:full`) : undefined);
     if (hit) return hit;
+    const cacheKey = `${placeId}:${tier}`;
+    const pending = inflight.get(cacheKey) ?? (tier === "basic" ? inflight.get(`${placeId}:full`) : undefined);
+    if (pending) return pending;
 
+    const request = load(placeId, tier).finally(() => inflight.delete(cacheKey));
+    inflight.set(cacheKey, request);
+    return request;
+  };
+
+  async function load(placeId: string, tier: DetailsTier): Promise<GooglePlaceDetails> {
     const key = googleServerKey();
     const response = await doFetch(`${PLACES_API_BASE}/places/${encodeURIComponent(placeId)}?languageCode=en`, {
       headers: { "X-Goog-Api-Key": key, "X-Goog-FieldMask": fieldMask(tier) },
@@ -97,7 +117,7 @@ export function createPlaceDetails(deps: { fetch?: typeof fetch; now?: () => num
     }
     cache.set(`${placeId}:${tier}`, { value, expiresAt: now() + CACHE_TTL_MS });
     return value;
-  };
+  }
 
   return Object.assign(placeDetails, { clearCache: () => cache.clear() });
 }
@@ -136,8 +156,8 @@ export function normalizeDetails(raw: RawPlaceDetails, tier: DetailsTier): Googl
     Object.assign(details, {
       rating: raw.rating,
       ratingCount: raw.userRatingCount,
-      openNow: raw.regularOpeningHours?.openNow,
-      openingHours: raw.regularOpeningHours?.weekdayDescriptions,
+      openNow: raw.currentOpeningHours?.openNow ?? raw.regularOpeningHours?.openNow,
+      openingHours: raw.regularOpeningHours?.weekdayDescriptions ?? raw.currentOpeningHours?.weekdayDescriptions,
       website: raw.websiteUri,
       phone: raw.nationalPhoneNumber,
       priceLevel: raw.priceLevel ? PRICE_LEVELS[raw.priceLevel] : undefined,

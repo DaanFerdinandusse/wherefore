@@ -29,6 +29,11 @@ export const reviewSchema = z.looseObject({
   googleMapsUri: z.string().optional(),
 });
 
+const openingHoursSchema = z.looseObject({
+  openNow: z.boolean().optional(),
+  weekdayDescriptions: z.array(z.string()).optional(),
+});
+
 export const placeDetailsSchema = z.looseObject({
   id: z.string(),
   displayName: localizedText.optional(),
@@ -42,12 +47,8 @@ export const placeDetailsSchema = z.looseObject({
   // full tier
   rating: z.number().optional(),
   userRatingCount: z.number().optional(),
-  regularOpeningHours: z
-    .looseObject({
-      openNow: z.boolean().optional(),
-      weekdayDescriptions: z.array(z.string()).optional(),
-    })
-    .optional(),
+  currentOpeningHours: openingHoursSchema.optional(),
+  regularOpeningHours: openingHoursSchema.optional(),
   websiteUri: z.string().optional(),
   nationalPhoneNumber: z.string().optional(),
   priceLevel: z.string().optional(),

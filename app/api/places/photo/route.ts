@@ -6,7 +6,8 @@ import { googleErrorResponse } from "@/lib/google/http";
 
 // Google photo proxy: GET /api/places/photo?name=places/.../photos/...&w=800.
 // Keeps the server key off the client and lets the browser cache the bytes for
-// an hour. Photo names are passed through, never stored.
+// an hour. Width is capped at 1600 px, the body is streamed through (never
+// buffered) and refused above 4 MB. Photo names are passed through, never stored.
 
 export async function GET(request: NextRequest) {
   await requireUser();
