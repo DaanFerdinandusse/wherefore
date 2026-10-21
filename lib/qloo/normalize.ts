@@ -297,12 +297,18 @@ export function displayScore(affinity: number, setAffinities: readonly number[])
 
 // ------------------------------------------------------------ explainability
 
+/** Entity id of the one entry that holds every driver without a name. */
+export const OTHER_FAVORITES_ID = "other";
+export const OTHER_FAVORITES_NAME = "Other favorites";
+
 /**
  * "Because they loved": each favorite's share of one result, as integer
  * percentages that sum to exactly 100 (largest remainder rounding), biggest
- * first. Inputs that are not in `favorites` (no name to show) are left out and
- * the rest are rescaled. Empty when the API returned no explainability (for
- * example with tag signals only).
+ * first. Inputs that are not in `favorites` (no name to show) are never
+ * rescaled away: together they become one "Other favorites" entry, listed
+ * last, so a named share is never inflated. Empty when no driver has a name,
+ * or when the API returned no explainability (for example with tag signals
+ * only).
  */
 export function explainabilityFor(
   result: { signalScores: readonly SignalScore[] },
@@ -310,26 +316,34 @@ export function explainabilityFor(
 ): Explainability {
   const names = new Map(favorites.map((f) => [f.entityId, f.name]));
   const merged = new Map<string, number>();
+  let unnamed = 0;
   for (const { entityId, score } of result.signalScores) {
-    if (!names.has(entityId) || !(score > 0)) continue;
-    merged.set(entityId, (merged.get(entityId) ?? 0) + score);
+    if (!(score > 0)) continue;
+    if (names.has(entityId)) merged.set(entityId, (merged.get(entityId) ?? 0) + score);
+    else unnamed += score;
   }
-  const total = [...merged.values()].reduce((sum, s) => sum + s, 0);
-  if (total <= 0) return [];
+  if (merged.size === 0) return [];
+  const total = [...merged.values()].reduce((sum, s) => sum + s, 0) + unnamed;
 
-  const rows = [...merged.entries()].map(([entityId, score]) => {
+  const toRow = (entityId: string, score: number) => {
     const exact = (score / total) * 100;
     return { entityId, exact, share: Math.floor(exact) };
-  });
-  let left = 100 - rows.reduce((sum, r) => sum + r.share, 0);
-  for (const row of [...rows].sort((a, b) => b.exact - Math.floor(b.exact) - (a.exact - Math.floor(a.exact)))) {
+  };
+  const rows = [...merged.entries()].map(([entityId, score]) => toRow(entityId, score));
+  const other = unnamed > 0 ? toRow(OTHER_FAVORITES_ID, unnamed) : undefined;
+  const all = other ? [...rows, other] : rows;
+  let left = 100 - all.reduce((sum, r) => sum + r.share, 0);
+  for (const row of [...all].sort((a, b) => b.exact - Math.floor(b.exact) - (a.exact - Math.floor(a.exact)))) {
     if (left <= 0) break;
     row.share += 1;
     left -= 1;
   }
-  return rows
+  const named = rows
     .sort((a, b) => b.share - a.share || b.exact - a.exact)
     .map(({ entityId, share }) => ({ entityId, name: names.get(entityId) ?? "", share }));
+  return other && other.share > 0
+    ? [...named, { entityId: OTHER_FAVORITES_ID, name: OTHER_FAVORITES_NAME, share: other.share }]
+    : named;
 }
 
 /**
@@ -438,32 +452,67 @@ function countryNameOfPlace(result: PlaceResult): string | undefined {
   return typeof name === "string" ? name : undefined;
 }
 
-/**
- * Are the results where the trip is? The API reports `query.localities` only
- * for text locations; with a POINT it does not, so the answer comes from the
- * results themselves: their country (when the destination has one) and their
- * distance from the point.
- */
-export function checkLocality(
-  destination: Destination,
-  results: readonly PlaceResult[],
-  localityLabel?: string,
-): LocalityCheck {
-  const requested = destination.disambiguation ?? destination.name;
-  if (results.length === 0) return { requested, resolved: localityLabel ?? "no results", ok: true };
+/** Results farther than this many destination radii are dropped. */
+export const MAX_DISTANCE_FACTOR = 1.5;
+/** checkLocality wants 80% of the kept results within this many radii. */
+const NEAR_FACTOR = 1.25;
 
+/**
+ * Meters from the destination point: the API's own `query.distance` when it
+ * reports one, otherwise the haversine distance from the place's coordinates.
+ * Null when there is neither.
+ */
+export function distanceFromDestination(
+  destination: Pick<Destination, "lat" | "lon">,
+  place: Pick<NormalizedPlace, "lat" | "lon">,
+  apiDistanceM?: number | null,
+): number | null {
+  if (typeof apiDistanceM === "number" && Number.isFinite(apiDistanceM)) return apiDistanceM;
+  if (place.lat === null || place.lon === null) return null;
+  return haversineM(destination.lat, destination.lon, place.lat, place.lon);
+}
+
+/** True when a result is too far from the destination to show (more than 1.5x
+ *  its radius). A result without any distance or coordinates is kept. */
+export function isTooFar(destination: Pick<Destination, "radiusM">, distanceM: number | null): boolean {
+  return distanceM !== null && distanceM > destination.radiusM * MAX_DISTANCE_FACTOR;
+}
+
+/** The most common "city, country" among places, for "results are in X". */
+export function majorityLocalityLabel(results: readonly PlaceResult[]): string | undefined {
   const counts = new Map<string, number>();
   for (const r of results) {
     const label = [r.place.city, countryNameOfPlace(r)].filter(Boolean).join(", ");
     if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
   }
-  const majority = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const resolved = localityLabel ?? majority ?? "unknown";
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+}
 
+/**
+ * Are the results where the trip is? The API reports `query.localities` only
+ * for text locations; with a POINT it does not, so the answer comes from the
+ * results themselves: their country (when the destination has one) and their
+ * distance from the point (computed from coordinates when the API gives none;
+ * a result with neither does not count as near). `dropped` is how many results
+ * findPlaces already removed for being too far.
+ */
+export function checkLocality(
+  destination: Destination,
+  results: readonly PlaceResult[],
+  localityLabel?: string,
+  dropped = 0,
+): LocalityCheck {
+  const requested = destination.disambiguation ?? destination.name;
+  if (results.length === 0) return { requested, resolved: localityLabel ?? "no results", ok: true, dropped };
+
+  const resolved = localityLabel ?? majorityLocalityLabel(results) ?? "unknown";
   const code = destination.countryCode?.toUpperCase();
   const countryOk = !code || results.filter((r) => countryCodeOfPlace(r) === code).length * 2 >= results.length;
-  const limit = destination.radiusM * 1.25;
-  const near = results.filter((r) => r.distanceM === null || r.distanceM <= limit).length;
+  const limit = destination.radiusM * NEAR_FACTOR;
+  const near = results.filter((r) => {
+    const distance = distanceFromDestination(destination, r.place, r.distanceM);
+    return distance !== null && distance <= limit;
+  }).length;
   const radiusOk = near >= results.length * 0.8;
-  return { requested, resolved, ok: countryOk && radiusOk };
+  return { requested, resolved, ok: countryOk && radiusOk, dropped };
 }

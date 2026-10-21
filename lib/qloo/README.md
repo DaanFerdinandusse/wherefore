@@ -40,15 +40,25 @@ Not listed on purpose: `filter.location.query` (wrong city for ambiguous names),
 
 ## Cache and retries
 
-Key: `qloo:` + sha256 of the endpoint and its sorted serialized params. TTLs: insights 24 h, search 7 d, tags 7 d, entities 30 d. `akas` (names in 60 languages) are stripped before caching. A cached body that fails the current schema is refetched. Cache read or write failures log and fall through. One retry after 400 ms on 5xx or a dropped connection; never on 4xx or a timeout (20 s). At most 2 requests in flight per process; bulk callers (the seed) still go sequentially.
+Key: `qloo:` + sha256 of `JSON.stringify([endpoint, pairs])`, pairs sorted by key (JSON escapes every value, so `a&take=3` cannot collide with two params). TTLs: insights 24 h, search 7 d, tags 7 d, entities 30 d; an answer with zero results is kept 60 s at most on any endpoint (a cold upstream or a rate limit can return an empty page). `akas` (names in 60 languages) are stripped before caching. A cached body that fails the current schema is refetched. Cache read or write failures log and fall through. Concurrent identical requests in one instance share one cache read and one fetch; the joiners' call records say `cached: true` (other instances still meet at the table). One retry after 400 ms on 5xx or a dropped connection; never on 4xx or a timeout (20 s). At most 2 requests in flight per process; bulk callers (the seed) still go sequentially.
 
 ## The geocoder fix
 
-`filter.location.query=Copenhagen` returns Copenhagen, New York. So the destination picker uses `resolveLocality` (candidates with disambiguation, lat/lon, country code from the ancestors, and a radius from the boundary's bounding box, 2 to 25 km), and `findPlaces` always sends `POINT(lon lat)` plus radius. With a POINT the API returns no `query.localities`, so `localityCheck` reads the results: `ok` is false when fewer than half are in the destination's country or fewer than 80% are within 1.25x the radius. When none is in the country, `findPlaces` throws `QlooLocalityMismatchError`.
+`filter.location.query=Copenhagen` returns Copenhagen, New York. So the destination picker uses `resolveLocality` (candidates with disambiguation, lat/lon, country code from the ancestors, and a radius from the boundary's bounding box, 2 to 25 km), and `findPlaces` always sends `POINT(lon lat)` plus radius. With a POINT the API returns no `query.localities`, so `findPlaces` checks every result itself: the distance is `query.distance`, or the haversine distance from the destination point when the API gives none, and a result farther than 1.5x the radius is dropped (another city in the same country no longer passes). `localityCheck.dropped` says how many. `ok` is false when fewer than half of the kept results are in the destination's country or fewer than 80% are within 1.25x the radius (a result with neither distance nor coordinates does not count as near). Results came back but none survived: `findPlaces` throws `QlooLocalityMismatchError`. `PlaceResult.distanceM` carries the computed distance too.
 
 ## Fallbacks
 
-Fewer than 5 results (or `take` if smaller): drop `filter.tags`, then the price cap. `loosened` lists what was dropped (`"tags"`, `"price"`). Results from stricter steps stay in the set; the set is re-ranked by affinity and capped at `take`. The price filter drops places without a `price_level` (museums, hotels), so when every tag is a see or stay category (`isUnpricedTagFilter`), `findPlaces` does not apply `priceMax` at all, and `"price"` appears in `loosened` only when a cap was applied and then dropped.
+Fewer than 5 kept results (or `take` if smaller): drop `filter.tags`, then the price cap. Strict results always come first, sorted by affinity; each looser step only fills the slots that are left, so a loosened result never displaces a strict one even with a higher affinity. Scores stay affinity-based over the final set.
+
+`loosened` lists what was not applied as asked:
+
+| Value | Meaning | UI copy |
+|---|---|---|
+| `"tags"` | too few results, `filter.tags` dropped | "Widened beyond the category" |
+| `"price"` | too few results, price cap dropped | "Price cap dropped to find enough places" |
+| `"price_not_applicable"` | `priceMax` asked on a see or stay ask; never sent | "Price cap not applied to museums and hotels" |
+
+The price filter drops places without a `price_level` (museums, hotels), so when every tag is a see or stay category (`isUnpricedTagFilter`), `findPlaces` does not send `priceMax` and returns `"price_not_applicable"` first in `loosened`, whether or not the tags were dropped later.
 
 ## The category re-check
 
@@ -65,7 +75,7 @@ Affinities bunch (0.79 to 0.80 for a top 10), so `displayScore` is rank-based wi
     { "entity_id": "55E6BA87-...", "score": 0.2584 } ] } }
 ```
 
-`explainabilityFor(result, favorites)` turns that into `[{ entityId, name, share }]`, integer shares summing to 100 (largest remainder), biggest first. Tag-only signals return no explainability, so the card shows no drivers.
+`explainabilityFor(result, favorites)` turns that into `[{ entityId, name, share }]`, integer shares summing to 100 (largest remainder), biggest first. Signals without a name in `favorites` are never rescaled away: together they are one `{ entityId: "other" (OTHER_FAVORITES_ID), name: "Other favorites", share }` entry, listed last. No named driver at all, or tag-only signals (no explainability): an empty array, so the card shows no drivers.
 
 ## Normalized place
 

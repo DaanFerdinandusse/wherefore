@@ -60,7 +60,7 @@ describe("findPlaces", () => {
     expect(out.results[0].category).toBe("eat");
     expect(out.calls).toHaveLength(1);
     expect(out.calls[0]).toMatchObject({ endpoint: "/v2/insights", count: 6, cached: false, tripId: "trip-1" });
-    expect(out.localityCheck).toEqual({ requested: "Lisboa, Portugal", resolved: "Lisbon, Portugal", ok: true });
+    expect(out.localityCheck).toEqual({ requested: "Lisboa, Portugal", resolved: "Lisbon, Portugal", ok: true, dropped: 0 });
   });
 
   it("drops the tags, then the price cap, when fewer than 5 come back", async () => {
@@ -79,11 +79,9 @@ describe("findPlaces", () => {
     expect(urls[1].searchParams.has("filter.tags")).toBe(false);
     expect(urls[1].searchParams.get("filter.price_level.max")).toBe("2");
     expect(urls[2].searchParams.has("filter.price_level.max")).toBe(false);
-    // Strict results stay in the set; the set is ranked by affinity and capped at take.
+    // Strict results come first, then each looser step fills what is left.
     const ids = out.results.map((r) => r.place.entityId);
-    expect(ids.slice(0, 2)).toEqual(["strict0", "mid0"]);
-    expect(ids).toContain("strict1");
-    expect(ids).toHaveLength(8);
+    expect(ids).toEqual(["strict0", "strict1", "mid0", "loose0", "loose1", "loose2", "loose3", "loose4"]);
     expect(out.calls).toHaveLength(3);
   });
 
@@ -113,9 +111,34 @@ describe("findPlaces", () => {
         { client },
       );
       expect(urls.every((u) => !u.searchParams.has("filter.price_level.max"))).toBe(true);
-      expect(out.loosened).toEqual(["tags"]);
+      expect(out.loosened).toEqual(["price_not_applicable", "tags"]);
       expect(urls).toHaveLength(2);
     }
+  });
+
+  it("reports a price cap on a see or stay ask as not applied, even with enough results", async () => {
+    const { client } = clientFor(() => ({ results: { entities: entities(6, "strict") } }));
+    const out = await findPlaces(
+      { destination: lisbon, signals, tags: CATEGORY_FILTER_TAGS.stay, priceMax: 2, take: 6 },
+      { client },
+    );
+    expect(out.loosened).toEqual(["price_not_applicable"]);
+    const plain = await findPlaces({ destination: lisbon, signals, tags: CATEGORY_FILTER_TAGS.stay, take: 6 }, { client });
+    expect(plain.loosened).toEqual([]);
+  });
+
+  it("never lets a looser result displace a strict one, even with a higher affinity", async () => {
+    const { client } = clientFor((url) => {
+      if (url.searchParams.has("filter.tags")) {
+        return { results: { entities: entities(3, "strict").map((e) => ({ ...e, query: { ...e.query, affinity: 0.5 } })) } };
+      }
+      return { results: { entities: entities(10, "loose") } };
+    });
+    const out = await findPlaces(
+      { destination: lisbon, signals, tags: ["urn:tag:category:place:wine_bar"], take: 5 },
+      { client },
+    );
+    expect(out.results.map((r) => r.place.entityId)).toEqual(["strict0", "strict1", "strict2", "loose0", "loose1"]);
   });
 
   it("still applies the price cap when an ask mixes in a priced category", async () => {
@@ -127,11 +150,42 @@ describe("findPlaces", () => {
     expect(urls[0].searchParams.get("filter.price_level.max")).toBe("2");
   });
 
-  it("throws when no result is in the destination's country", async () => {
-    const { client } = clientFor(() => ({ results: { entities: entities(5, "strict") } }));
-    await expect(
-      findPlaces({ destination: { ...lisbon, name: "Copenhagen", countryCode: "DK" }, signals, take: 5 }, { client }),
-    ).rejects.toBeInstanceOf(QlooLocalityMismatchError);
+  it("throws when results came back but none is near the destination", async () => {
+    // The fixture places are in Lisbon; the trip is in Copenhagen.
+    const copenhagen = { name: "Copenhagen", countryCode: "DK", lat: 55.6761, lon: 12.5683, radiusM: 8000 };
+    const { client } = clientFor(() => ({
+      results: { entities: entities(5, "strict").map((e) => ({ ...e, query: { ...e.query, distance: undefined } })) },
+    }));
+    await expect(findPlaces({ destination: copenhagen, signals, take: 5 }, { client })).rejects.toBeInstanceOf(
+      QlooLocalityMismatchError,
+    );
+  });
+
+  it("drops far results in the same country, computing the distance when the API gives none", async () => {
+    // Porto results for a Lisbon trip: same country, about 275 km away, no distance.
+    const porto = { lat: 41.1496, lon: -8.611 };
+    const { client, urls } = clientFor((url) => {
+      if (!url.searchParams.has("filter.tags")) return { results: { entities: entities(5, "loose") } };
+      const near = entities(3, "strict");
+      const far = entities(2, "far").map((e) => ({
+        ...e,
+        location: { ...e.location, ...porto },
+        query: { ...e.query, distance: undefined, affinity: 0.9 },
+      }));
+      return { results: { entities: [...far, ...near] } };
+    });
+    const out = await findPlaces(
+      { destination: lisbon, signals, tags: ["urn:tag:category:place:wine_bar"], take: 8 },
+      { client },
+    );
+    const ids = out.results.map((r) => r.place.entityId);
+    expect(ids.some((id) => id.startsWith("far"))).toBe(false);
+    expect(ids.slice(0, 3)).toEqual(["strict0", "strict1", "strict2"]);
+    // Only 3 near strict results, so the tags were dropped to fill the set.
+    expect(urls).toHaveLength(2);
+    expect(out.loosened).toEqual(["tags"]);
+    expect(out.localityCheck).toMatchObject({ ok: true, dropped: 2 });
+    expect(out.results.every((r) => r.distanceM !== null)).toBe(true);
   });
 });
 
@@ -153,7 +207,8 @@ describe("scoreEntities", () => {
     expect(urls[0].searchParams.get("filter.results.entities")).toBe(ids.join(","));
     expect(urls[0].searchParams.get("take")).toBe(String(ids.length));
     expect(scores[0].affinity).toBeGreaterThanOrEqual(scores[1].affinity);
-    expect(scores[0].explainability.map((e) => e.name)).toEqual(["Via Carota", "Lilia"]);
+    // Two of the four signals are named; the other two share one entry.
+    expect(scores[0].explainability.map((e) => e.name)).toEqual(["Via Carota", "Lilia", "Other favorites"]);
     expect(scores[0].explainability.reduce((s, e) => s + e.share, 0)).toBe(100);
   });
 

@@ -22,8 +22,15 @@ const FAVORITES = ["Via Carota", "Lilia", "Death & Co East Village", "Ace Hotel 
 const NEW_YORK = { lat: 40.73, lon: -73.99 };
 
 async function main() {
-  const { explainabilityFor, findPlaces, resolveLocality, searchEntities, tastePortrait, sharedTagsFor } =
-    await import("@/lib/qloo");
+  const {
+    CATEGORY_FILTER_TAGS,
+    explainabilityFor,
+    findPlaces,
+    resolveLocality,
+    searchEntities,
+    tastePortrait,
+    sharedTagsFor,
+  } = await import("@/lib/qloo");
   const allCalls: { endpoint: string; count: number; ms: number; cached: boolean }[] = [];
 
   console.log("1. resolveLocality(\"Lisbon\")");
@@ -61,10 +68,14 @@ async function main() {
   };
   const found = await findPlaces({ destination, signals: favorites.map((f) => f.entityId), take: 10 });
   allCalls.push(...found.calls);
-  console.log(`   locality: requested "${found.localityCheck.requested}", resolved "${found.localityCheck.resolved}", ok=${found.localityCheck.ok}`);
+  console.log(
+    `   locality: requested "${found.localityCheck.requested}", resolved "${found.localityCheck.resolved}", ok=${found.localityCheck.ok}, dropped=${found.localityCheck.dropped}`,
+  );
   console.log(`   loosened: [${found.loosened.join(", ")}]`);
   check(found.results.length >= 5, "at least 5 results");
   check(found.localityCheck.ok, "results are in the destination");
+  const farthest = Math.max(...found.results.map((r) => r.distanceM ?? 0));
+  check(farthest <= lisbon.radiusM * 1.5, `every result within 1.5x the radius (farthest ${Math.round(farthest)} m)`);
 
   const portrait = await tastePortrait(favorites.map((f) => f.entityId));
   allCalls.push(...portrait.calls);
@@ -84,7 +95,21 @@ async function main() {
     console.log(`      shared tags: ${shared.map((t) => t.name).join(", ") || "none"}`);
   }
 
-  console.log("4. calls");
+  console.log("4. findPlaces for hotels in Lisbon with a price cap, take 5");
+  const hotels = await findPlaces({
+    destination,
+    signals: favorites.map((f) => f.entityId),
+    tags: CATEGORY_FILTER_TAGS.stay,
+    priceMax: 2,
+    take: 5,
+  });
+  allCalls.push(...hotels.calls);
+  console.log(`   loosened: [${hotels.loosened.join(", ")}], dropped=${hotels.localityCheck.dropped}`);
+  for (const r of hotels.results) console.log(`   ${r.place.name} [${r.category}] score ${r.score}, ${Math.round(r.distanceM ?? -1)} m`);
+  check(hotels.loosened.includes("price_not_applicable"), "price cap reported as not applied to hotels");
+  check(hotels.calls.every((c) => !("filter.price_level.max" in c.params)), "no price filter sent for hotels");
+
+  console.log("5. calls");
   for (const c of allCalls) console.log(`   ${c.endpoint} count=${c.count} ${c.ms} ms cached=${c.cached}`);
 }
 

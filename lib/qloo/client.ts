@@ -8,7 +8,7 @@ import "server-only";
 
 import type { z } from "zod";
 
-import { type CacheStore, cacheKey, dbCacheStore, memoryCacheStore } from "./cache";
+import { type CacheStore, EMPTY_TTL_SECONDS, cacheKey, dbCacheStore, memoryCacheStore } from "./cache";
 import type { QlooCall } from "./contracts";
 import { QlooHttpError, QlooNetworkError, QlooNotConfiguredError, QlooSchemaError } from "./errors";
 import { type QlooEndpoint, type QlooParams, TTL_SECONDS, paramsForLog, serializeParams, toQueryString } from "./params";
@@ -89,6 +89,37 @@ export function createQlooClient(options: QlooClientOptions = {}): QlooClient {
     }
   }
 
+  // Concurrent requests for the same key share one cache read and at most one
+  // upstream fetch (within this instance; other instances still meet at the
+  // cache table).
+  const inflight = new Map<string, Promise<unknown>>();
+
+  async function load<T>(
+    endpoint: QlooEndpoint,
+    key: string,
+    pairs: [string, string][],
+    options: GetOptions<T>,
+  ): Promise<{ body: unknown; data: T; cached: boolean }> {
+    const hit = await store.get(key).catch((error: unknown) => {
+      console.warn(`[qloo] cache read failed for ${endpoint}`, error);
+      return undefined;
+    });
+    if (hit !== undefined) {
+      const parsed = options.schema.safeParse(hit);
+      if (parsed.success) return { body: hit, data: parsed.data, cached: true };
+      // A row written under an older schema: refetch and overwrite it.
+    }
+
+    const body = stripAkas(await fetchJson(endpoint, toQueryString(pairs)));
+    const parsed = options.schema.safeParse(body);
+    if (!parsed.success) throw new QlooSchemaError(endpoint, summarizeIssues(parsed.error));
+
+    await store
+      .set({ key, endpoint, body, ttlSeconds: ttlFor(endpoint, body, options.ttlSeconds) })
+      .catch((error: unknown) => console.warn(`[qloo] cache write failed for ${endpoint}`, error));
+    return { body, data: parsed.data, cached: false };
+  }
+
   return {
     async get<T>(endpoint: QlooEndpoint, params: QlooParams, options: GetOptions<T>): Promise<GetResult<T>> {
       const pairs = serializeParams(endpoint, params);
@@ -103,25 +134,28 @@ export function createQlooClient(options: QlooClientOptions = {}): QlooClient {
         ...(options.tripId ? { tripId: options.tripId } : {}),
       });
 
-      const hit = await store.get(key).catch((error: unknown) => {
-        console.warn(`[qloo] cache read failed for ${endpoint}`, error);
-        return undefined;
-      });
-      if (hit !== undefined) {
-        const parsed = options.schema.safeParse(hit);
-        if (parsed.success) return { data: parsed.data, call: record(hit, true) };
-        // A row written under an older schema: refetch and overwrite it.
+      const shared = inflight.get(key);
+      if (shared) {
+        // Joined another caller's request: parse with this caller's schema and
+        // log it as cached, since it cost no request of its own.
+        const body = await shared;
+        const parsed = options.schema.safeParse(body);
+        if (!parsed.success) throw new QlooSchemaError(endpoint, summarizeIssues(parsed.error));
+        return { data: parsed.data, call: record(body, true) };
       }
 
-      const body = stripAkas(await fetchJson(endpoint, toQueryString(pairs)));
-      const parsed = options.schema.safeParse(body);
-      if (!parsed.success) throw new QlooSchemaError(endpoint, summarizeIssues(parsed.error));
-
-      await store
-        .set({ key, endpoint, body, ttlSeconds: options.ttlSeconds ?? TTL_SECONDS[endpoint] })
-        .catch((error: unknown) => console.warn(`[qloo] cache write failed for ${endpoint}`, error));
-
-      return { data: parsed.data, call: record(body, false) };
+      const pending = load(endpoint, key, pairs, options);
+      const body = pending.then((loaded) => loaded.body);
+      // Joiners see a failure through their own await; this only keeps a
+      // failure nobody joined from surfacing as an unhandled rejection.
+      body.catch(() => {});
+      inflight.set(key, body);
+      try {
+        const loaded = await pending;
+        return { data: loaded.data, call: record(loaded.body, loaded.cached) };
+      } finally {
+        inflight.delete(key);
+      }
     },
   };
 }
@@ -139,6 +173,12 @@ export function getQlooClient(): QlooClient {
 /** `getQlooClient().get(...)`: validated, cached, retried once on 5xx. */
 export function qlooGet<T>(endpoint: QlooEndpoint, params: QlooParams, options: GetOptions<T>): Promise<GetResult<T>> {
   return getQlooClient().get(endpoint, params, options);
+}
+
+/** The endpoint's TTL (or the caller's), cut to a minute for an empty answer. */
+export function ttlFor(endpoint: QlooEndpoint, body: unknown, ttlSeconds?: number): number {
+  const ttl = ttlSeconds ?? TTL_SECONDS[endpoint];
+  return countResults(body) === 0 ? Math.min(ttl, EMPTY_TTL_SECONDS) : ttl;
 }
 
 /** Result count of any response shape the client reads. */

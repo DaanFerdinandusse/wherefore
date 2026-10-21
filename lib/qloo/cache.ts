@@ -14,15 +14,20 @@ export interface CacheStore {
 }
 
 /**
- * Stable key for a request: sha256 over the endpoint and its sorted, serialized
- * params. The pairs must come from serializeParams (already sorted), so the same
- * request always lands on the same row whatever order the caller wrote it in.
+ * Stable key for a request: sha256 over `JSON.stringify([endpoint, pairs])`
+ * with the pairs sorted by key, so the same request always lands on the same
+ * row whatever order the caller wrote it in. JSON keeps every value delimited
+ * and escaped: a value holding "&" or "=" cannot collide with two params.
  */
 export function cacheKey(endpoint: QlooEndpoint, pairs: readonly [string, string][]): string {
   const sorted = [...pairs].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  const canonical = `${endpoint}?${sorted.map(([k, v]) => `${k}=${v}`).join("&")}`;
+  const canonical = JSON.stringify([endpoint, sorted]);
   return `qloo:${createHash("sha256").update(canonical).digest("hex")}`;
 }
+
+/** An empty answer may be a cold upstream or a passing rate limit, so it is
+ *  kept at most this long instead of the endpoint's TTL. */
+export const EMPTY_TTL_SECONDS = 60;
 
 export function memoryCacheStore(now: () => number = Date.now): CacheStore {
   const rows = new Map<string, { body: unknown; expiresAt: number }>();

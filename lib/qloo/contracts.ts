@@ -48,6 +48,8 @@ export type PlaceResult = {
   /** Rank-based 60..94 within this result set (see displayScore). */
   score: number;
   signalScores: SignalScore[];
+  /** Meters from the destination point: the API's distance, or computed from
+   *  the coordinates when it gives none. Null without either. */
   distanceM: number | null;
 };
 
@@ -92,7 +94,15 @@ export type EntityCandidate = FavoriteCandidate & {
   place?: NormalizedPlace;
 };
 
-export type LoosenedFilter = "tags" | "price";
+/**
+ * What findPlaces did not apply as asked:
+ * - "tags": too few results, so filter.tags was dropped.
+ * - "price": too few results, so the price cap was dropped.
+ * - "price_not_applicable": a price cap was asked for a see or stay ask
+ *   (museums, hotels carry no price level), so it was never applied. The UI
+ *   says "Price cap not applied to museums and hotels".
+ */
+export type LoosenedFilter = "tags" | "price" | "price_not_applicable";
 
 export type LocalityCheck = {
   /** What the trip asked for (the destination's disambiguation or name). */
@@ -102,6 +112,8 @@ export type LocalityCheck = {
   resolved: string;
   /** False when the results look like they are somewhere else. */
   ok: boolean;
+  /** Results dropped for being farther than 1.5x the destination radius. */
+  dropped: number;
 };
 
 export type FindPlacesInput = {
