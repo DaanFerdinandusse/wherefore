@@ -1,0 +1,1382 @@
+{
+ "results": [
+  {
+   "name": "Via Carota",
+   "entity_id": "3F659C60-D199-4E55-9B72-62DEEFB6AA11",
+   "types": [
+    "urn:entity:place"
+   ],
+   "properties": {
+    "address": "51 Grove St New York, NY 10014",
+    "business_rating": 4.4,
+    "description": "Rustic Italian trattoria in West Village offering authentic seasonal dishes, handmade pastas, and a warm, inviting atmosphere with attentive service.",
+    "external": {
+     "michelin": {
+      "id": "468079"
+     },
+     "resy": {
+      "neighborhood": "West Village",
+      "cuisine": "Italian",
+      "rating": 4.75624,
+      "min_party_size": 1,
+      "id": "2567",
+      "why_we_like_it": "",
+      "url": "https://resy.com/cities/new-york-ny/venues/via-carota",
+      "max_party_size": 6,
+      "rating_count": 24257
+     },
+     "tripadvisor": {
+      "id": "d7289152",
+      "rating": 4.5,
+      "rating_count": 432
+     },
+     "google_place": {
+      "id": "e49ad5dc628370bb",
+      "place_id": "ChIJr7FOf5NZwokRu3CDYtzVmuQ"
+     }
+    },
+    "geocode": {
+     "name": "West Village",
+     "city": "New York",
+     "admin1_region": "New York",
+     "admin2_region": "New York County",
+     "country_code": "US",
+     "country": "United States",
+     "metro": "New York City"
+    },
+    "hours": {
+     "sunday": [
+      {
+       "closed": false,
+       "opens": "T10:00:00",
+       "closes": "T23:00:00"
+      }
+     ],
+     "monday": [
+      {
+       "closed": false,
+       "opens": "T11:00:00",
+       "closes": "T23:00:00"
+      }
+     ],
+     "tuesday": [
+      {
+       "closed": false,
+       "opens": "T11:00:00",
+       "closes": "T23:00:00"
+      }
+     ],
+     "wednesday": [
+      {
+       "closed": false,
+       "opens": "T11:00:00",
+       "closes": "T23:00:00"
+      }
+     ],
+     "thursday": [
+      {
+       "closed": false,
+       "opens": "T11:00:00",
+       "closes": "T23:00:00"
+      }
+     ],
+     "friday": [
+      {
+       "closed": false,
+       "opens": "T10:00:00",
+       "closes": "T23:00:00"
+      }
+     ],
+     "saturday": [
+      {
+       "closed": false,
+       "opens": "T10:00:00",
+       "closes": "T23:00:00"
+      }
+     ]
+    },
+    "image": {
+     "url": "https://images.qloo.com/i/3F659C60-D199-4E55-9B72-62DEEFB6AA11-420x-auto.jpg"
+    },
+    "is_closed": false,
+    "neighborhood": "West Village",
+    "price_level": 3,
+    "price_range": {
+     "currency": "usd"
+    },
+    "website": "http://viacarota.com/",
+    "specialty_dishes": [
+     {
+      "id": "urn:tag:specialty_dish:place:tonnarelli_cacio_e_pepe",
+      "name": "Tonnarelli Cacio E Pepe",
+      "type": "urn:tag:specialty_dish:place",
+      "weight": 1
+     },
+     {
+      "id": "urn:tag:specialty_dish:place:insalata_verde",
+      "name": "Insalata Verde",
+      "type": "urn:tag:specialty_dish:place",
+      "weight": 0.9583333333333334
+     },
+     {
+      "id": "urn:tag:specialty_dish:place:tiramisu",
+      "name": "Il Tiramisu",
+      "type": "urn:tag:specialty_dish:place",
+      "weight": 0.9166666666666666
+     }
+    ],
+    "good_for": [
+     {
+      "id": "urn:tag:event:place:anniversary",
+      "name": "Anniversary",
+      "type": "urn:tag:event:place",
+      "weight": 0.25
+     }
+    ],
+    "primary_genre": {
+     "id": "urn:tag:genre:place:restaurant:italian",
+     "name": "Italian restaurant",
+     "type": "urn:tag:genre:place"
+    }
+   },
+   "popularity": 0.9820519363872307,
+   "disambiguation": "51 Grove St New York, NY 10014",
+   "location": {
+    "lat": 40.7331959,
+    "lon": -74.0036494
+   },
+   "tags": [
+    {
+     "name": "Traditional",
+     "tag_id": "urn:tag:culinary_style:qloo:traditional",
+     "type": "urn:tag:culinary_style:qloo",
+     "value": "urn:tag:culinary_style:qloo:traditional"
+    },
+    {
+     "name": "Large group",
+     "tag_id": "urn:tag:ambience:place:large_group",
+     "type": "urn:tag:ambience:place",
+     "value": "urn:tag:ambience:place:large_group"
+    },
+    {
+     "name": "Visa",
+     "tag_id": "urn:tag:credit_card:place:visa",
+     "type": "urn:tag:credit_card:place",
+     "value": "urn:tag:credit_card:place:visa"
+    },
+    {
+     "name": "Beer",
+     "tag_id": "urn:tag:offerings:place:beer",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:beer"
+    },
+    {
+     "name": "Wild boar ragu pappardelle",
+     "tag_id": "urn:tag:specialty_dish:place:wild_boar_ragu_pappardelle",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:wild_boar_ragu_pappardelle"
+    },
+    {
+     "name": "Onsite services",
+     "tag_id": "urn:tag:service_options:place:onsite_services",
+     "type": "urn:tag:service_options:place",
+     "value": "urn:tag:service_options:place:onsite_services"
+    },
+    {
+     "name": "Work dinner",
+     "tag_id": "urn:tag:event:place:work_dinner",
+     "type": "urn:tag:event:place",
+     "value": "urn:tag:event:place:work_dinner"
+    },
+    {
+     "name": "Via carota svizzerina",
+     "tag_id": "urn:tag:specialty_dish:place:via_carota_svizzerina",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:via_carota_svizzerina"
+    },
+    {
+     "name": "Usually a wait",
+     "tag_id": "urn:tag:planning:place:usually_a_wait",
+     "type": "urn:tag:planning:place",
+     "value": "urn:tag:planning:place:usually_a_wait"
+    },
+    {
+     "name": "Reservations",
+     "tag_id": "urn:tag:resy:keyword:place:reservations",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:reservations"
+    },
+    {
+     "name": "Dining drinking",
+     "tag_id": "urn:tag:activity_type:qloo:dining_drinking",
+     "type": "urn:tag:activity_type:qloo",
+     "value": "urn:tag:activity_type:qloo:dining_drinking"
+    },
+    {
+     "name": "Global dining access",
+     "tag_id": "urn:tag:resy:collection:place:global_dining_access",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:global_dining_access"
+    },
+    {
+     "name": "Club soda",
+     "tag_id": "urn:tag:specialty_dish:place:club_soda",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:club_soda"
+    },
+    {
+     "name": "Birthday",
+     "tag_id": "urn:tag:event:place:birthday",
+     "type": "urn:tag:event:place",
+     "value": "urn:tag:event:place:birthday"
+    },
+    {
+     "name": "Mastercard",
+     "tag_id": "urn:tag:credit_card:place:mastercard",
+     "type": "urn:tag:credit_card:place",
+     "value": "urn:tag:credit_card:place:mastercard"
+    },
+    {
+     "name": "Curbside pickup",
+     "tag_id": "urn:tag:amenity:qloo:curbside_pickup",
+     "type": "urn:tag:amenity:qloo",
+     "value": "urn:tag:amenity:qloo:curbside_pickup"
+    },
+    {
+     "name": "Whitney museum",
+     "tag_id": "urn:tag:nearby_attraction:qloo:whitney_museum",
+     "type": "urn:tag:nearby_attraction:qloo",
+     "value": "urn:tag:nearby_attraction:qloo:whitney_museum"
+    },
+    {
+     "name": "Seasonal cooking",
+     "tag_id": "urn:tag:interests:qloo:seasonal_cooking",
+     "type": "urn:tag:interests:qloo",
+     "value": "urn:tag:interests:qloo:seasonal_cooking"
+    },
+    {
+     "name": "Design and aesthetics",
+     "tag_id": "urn:tag:interests:qloo:design_and_aesthetics",
+     "type": "urn:tag:interests:qloo",
+     "value": "urn:tag:interests:qloo:design_and_aesthetics"
+    },
+    {
+     "name": "Authentic",
+     "tag_id": "urn:tag:decor:qloo:authentic",
+     "type": "urn:tag:decor:qloo",
+     "value": "urn:tag:decor:qloo:authentic"
+    },
+    {
+     "name": "Nfc mobile payments",
+     "tag_id": "urn:tag:payments:place:nfc_mobile_payments",
+     "type": "urn:tag:payments:place",
+     "value": "urn:tag:payments:place:nfc_mobile_payments"
+    },
+    {
+     "name": "Meyer lemon risotto",
+     "tag_id": "urn:tag:specialty_dish:place:meyer_lemon_risotto",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:meyer_lemon_risotto"
+    },
+    {
+     "name": "New york",
+     "tag_id": "urn:tag:resy:keyword:place:new_york",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:new_york"
+    },
+    {
+     "name": "Brunch reservations recommended",
+     "tag_id": "urn:tag:planning:place:brunch_reservations_recommended",
+     "type": "urn:tag:planning:place",
+     "value": "urn:tag:planning:place:brunch_reservations_recommended"
+    },
+    {
+     "name": "Locals",
+     "tag_id": "urn:tag:customer_identity:qloo:locals",
+     "type": "urn:tag:customer_identity:qloo",
+     "value": "urn:tag:customer_identity:qloo:locals"
+    },
+    {
+     "name": "Women operated",
+     "tag_id": "urn:tag:resy:collection:place:women_operated",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:women_operated"
+    },
+    {
+     "name": "Authentic",
+     "tag_id": "urn:tag:neighborhood_characteristic:qloo:authentic",
+     "type": "urn:tag:neighborhood_characteristic:qloo",
+     "value": "urn:tag:neighborhood_characteristic:qloo:authentic"
+    },
+    {
+     "name": "Casual",
+     "tag_id": "urn:tag:ambience:qloo:casual",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:casual"
+    },
+    {
+     "name": "Tuscan inspired",
+     "tag_id": "urn:tag:cuisine:qloo:tuscan_inspired",
+     "type": "urn:tag:cuisine:qloo",
+     "value": "urn:tag:cuisine:qloo:tuscan_inspired"
+    },
+    {
+     "name": "Comfortable",
+     "tag_id": "urn:tag:ambience:qloo:comfortable",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:comfortable"
+    },
+    {
+     "name": "Tourists",
+     "tag_id": "urn:tag:customer_identity:qloo:tourists",
+     "type": "urn:tag:customer_identity:qloo",
+     "value": "urn:tag:customer_identity:qloo:tourists"
+    },
+    {
+     "name": "Book tonight",
+     "tag_id": "urn:tag:resy:collection:place:book_tonight",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:book_tonight"
+    },
+    {
+     "name": "Historic",
+     "tag_id": "urn:tag:neighborhood_characteristic:qloo:historic",
+     "type": "urn:tag:neighborhood_characteristic:qloo",
+     "value": "urn:tag:neighborhood_characteristic:qloo:historic"
+    },
+    {
+     "name": "Delivery",
+     "tag_id": "urn:tag:service_type:qloo:delivery",
+     "type": "urn:tag:service_type:qloo",
+     "value": "urn:tag:service_type:qloo:delivery"
+    },
+    {
+     "name": "Price level",
+     "tag_id": "urn:tag:payments:place:price_level",
+     "type": "urn:tag:payments:place",
+     "value": "urn:tag:payments:place:price_level"
+    },
+    {
+     "name": "Fine dining",
+     "tag_id": "urn:tag:interests:qloo:fine_dining",
+     "type": "urn:tag:interests:qloo",
+     "value": "urn:tag:interests:qloo:fine_dining"
+    },
+    {
+     "name": "Coffee",
+     "tag_id": "urn:tag:offerings:place:coffee",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:coffee"
+    },
+    {
+     "name": "Tonnarelli cacio e pepe",
+     "tag_id": "urn:tag:specialty_dish:place:tonnarelli_cacio_e_pepe",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:tonnarelli_cacio_e_pepe"
+    },
+    {
+     "name": "Dining",
+     "tag_id": "urn:tag:resy:keyword:place:dining",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:dining"
+    },
+    {
+     "name": "Urban",
+     "tag_id": "urn:tag:setting:qloo:urban",
+     "type": "urn:tag:setting:qloo",
+     "value": "urn:tag:setting:qloo:urban"
+    },
+    {
+     "name": "Lunch",
+     "tag_id": "urn:tag:dining_options:place:lunch",
+     "type": "urn:tag:dining_options:place",
+     "value": "urn:tag:dining_options:place:lunch"
+    },
+    {
+     "name": "Insalata verde",
+     "tag_id": "urn:tag:menu_highlight:qloo:insalata_verde",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:insalata_verde"
+    },
+    {
+     "name": "Bar onsite",
+     "tag_id": "urn:tag:amenities:place:bar_onsite",
+     "type": "urn:tag:amenities:place",
+     "value": "urn:tag:amenities:place:bar_onsite"
+    },
+    {
+     "name": "Spirits",
+     "tag_id": "urn:tag:beverage_offering:qloo:spirits",
+     "type": "urn:tag:beverage_offering:qloo",
+     "value": "urn:tag:beverage_offering:qloo:spirits"
+    },
+    {
+     "name": "Foodies",
+     "tag_id": "urn:tag:customer_identity:qloo:foodies",
+     "type": "urn:tag:customer_identity:qloo",
+     "value": "urn:tag:customer_identity:qloo:foodies"
+    },
+    {
+     "name": "Nduja arancini",
+     "tag_id": "urn:tag:specialty_dish:place:nduja_arancini",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:nduja_arancini"
+    },
+    {
+     "name": "Hard cider",
+     "tag_id": "urn:tag:offerings:place:hard_cider",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:hard_cider"
+    },
+    {
+     "name": "Travel and gastronomy",
+     "tag_id": "urn:tag:interests:qloo:travel_and_gastronomy",
+     "type": "urn:tag:interests:qloo",
+     "value": "urn:tag:interests:qloo:travel_and_gastronomy"
+    },
+    {
+     "name": "Scenic",
+     "tag_id": "urn:tag:neighborhood_characteristic:qloo:scenic",
+     "type": "urn:tag:neighborhood_characteristic:qloo",
+     "value": "urn:tag:neighborhood_characteristic:qloo:scenic"
+    },
+    {
+     "name": "Dessert",
+     "tag_id": "urn:tag:dining_options:place:dessert",
+     "type": "urn:tag:dining_options:place",
+     "value": "urn:tag:dining_options:place:dessert"
+    },
+    {
+     "name": "Pappardelle al cinghiale",
+     "tag_id": "urn:tag:specialty_dish:place:pappardelle_al_cinghiale",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:pappardelle_al_cinghiale"
+    },
+    {
+     "name": "Sunset view",
+     "tag_id": "urn:tag:view:qloo:sunset_view",
+     "type": "urn:tag:view:qloo",
+     "value": "urn:tag:view:qloo:sunset_view"
+    },
+    {
+     "name": "Vegan",
+     "tag_id": "urn:tag:dietary_option:qloo:vegan",
+     "type": "urn:tag:dietary_option:qloo",
+     "value": "urn:tag:dietary_option:qloo:vegan"
+    },
+    {
+     "name": "$40 to $100",
+     "tag_id": "urn:tag:cost_description:place:40_to_100",
+     "type": "urn:tag:cost_description:place",
+     "value": "urn:tag:cost_description:place:40_to_100"
+    },
+    {
+     "name": "Accepts reservations",
+     "tag_id": "urn:tag:planning:place:accepts_reservations",
+     "type": "urn:tag:planning:place",
+     "value": "urn:tag:planning:place:accepts_reservations"
+    },
+    {
+     "name": "Gluten free",
+     "tag_id": "urn:tag:dietary_option:qloo:gluten_free",
+     "type": "urn:tag:dietary_option:qloo",
+     "value": "urn:tag:dietary_option:qloo:gluten_free"
+    },
+    {
+     "name": "Wheelchair accessible restroom",
+     "tag_id": "urn:tag:accessibility:place:wheelchair_accessible_restroom",
+     "type": "urn:tag:accessibility:place",
+     "value": "urn:tag:accessibility:place:wheelchair_accessible_restroom"
+    },
+    {
+     "name": "Discover",
+     "tag_id": "urn:tag:credit_card:place:discover",
+     "type": "urn:tag:credit_card:place",
+     "value": "urn:tag:credit_card:place:discover"
+    },
+    {
+     "name": "10014",
+     "tag_id": "urn:tag:resy:keyword:place:10014",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:10014"
+    },
+    {
+     "name": "Parking",
+     "tag_id": "urn:tag:parking:place:parking",
+     "type": "urn:tag:parking:place",
+     "value": "urn:tag:parking:place:parking"
+    },
+    {
+     "name": "Insalata verde",
+     "tag_id": "urn:tag:specialty_dish:place:insalata_verde",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:insalata_verde"
+    },
+    {
+     "name": "Seafood",
+     "tag_id": "urn:tag:cuisine:qloo:seafood",
+     "type": "urn:tag:cuisine:qloo",
+     "value": "urn:tag:cuisine:qloo:seafood"
+    },
+    {
+     "name": "Paid street parking",
+     "tag_id": "urn:tag:parking:place:paid_street_parking",
+     "type": "urn:tag:parking:place",
+     "value": "urn:tag:parking:place:paid_street_parking"
+    },
+    {
+     "name": "Organic dishes",
+     "tag_id": "urn:tag:offerings:place:organic_dishes",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:organic_dishes"
+    },
+    {
+     "name": "West village",
+     "tag_id": "urn:tag:resy:keyword:place:west_village",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:west_village"
+    },
+    {
+     "name": "Street view",
+     "tag_id": "urn:tag:view:qloo:street_view",
+     "type": "urn:tag:view:qloo",
+     "value": "urn:tag:view:qloo:street_view"
+    },
+    {
+     "name": "Italian",
+     "tag_id": "urn:tag:cuisine:qloo:italian",
+     "type": "urn:tag:cuisine:qloo",
+     "value": "urn:tag:cuisine:qloo:italian"
+    },
+    {
+     "name": "Green salad",
+     "tag_id": "urn:tag:specialty_dish:place:green_salad",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:green_salad"
+    },
+    {
+     "name": "Critically acclaimed",
+     "tag_id": "urn:tag:resy:collection:place:critically_acclaimed",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:critically_acclaimed"
+    },
+    {
+     "name": "Evening",
+     "tag_id": "urn:tag:time_of_day_fit:qloo:evening",
+     "type": "urn:tag:time_of_day_fit:qloo",
+     "value": "urn:tag:time_of_day_fit:qloo:evening"
+    },
+    {
+     "name": "Charming",
+     "tag_id": "urn:tag:ambience:qloo:charming",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:charming"
+    },
+    {
+     "name": "Full bar",
+     "tag_id": "urn:tag:beverage_offering:qloo:full_bar",
+     "type": "urn:tag:beverage_offering:qloo",
+     "value": "urn:tag:beverage_offering:qloo:full_bar"
+    },
+    {
+     "name": "Italian",
+     "tag_id": "urn:tag:resy:keyword:place:italian",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:italian"
+    },
+    {
+     "name": "Vegetarian meals",
+     "tag_id": "urn:tag:offerings:place:vegetarian_options",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:vegetarian_options"
+    },
+    {
+     "name": "Dine in",
+     "tag_id": "urn:tag:service_options:place:dine_in",
+     "type": "urn:tag:service_options:place",
+     "value": "urn:tag:service_options:place:dine_in"
+    },
+    {
+     "name": "Pappardelle with wild boar ragu",
+     "tag_id": "urn:tag:menu_highlight:qloo:pappardelle_with_wild_boar_ragu",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:pappardelle_with_wild_boar_ragu"
+    },
+    {
+     "name": "Charming west village",
+     "tag_id": "urn:tag:neighborhood_characteristic:qloo:charming_west_village",
+     "type": "urn:tag:neighborhood_characteristic:qloo",
+     "value": "urn:tag:neighborhood_characteristic:qloo:charming_west_village"
+    },
+    {
+     "name": "Late night",
+     "tag_id": "urn:tag:time_of_day_fit:qloo:late_night",
+     "type": "urn:tag:time_of_day_fit:qloo",
+     "value": "urn:tag:time_of_day_fit:qloo:late_night"
+    },
+    {
+     "name": "Healthy options",
+     "tag_id": "urn:tag:dietary_option:qloo:healthy_options",
+     "type": "urn:tag:dietary_option:qloo",
+     "value": "urn:tag:dietary_option:qloo:healthy_options"
+    },
+    {
+     "name": "Special occasion",
+     "tag_id": "urn:tag:visit_intent:qloo:special_occasion",
+     "type": "urn:tag:visit_intent:qloo",
+     "value": "urn:tag:visit_intent:qloo:special_occasion"
+    },
+    {
+     "name": "30 34",
+     "tag_id": "urn:tag:age_range:qloo:30_34",
+     "type": "urn:tag:age_range:qloo",
+     "value": "urn:tag:age_range:qloo:30_34"
+    },
+    {
+     "name": "Wheelchair accessible seating",
+     "tag_id": "urn:tag:accessibility:place:wheelchair_accessible_seating",
+     "type": "urn:tag:accessibility:place",
+     "value": "urn:tag:accessibility:place:wheelchair_accessible_seating"
+    },
+    {
+     "name": "Private dining room",
+     "tag_id": "urn:tag:offerings:place:private_dining_room",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:private_dining_room"
+    },
+    {
+     "name": "Bar service",
+     "tag_id": "urn:tag:service_type:qloo:bar_service",
+     "type": "urn:tag:service_type:qloo",
+     "value": "urn:tag:service_type:qloo:bar_service"
+    },
+    {
+     "name": "Reservations",
+     "tag_id": "urn:tag:service_type:qloo:reservations",
+     "type": "urn:tag:service_type:qloo",
+     "value": "urn:tag:service_type:qloo:reservations"
+    },
+    {
+     "name": "Top rated",
+     "tag_id": "urn:tag:resy:collection:place:top_rated",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:top_rated"
+    },
+    {
+     "name": "Traditional",
+     "tag_id": "urn:tag:decor:qloo:traditional",
+     "type": "urn:tag:decor:qloo",
+     "value": "urn:tag:decor:qloo:traditional"
+    },
+    {
+     "name": "Identifies as women owned",
+     "tag_id": "urn:tag:inclusivity:place:identifies_as_women_owned",
+     "type": "urn:tag:inclusivity:place",
+     "value": "urn:tag:inclusivity:place:identifies_as_women_owned"
+    },
+    {
+     "name": "Farm to table",
+     "tag_id": "urn:tag:culinary_style:qloo:farm_to_table",
+     "type": "urn:tag:culinary_style:qloo",
+     "value": "urn:tag:culinary_style:qloo:farm_to_table"
+    },
+    {
+     "name": "Walkable",
+     "tag_id": "urn:tag:neighborhood_characteristic:qloo:walkable",
+     "type": "urn:tag:neighborhood_characteristic:qloo",
+     "value": "urn:tag:neighborhood_characteristic:qloo:walkable"
+    },
+    {
+     "name": "Alcohol",
+     "tag_id": "urn:tag:offerings:place:alcohol",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:alcohol"
+    },
+    {
+     "name": "Osteria style",
+     "tag_id": "urn:tag:ambience:qloo:osteria_style",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:osteria_style"
+    },
+    {
+     "name": "Washington square park",
+     "tag_id": "urn:tag:nearby_attraction:qloo:washington_square_park",
+     "type": "urn:tag:nearby_attraction:qloo",
+     "value": "urn:tag:nearby_attraction:qloo:washington_square_park"
+    },
+    {
+     "name": "Small plates",
+     "tag_id": "urn:tag:offerings:place:small_plates",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:small_plates"
+    },
+    {
+     "name": "Meatballs",
+     "tag_id": "urn:tag:specialty_dish:place:meatballs",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:meatballs"
+    },
+    {
+     "name": "Central",
+     "tag_id": "urn:tag:neighborhood_characteristic:qloo:central",
+     "type": "urn:tag:neighborhood_characteristic:qloo",
+     "value": "urn:tag:neighborhood_characteristic:qloo:central"
+    },
+    {
+     "name": "Rustic italian",
+     "tag_id": "urn:tag:cuisine:qloo:rustic_italian",
+     "type": "urn:tag:cuisine:qloo",
+     "value": "urn:tag:cuisine:qloo:rustic_italian"
+    },
+    {
+     "name": "Wine",
+     "tag_id": "urn:tag:offerings:place:wine",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:wine"
+    },
+    {
+     "name": "Morning",
+     "tag_id": "urn:tag:time_of_day_fit:qloo:morning",
+     "type": "urn:tag:time_of_day_fit:qloo",
+     "value": "urn:tag:time_of_day_fit:qloo:morning"
+    },
+    {
+     "name": "Dinner reservations recommended",
+     "tag_id": "urn:tag:planning:place:dinner_reservations_recommended",
+     "type": "urn:tag:planning:place",
+     "value": "urn:tag:planning:place:dinner_reservations_recommended"
+    },
+    {
+     "name": "Nduja arancini",
+     "tag_id": "urn:tag:menu_highlight:qloo:nduja_arancini",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:nduja_arancini"
+    },
+    {
+     "name": "Counter seating",
+     "tag_id": "urn:tag:dining_options:place:counter_seating",
+     "type": "urn:tag:dining_options:place",
+     "value": "urn:tag:dining_options:place:counter_seating"
+    },
+    {
+     "name": "American express",
+     "tag_id": "urn:tag:credit_card:place:american_express",
+     "type": "urn:tag:credit_card:place",
+     "value": "urn:tag:credit_card:place:american_express"
+    },
+    {
+     "name": "Fried rabbit",
+     "tag_id": "urn:tag:menu_highlight:qloo:fried_rabbit",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:fried_rabbit"
+    },
+    {
+     "name": "Olive oil cake",
+     "tag_id": "urn:tag:specialty_dish:place:olive_oil_cake",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:olive_oil_cake"
+    },
+    {
+     "name": "Grilled octopus",
+     "tag_id": "urn:tag:menu_highlight:qloo:grilled_octopus",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:grilled_octopus"
+    },
+    {
+     "name": "Social community",
+     "tag_id": "urn:tag:activity_type:qloo:social_community",
+     "type": "urn:tag:activity_type:qloo",
+     "value": "urn:tag:activity_type:qloo:social_community"
+    },
+    {
+     "name": "People watching",
+     "tag_id": "urn:tag:activity_type:qloo:people_watching",
+     "type": "urn:tag:activity_type:qloo",
+     "value": "urn:tag:activity_type:qloo:people_watching"
+    },
+    {
+     "name": "Risotto limone",
+     "tag_id": "urn:tag:specialty_dish:place:risotto_limone",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:risotto_limone"
+    },
+    {
+     "name": "5 0 star",
+     "tag_id": "urn:tag:resy:keyword:place:5_0_star",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:5_0_star"
+    },
+    {
+     "name": "Wheelchair accessible entrance",
+     "tag_id": "urn:tag:accessibility:place:wheelchair_accessible_entrance",
+     "type": "urn:tag:accessibility:place",
+     "value": "urn:tag:accessibility:place:wheelchair_accessible_entrance"
+    },
+    {
+     "name": "Beer",
+     "tag_id": "urn:tag:beverage_offering:qloo:beer",
+     "type": "urn:tag:beverage_offering:qloo",
+     "value": "urn:tag:beverage_offering:qloo:beer"
+    },
+    {
+     "name": "Dine in",
+     "tag_id": "urn:tag:service_type:qloo:dine_in",
+     "type": "urn:tag:service_type:qloo",
+     "value": "urn:tag:service_type:qloo:dine_in"
+    },
+    {
+     "name": "West village",
+     "tag_id": "urn:tag:setting:qloo:west_village",
+     "type": "urn:tag:setting:qloo",
+     "value": "urn:tag:setting:qloo:west_village"
+    },
+    {
+     "name": "Seating",
+     "tag_id": "urn:tag:dining_options:place:seating",
+     "type": "urn:tag:dining_options:place",
+     "value": "urn:tag:dining_options:place:seating"
+    },
+    {
+     "name": "Staff picks",
+     "tag_id": "urn:tag:resy:collection:place:staff_picks",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:staff_picks"
+    },
+    {
+     "name": "Destination",
+     "tag_id": "urn:tag:visit_intent:qloo:destination",
+     "type": "urn:tag:visit_intent:qloo",
+     "value": "urn:tag:visit_intent:qloo:destination"
+    },
+    {
+     "name": "Takeout",
+     "tag_id": "urn:tag:service_type:qloo:takeout",
+     "type": "urn:tag:service_type:qloo",
+     "value": "urn:tag:service_type:qloo:takeout"
+    },
+    {
+     "name": "No contact delivery",
+     "tag_id": "urn:tag:service_options:place:no_contact_delivery",
+     "type": "urn:tag:service_options:place",
+     "value": "urn:tag:service_options:place:no_contact_delivery"
+    },
+    {
+     "name": "Stylish",
+     "tag_id": "urn:tag:ambience:qloo:stylish",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:stylish"
+    },
+    {
+     "name": "Hot tea",
+     "tag_id": "urn:tag:offerings:place:hot_tea",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:hot_tea"
+    },
+    {
+     "name": "Outdoor seating",
+     "tag_id": "urn:tag:amenity:qloo:outdoor_seating",
+     "type": "urn:tag:amenity:qloo",
+     "value": "urn:tag:amenity:qloo:outdoor_seating"
+    },
+    {
+     "name": "Vegetarian",
+     "tag_id": "urn:tag:dietary_option:qloo:vegetarian",
+     "type": "urn:tag:dietary_option:qloo",
+     "value": "urn:tag:dietary_option:qloo:vegetarian"
+    },
+    {
+     "name": "Young professionals",
+     "tag_id": "urn:tag:customer_identity:qloo:young_professionals",
+     "type": "urn:tag:customer_identity:qloo",
+     "value": "urn:tag:customer_identity:qloo:young_professionals"
+    },
+    {
+     "name": "Cozy",
+     "tag_id": "urn:tag:decor:qloo:cozy",
+     "type": "urn:tag:decor:qloo",
+     "value": "urn:tag:decor:qloo:cozy"
+    },
+    {
+     "name": "Lunch reservations recommended",
+     "tag_id": "urn:tag:planning:place:lunch_reservations_recommended",
+     "type": "urn:tag:planning:place",
+     "value": "urn:tag:planning:place:lunch_reservations_recommended"
+    },
+    {
+     "name": "Place",
+     "tag_id": "urn:tag:genre:place",
+     "type": "urn:tag:genre:place",
+     "value": "urn:tag:genre:place"
+    },
+    {
+     "name": "Credit cards",
+     "tag_id": "urn:tag:payments:place:credit_cards",
+     "type": "urn:tag:payments:place",
+     "value": "urn:tag:payments:place:credit_cards"
+    },
+    {
+     "name": "Cocktails",
+     "tag_id": "urn:tag:offerings:place:cocktails",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:cocktails"
+    },
+    {
+     "name": "Debit cards",
+     "tag_id": "urn:tag:payments:place:debit_cards",
+     "type": "urn:tag:payments:place",
+     "value": "urn:tag:payments:place:debit_cards"
+    },
+    {
+     "name": "Rustic",
+     "tag_id": "urn:tag:decor:qloo:rustic",
+     "type": "urn:tag:decor:qloo",
+     "value": "urn:tag:decor:qloo:rustic"
+    },
+    {
+     "name": "Late night food",
+     "tag_id": "urn:tag:offerings:place:late_night_food",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:late_night_food"
+    },
+    {
+     "name": "Al fresco dining",
+     "tag_id": "urn:tag:resy:collection:place:al_fresco_dining",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:al_fresco_dining"
+    },
+    {
+     "name": "Pistachio cannoli",
+     "tag_id": "urn:tag:specialty_dish:place:pistachio_cannoli",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:pistachio_cannoli"
+    },
+    {
+     "name": "Lgbtq+ friendly",
+     "tag_id": "urn:tag:inclusivity:place:lgbtq_friendly",
+     "type": "urn:tag:inclusivity:place",
+     "value": "urn:tag:inclusivity:place:lgbtq_friendly"
+    },
+    {
+     "name": "Healthy options",
+     "tag_id": "urn:tag:offerings:place:healthy_options",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:healthy_options"
+    },
+    {
+     "name": "Book",
+     "tag_id": "urn:tag:resy:keyword:place:book",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:book"
+    },
+    {
+     "name": "Rustic",
+     "tag_id": "urn:tag:ambience:qloo:rustic",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:rustic"
+    },
+    {
+     "name": "Coffee and tea",
+     "tag_id": "urn:tag:beverage_offering:qloo:coffee_and_tea",
+     "type": "urn:tag:beverage_offering:qloo",
+     "value": "urn:tag:beverage_offering:qloo:coffee_and_tea"
+    },
+    {
+     "name": "Order ahead",
+     "tag_id": "urn:tag:dining_options:place:order_ahead",
+     "type": "urn:tag:dining_options:place",
+     "value": "urn:tag:dining_options:place:order_ahead"
+    },
+    {
+     "name": "Negroni classico",
+     "tag_id": "urn:tag:specialty_dish:place:negroni_classico",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:negroni_classico"
+    },
+    {
+     "name": "Tonnarelli cacio e pepe",
+     "tag_id": "urn:tag:menu_highlight:qloo:tonnarelli_cacio_e_pepe",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:tonnarelli_cacio_e_pepe"
+    },
+    {
+     "name": "Outdoor seating",
+     "tag_id": "urn:tag:service_type:qloo:outdoor_seating",
+     "type": "urn:tag:service_type:qloo",
+     "value": "urn:tag:service_type:qloo:outdoor_seating"
+    },
+    {
+     "name": "Tiramisu",
+     "tag_id": "urn:tag:menu_highlight:qloo:tiramisu",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:tiramisu"
+    },
+    {
+     "name": "Cozy locales",
+     "tag_id": "urn:tag:resy:collection:place:cozy_locales",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:cozy_locales"
+    },
+    {
+     "name": "Italian",
+     "tag_id": "urn:tag:genre:place:restaurant:italian",
+     "type": "urn:tag:genre:place",
+     "value": "urn:tag:genre:place:restaurant:italian"
+    },
+    {
+     "name": "Loud",
+     "tag_id": "urn:tag:noise_level:qloo:loud",
+     "type": "urn:tag:noise_level:qloo",
+     "value": "urn:tag:noise_level:qloo:loud"
+    },
+    {
+     "name": "Bright",
+     "tag_id": "urn:tag:ambience:qloo:bright",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:bright"
+    },
+    {
+     "name": "Lively",
+     "tag_id": "urn:tag:ambience:qloo:lively",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:lively"
+    },
+    {
+     "name": "Carciofi alla griglia",
+     "tag_id": "urn:tag:specialty_dish:place:carciofi_alla_griglia",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:carciofi_alla_griglia"
+    },
+    {
+     "name": "The high line",
+     "tag_id": "urn:tag:nearby_attraction:qloo:the_high_line",
+     "type": "urn:tag:nearby_attraction:qloo",
+     "value": "urn:tag:nearby_attraction:qloo:the_high_line"
+    },
+    {
+     "name": "City center",
+     "tag_id": "urn:tag:setting:qloo:city_center",
+     "type": "urn:tag:setting:qloo",
+     "value": "urn:tag:setting:qloo:city_center"
+    },
+    {
+     "name": "Seasonal",
+     "tag_id": "urn:tag:culinary_style:qloo:seasonal",
+     "type": "urn:tag:culinary_style:qloo",
+     "value": "urn:tag:culinary_style:qloo:seasonal"
+    },
+    {
+     "name": "Climbing",
+     "tag_id": "urn:tag:resy:collection:place:climbing",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:climbing"
+    },
+    {
+     "name": "Casual",
+     "tag_id": "urn:tag:culinary_style:qloo:casual",
+     "type": "urn:tag:culinary_style:qloo",
+     "value": "urn:tag:culinary_style:qloo:casual"
+    },
+    {
+     "name": "Midday",
+     "tag_id": "urn:tag:time_of_day_fit:qloo:midday",
+     "type": "urn:tag:time_of_day_fit:qloo",
+     "value": "urn:tag:time_of_day_fit:qloo:midday"
+    },
+    {
+     "name": "Comfort food",
+     "tag_id": "urn:tag:offerings:place:comfort_food",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:comfort_food"
+    },
+    {
+     "name": "Couples",
+     "tag_id": "urn:tag:customer_identity:qloo:couples",
+     "type": "urn:tag:customer_identity:qloo",
+     "value": "urn:tag:customer_identity:qloo:couples"
+    },
+    {
+     "name": "Chic",
+     "tag_id": "urn:tag:decor:qloo:chic",
+     "type": "urn:tag:decor:qloo",
+     "value": "urn:tag:decor:qloo:chic"
+    },
+    {
+     "name": "Afternoon",
+     "tag_id": "urn:tag:time_of_day_fit:qloo:afternoon",
+     "type": "urn:tag:time_of_day_fit:qloo",
+     "value": "urn:tag:time_of_day_fit:qloo:afternoon"
+    },
+    {
+     "name": "Restroom",
+     "tag_id": "urn:tag:amenities:place:restroom",
+     "type": "urn:tag:amenities:place",
+     "value": "urn:tag:amenities:place:restroom"
+    },
+    {
+     "name": "Aperitifs and digestifs",
+     "tag_id": "urn:tag:beverage_offering:qloo:aperitifs_and_digestifs",
+     "type": "urn:tag:beverage_offering:qloo",
+     "value": "urn:tag:beverage_offering:qloo:aperitifs_and_digestifs"
+    },
+    {
+     "name": "Meyer lemon risotto",
+     "tag_id": "urn:tag:menu_highlight:qloo:meyer_lemon_risotto",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:meyer_lemon_risotto"
+    },
+    {
+     "name": "Table service",
+     "tag_id": "urn:tag:dining_options:place:table_service",
+     "type": "urn:tag:dining_options:place",
+     "value": "urn:tag:dining_options:place:table_service"
+    },
+    {
+     "name": "Delivery",
+     "tag_id": "urn:tag:service_options:place:delivery",
+     "type": "urn:tag:service_options:place",
+     "value": "urn:tag:service_options:place:delivery"
+    },
+    {
+     "name": "Anniversary",
+     "tag_id": "urn:tag:event:place:anniversary",
+     "type": "urn:tag:event:place",
+     "value": "urn:tag:event:place:anniversary"
+    },
+    {
+     "name": "Panna cotta",
+     "tag_id": "urn:tag:specialty_dish:place:panna_cotta",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:panna_cotta"
+    },
+    {
+     "name": "Authentic",
+     "tag_id": "urn:tag:culinary_style:qloo:authentic",
+     "type": "urn:tag:culinary_style:qloo",
+     "value": "urn:tag:culinary_style:qloo:authentic"
+    },
+    {
+     "name": "Romantic",
+     "tag_id": "urn:tag:neighborhood_characteristic:qloo:romantic",
+     "type": "urn:tag:neighborhood_characteristic:qloo",
+     "value": "urn:tag:neighborhood_characteristic:qloo:romantic"
+    },
+    {
+     "name": "Takeout",
+     "tag_id": "urn:tag:service_options:place:takeout",
+     "type": "urn:tag:service_options:place",
+     "value": "urn:tag:service_options:place:takeout"
+    },
+    {
+     "name": "Pesto",
+     "tag_id": "urn:tag:specialty_dish:place:pesto",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:pesto"
+    },
+    {
+     "name": "Wine",
+     "tag_id": "urn:tag:beverage_offering:qloo:wine",
+     "type": "urn:tag:beverage_offering:qloo",
+     "value": "urn:tag:beverage_offering:qloo:wine"
+    },
+    {
+     "name": "Olive oil cake",
+     "tag_id": "urn:tag:menu_highlight:qloo:olive_oil_cake",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:olive_oil_cake"
+    },
+    {
+     "name": "35 44",
+     "tag_id": "urn:tag:age_range:qloo:35_44",
+     "type": "urn:tag:age_range:qloo",
+     "value": "urn:tag:age_range:qloo:35_44"
+    },
+    {
+     "name": "Tiramisu",
+     "tag_id": "urn:tag:specialty_dish:place:tiramisu",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:tiramisu"
+    },
+    {
+     "name": "Inviting",
+     "tag_id": "urn:tag:ambience:qloo:inviting",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:inviting"
+    },
+    {
+     "name": "Pasta picks",
+     "tag_id": "urn:tag:resy:collection:place:pasta_picks",
+     "type": "urn:tag:resy:collection:place",
+     "value": "urn:tag:resy:collection:place:pasta_picks"
+    },
+    {
+     "name": "Welcoming",
+     "tag_id": "urn:tag:ambience:qloo:welcoming",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:welcoming"
+    },
+    {
+     "name": "Takeout",
+     "tag_id": "urn:tag:amenity:qloo:takeout",
+     "type": "urn:tag:amenity:qloo",
+     "value": "urn:tag:amenity:qloo:takeout"
+    },
+    {
+     "name": "Delivery",
+     "tag_id": "urn:tag:amenity:qloo:delivery",
+     "type": "urn:tag:amenity:qloo",
+     "value": "urn:tag:amenity:qloo:delivery"
+    },
+    {
+     "name": "Panna cotta",
+     "tag_id": "urn:tag:menu_highlight:qloo:panna_cotta",
+     "type": "urn:tag:menu_highlight:qloo",
+     "value": "urn:tag:menu_highlight:qloo:panna_cotta"
+    },
+    {
+     "name": "Italian restaurant",
+     "tag_id": "urn:tag:category:place:italian_restaurant",
+     "type": "urn:tag:category:place",
+     "value": "urn:tag:category:place:italian_restaurant"
+    },
+    {
+     "name": "Bar",
+     "tag_id": "urn:tag:amenity:qloo:bar",
+     "type": "urn:tag:amenity:qloo",
+     "value": "urn:tag:amenity:qloo:bar"
+    },
+    {
+     "name": "Culinary arts",
+     "tag_id": "urn:tag:interests:qloo:culinary_arts",
+     "type": "urn:tag:interests:qloo",
+     "value": "urn:tag:interests:qloo:culinary_arts"
+    },
+    {
+     "name": "Classic",
+     "tag_id": "urn:tag:ambience:qloo:classic",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:classic"
+    },
+    {
+     "name": "Groups of friends",
+     "tag_id": "urn:tag:customer_identity:qloo:groups_of_friends",
+     "type": "urn:tag:customer_identity:qloo",
+     "value": "urn:tag:customer_identity:qloo:groups_of_friends"
+    },
+    {
+     "name": "Date night",
+     "tag_id": "urn:tag:event:place:date_night",
+     "type": "urn:tag:event:place",
+     "value": "urn:tag:event:place:date_night"
+    },
+    {
+     "name": "25 29",
+     "tag_id": "urn:tag:age_range:qloo:25_29",
+     "type": "urn:tag:age_range:qloo",
+     "value": "urn:tag:age_range:qloo:25_29"
+    },
+    {
+     "name": "Resy",
+     "tag_id": "urn:tag:resy:keyword:place:resy",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:resy"
+    },
+    {
+     "name": "Restaurant",
+     "tag_id": "urn:tag:genre:place:restaurant",
+     "type": "urn:tag:genre:place",
+     "value": "urn:tag:genre:place:restaurant"
+    },
+    {
+     "name": "Cocktails",
+     "tag_id": "urn:tag:beverage_offering:qloo:cocktails",
+     "type": "urn:tag:beverage_offering:qloo",
+     "value": "urn:tag:beverage_offering:qloo:cocktails"
+    },
+    {
+     "name": "Classic",
+     "tag_id": "urn:tag:decor:qloo:classic",
+     "type": "urn:tag:decor:qloo",
+     "value": "urn:tag:decor:qloo:classic"
+    },
+    {
+     "name": "Old world italian",
+     "tag_id": "urn:tag:decor:qloo:old_world_italian",
+     "type": "urn:tag:decor:qloo",
+     "value": "urn:tag:decor:qloo:old_world_italian"
+    },
+    {
+     "name": "Free street parking",
+     "tag_id": "urn:tag:parking:place:free_street_parking",
+     "type": "urn:tag:parking:place",
+     "value": "urn:tag:parking:place:free_street_parking"
+    },
+    {
+     "name": "Brunch",
+     "tag_id": "urn:tag:dining_options:place:brunch",
+     "type": "urn:tag:dining_options:place",
+     "value": "urn:tag:dining_options:place:brunch"
+    },
+    {
+     "name": "Restaurant",
+     "tag_id": "urn:tag:resy:keyword:place:restaurant",
+     "type": "urn:tag:resy:keyword:place",
+     "value": "urn:tag:resy:keyword:place:restaurant"
+    },
+    {
+     "name": "Family friendly",
+     "tag_id": "urn:tag:ambience:qloo:family_friendly",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:family_friendly"
+    },
+    {
+     "name": "Grilled octopus",
+     "tag_id": "urn:tag:specialty_dish:place:grilled_octopus",
+     "type": "urn:tag:specialty_dish:place",
+     "value": "urn:tag:specialty_dish:place:grilled_octopus"
+    },
+    {
+     "name": "Relaxing",
+     "tag_id": "urn:tag:ambience:qloo:relaxing",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:relaxing"
+    },
+    {
+     "name": "Warm",
+     "tag_id": "urn:tag:ambience:qloo:warm",
+     "type": "urn:tag:ambience:qloo",
+     "value": "urn:tag:ambience:qloo:warm"
+    },
+    {
+     "name": "Trattoria",
+     "tag_id": "urn:tag:decor:qloo:trattoria",
+     "type": "urn:tag:decor:qloo",
+     "value": "urn:tag:decor:qloo:trattoria"
+    },
+    {
+     "name": "Walk ins",
+     "tag_id": "urn:tag:service_type:qloo:walk_ins",
+     "type": "urn:tag:service_type:qloo",
+     "value": "urn:tag:service_type:qloo:walk_ins"
+    },
+    {
+     "name": "Hard liquor",
+     "tag_id": "urn:tag:offerings:place:hard_liquor",
+     "type": "urn:tag:offerings:place",
+     "value": "urn:tag:offerings:place:hard_liquor"
+    },
+    {
+     "name": "Outdoor seating",
+     "tag_id": "urn:tag:service_options:place:outdoor_seating",
+     "type": "urn:tag:service_options:place",
+     "value": "urn:tag:service_options:place:outdoor_seating"
+    },
+    {
+     "name": "Dinner",
+     "tag_id": "urn:tag:dining_options:place:dinner",
+     "type": "urn:tag:dining_options:place",
+     "value": "urn:tag:dining_options:place:dinner"
+    }
+   ]
+  }
+ ]
+}

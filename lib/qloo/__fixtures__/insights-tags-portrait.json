@@ -1,0 +1,267 @@
+{
+ "success": true,
+ "results": {
+  "tags": [
+   {
+    "tag_id": "urn:tag:decor:qloo:european",
+    "name": "European",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:decor:qloo",
+    "tag_value": "urn:tag:decor:qloo:european",
+    "popularity": 0.9960103443893721,
+    "query": {
+     "affinity": 0.9713736211336109
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:trendy",
+    "name": "Trendy",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:trendy",
+    "popularity": 0.9995318854350865,
+    "query": {
+     "affinity": 0.8949463503839699
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:cozy",
+    "name": "Cozy",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:cozy",
+    "popularity": 0.9999597075886241,
+    "query": {
+     "affinity": 0.8718848154455106
+    }
+   },
+   {
+    "tag_id": "urn:tag:decor:qloo:irish_pub",
+    "name": "Irish Pub",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:decor:qloo",
+    "tag_value": "urn:tag:decor:qloo:irish_pub",
+    "popularity": 0.9986888865046812,
+    "query": {
+     "affinity": 0.8637816938062309
+    }
+   },
+   {
+    "tag_id": "urn:tag:decor:qloo:cozy",
+    "name": "Cozy",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:decor:qloo",
+    "tag_value": "urn:tag:decor:qloo:cozy",
+    "popularity": 0.9999677974879841,
+    "query": {
+     "affinity": 0.8294275440713262
+    }
+   },
+   {
+    "tag_id": "urn:tag:decor:qloo:chic",
+    "name": "Chic",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:decor:qloo",
+    "tag_value": "urn:tag:decor:qloo:chic",
+    "popularity": 0.999900564926312,
+    "query": {
+     "affinity": 0.8083207629236151
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:intimate",
+    "name": "Intimate",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:intimate",
+    "popularity": 0.9999182370365646,
+    "query": {
+     "affinity": 0.8039218211060084
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:lively",
+    "name": "Lively",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:lively",
+    "popularity": 0.9999859408545102,
+    "query": {
+     "affinity": 0.7868836264851962
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:chic",
+    "name": "Chic",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:chic",
+    "popularity": 0.9995714709620525,
+    "query": {
+     "affinity": 0.7742766337351863
+    }
+   },
+   {
+    "tag_id": "urn:tag:decor:qloo:vintage",
+    "name": "Vintage",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:decor:qloo",
+    "tag_value": "urn:tag:decor:qloo:vintage",
+    "popularity": 0.9998308189978484,
+    "query": {
+     "affinity": 0.7169631725588405
+    }
+   },
+   {
+    "tag_id": "urn:tag:cuisine:qloo:cocktail_bar",
+    "name": "Cocktail Bar",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:cuisine:qloo",
+    "tag_value": "urn:tag:cuisine:qloo:cocktail_bar",
+    "popularity": 0.9986976047457392,
+    "query": {
+     "affinity": 0.6935965589185173
+    }
+   },
+   {
+    "tag_id": "urn:tag:decor:qloo:rustic",
+    "name": "Rustic",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:decor:qloo",
+    "tag_value": "urn:tag:decor:qloo:rustic",
+    "popularity": 0.9999681902015453,
+    "query": {
+     "affinity": 0.6924688832304612
+    }
+   },
+   {
+    "tag_id": "urn:tag:cuisine:qloo:italian",
+    "name": "Italian",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:cuisine:qloo",
+    "tag_value": "urn:tag:cuisine:qloo:italian",
+    "popularity": 0.9999437634180406,
+    "query": {
+     "affinity": 0.6869044501253742
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:inviting",
+    "name": "Inviting",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:inviting",
+    "popularity": 0.9997808658328677,
+    "query": {
+     "affinity": 0.6856663891621887
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:romantic",
+    "name": "Romantic",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:romantic",
+    "popularity": 0.9999416427648102,
+    "query": {
+     "affinity": 0.6765558006182127
+    }
+   },
+   {
+    "tag_id": "urn:tag:decor:qloo:speakeasy",
+    "name": "Speakeasy",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:decor:qloo",
+    "tag_value": "urn:tag:decor:qloo:speakeasy",
+    "popularity": 0.9978977257643502,
+    "query": {
+     "affinity": 0.670349451442503
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:hip",
+    "name": "Hip",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:hip",
+    "popularity": 0.9993725222719642,
+    "query": {
+     "affinity": 0.667380556621063
+    }
+   },
+   {
+    "tag_id": "urn:tag:cuisine:qloo:jewish",
+    "name": "Jewish",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:cuisine:qloo",
+    "tag_value": "urn:tag:cuisine:qloo:jewish",
+    "popularity": 0.9964620435274286,
+    "query": {
+     "affinity": 0.6602293149981527
+    }
+   },
+   {
+    "tag_id": "urn:tag:cuisine:qloo:deli",
+    "name": "Deli",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:cuisine:qloo",
+    "tag_value": "urn:tag:cuisine:qloo:deli",
+    "popularity": 0.9997219587986924,
+    "query": {
+     "affinity": 0.659386301369863
+    }
+   },
+   {
+    "tag_id": "urn:tag:ambience:qloo:moody",
+    "name": "Moody",
+    "types": [
+     "urn:entity:place"
+    ],
+    "subtype": "urn:tag:ambience:qloo",
+    "tag_value": "urn:tag:ambience:qloo:moody",
+    "popularity": 0.9988770748431934,
+    "query": {
+     "affinity": 0.6474151288913932
+    }
+   }
+  ]
+ }
+}

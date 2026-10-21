@@ -1,0 +1,2404 @@
+{
+ "success": true,
+ "results": {
+  "entities": [
+   {
+    "name": "Feitoria",
+    "entity_id": "13916007-26B1-45BD-8DCD-0EC63888824A",
+    "type": "urn:entity",
+    "subtype": "urn:entity:place",
+    "properties": {
+     "hours": {
+      "friday": [
+       {
+        "opens": "T18:30:00",
+        "closed": false,
+        "closes": "T23:00:00"
+       }
+      ],
+      "monday": [
+       {
+        "opens": null,
+        "closed": true,
+        "closes": null
+       }
+      ],
+      "sunday": [
+       {
+        "opens": null,
+        "closed": true,
+        "closes": null
+       }
+      ],
+      "tuesday": [
+       {
+        "opens": "T18:30:00",
+        "closed": false,
+        "closes": "T23:00:00"
+       }
+      ],
+      "saturday": [
+       {
+        "opens": "T18:30:00",
+        "closed": false,
+        "closes": "T23:00:00"
+       }
+      ],
+      "thursday": [
+       {
+        "opens": "T18:30:00",
+        "closed": false,
+        "closes": "T23:00:00"
+       }
+      ],
+      "wednesday": [
+       {
+        "opens": "T18:30:00",
+        "closed": false,
+        "closes": "T23:00:00"
+       }
+      ]
+     },
+     "phone": "+351210400208",
+     "images": [
+      {
+       "url": "https://images.qloo.com/i/13916007-26B1-45BD-8DCD-0EC63888824A-0eNiF9-420x-outside.jpg",
+       "type": "urn:image:place:unknown"
+      }
+     ],
+     "address": "Altis Belem Hotel & Spa, Doca do Bom Sucesso 1400-038 Lisboa Portugal",
+     "geocode": {
+      "city": "Lisbon",
+      "name": "Pedrouços",
+      "metro": "Lisbon",
+      "country": "Portugal",
+      "country_code": "PT",
+      "admin1_region": null,
+      "admin2_region": "Lisbon"
+     },
+     "parking": true,
+     "website": "https://www.restaurantefeitoria.com/",
+     "good_for": null,
+     "keywords": [
+      {
+       "name": "tasting menu",
+       "count": 41
+      },
+      {
+       "name": "portuguese cuisine",
+       "count": 17
+      },
+      {
+       "name": "vegetarian menu",
+       "count": 22
+      },
+      {
+       "name": "wine pairing",
+       "count": 38
+      },
+      {
+       "name": "sommelier",
+       "count": 21
+      },
+      {
+       "name": "michelin star",
+       "count": 14
+      },
+      {
+       "name": "cod",
+       "count": 5
+      },
+      {
+       "name": "cheese course",
+       "count": 3
+      },
+      {
+       "name": "local produce",
+       "count": 4
+      },
+      {
+       "name": "passionate staff",
+       "count": 4
+      }
+     ],
+     "locality": {
+      "city": {
+       "name": "Lisbon",
+       "place": "city",
+       "boundary": "administrative",
+       "entity_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "admin_level": 7,
+       "locality_id": "r5400890",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "metro": {
+       "name": "Lisbon",
+       "place": "metro",
+       "boundary": "metro",
+       "entity_id": "8811AE53-6D57-49FA-8530-CD1292B706C9",
+       "admin_level": 12,
+       "locality_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "state": null,
+      "county": {
+       "name": "Lisbon",
+       "place": "distrito",
+       "boundary": "administrative",
+       "entity_id": "C4874F9D-BD5C-41E7-A895-99B6FD02A665",
+       "admin_level": 6,
+       "locality_id": "r2897141",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "country": {
+       "name": "Portugal",
+       "place": "country",
+       "boundary": "administrative",
+       "entity_id": "194581AB-5819-4E95-BA7F-317059A6793F",
+       "admin_level": 2,
+       "locality_id": "r295480",
+       "abbreviation": null,
+       "country_code": "PT"
+      },
+      "neighborhood": {
+       "name": "Pedrouços",
+       "place": "neighbourhood",
+       "boundary": null,
+       "entity_id": "0BEEA6C8-F7C4-4B45-ABE8-72180C7A8546",
+       "admin_level": 10,
+       "locality_id": "n1468348689",
+       "abbreviation": null,
+       "country_code": null
+      }
+     },
+     "menu_url": null,
+     "is_closed": false,
+     "live_music": false,
+     "localities": [
+      {
+       "name": "Pedrouços",
+       "place": "neighbourhood",
+       "boundary": null,
+       "entity_id": "0BEEA6C8-F7C4-4B45-ABE8-72180C7A8546",
+       "admin_level": 10,
+       "locality_id": "n1468348689",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Portugal",
+       "place": "country",
+       "boundary": "administrative",
+       "entity_id": "194581AB-5819-4E95-BA7F-317059A6793F",
+       "admin_level": 2,
+       "locality_id": "r295480",
+       "abbreviation": null,
+       "country_code": "PT"
+      },
+      {
+       "name": "Belém",
+       "place": "freguesia",
+       "boundary": "administrative",
+       "entity_id": "7D763246-3DE8-49DB-A5C4-0E1AD3ECBF37",
+       "admin_level": 8,
+       "locality_id": "r6427489",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "city",
+       "boundary": "administrative",
+       "entity_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "admin_level": 7,
+       "locality_id": "r5400890",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "distrito",
+       "boundary": "administrative",
+       "entity_id": "C4874F9D-BD5C-41E7-A895-99B6FD02A665",
+       "admin_level": 6,
+       "locality_id": "r2897141",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "metro",
+       "boundary": "metro",
+       "entity_id": "8811AE53-6D57-49FA-8530-CD1292B706C9",
+       "admin_level": 12,
+       "locality_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "abbreviation": null,
+       "country_code": null
+      }
+     ],
+     "description": "Michelin-starred Portuguese cuisine in a stylish, light-filled space with river views at Altis Belém Hotel.",
+     "hotel_class": null,
+     "price_level": 4,
+     "price_range": {
+      "to": null,
+      "from": null,
+      "currency": "usd"
+     },
+     "star_rating": null,
+     "event_spaces": true,
+     "neighborhood": "Pedrouços",
+     "pet_friendly": false,
+     "check_in_time": null,
+     "primary_genre": {
+      "id": "urn:tag:genre:place:restaurant:fine_dining",
+      "name": "Fine dining restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     "check_out_time": null,
+     "business_rating": 4.800000190734863,
+     "loyalty_program": null,
+     "number_of_rooms": null,
+     "cost_description": null,
+     "specialty_dishes": [
+      {
+       "id": "urn:tag:specialty_dish:place:taco",
+       "name": "And Taco",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 1
+      },
+      {
+       "id": "urn:tag:specialty_dish:place:fresh_shrimp_mushroom_rice",
+       "name": "Fresh Shrimp With Mushroom Rice",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 0.75
+      },
+      {
+       "id": "urn:tag:specialty_dish:place:scarlet_shrimp",
+       "name": "Scarlet Shrimp",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 0.5
+      }
+     ],
+     "short_description": "Michelin-starred Portuguese cuisine in a stylish, light-filled space with river views at Altis Belém Hotel.",
+     "number_of_stations": null,
+     "cuisine_description": "Feitoria offers a contemporary, Michelin-starred Portuguese fine dining experience. The cuisine is defined by a deep respect for seasonal, locally sourced products, crafted with innovation and creativity. Menu offerings include various tasting menus with both omnivore and vegetarian options, emphasizing pure flavors and the origin of ingredients. A comprehensive selection of wines is available for professional pairings, along with a full bar service.",
+     "overall_description": "This Michelin-starred destination offers a deeply immersive gastronomic journey that celebrates the richness of Portuguese ingredients through creative and seasonal tasting menus. Located in an elegant, light-filled space with serene river views, the restaurant emphasizes a profound respect for local producers and the artistry of modern cuisine. With a commitment to storytelling in every course, it provides a sophisticated yet memorable experience for those seeking the pinnacle of contemporary Portuguese dining.",
+     "service_description": "The restaurant provides a sophisticated fine dining experience characterized by professional, attentive service and a multi-course, immersive meal format. Guests can enjoy indoor dining in a refined atmosphere with river views, ideal for special occasions, romantic dates, and significant celebrations. Reservations are highly recommended for this gastronomic destination.",
+     "ambience_description": "The atmosphere is defined by a chic, white-tablecloth aesthetic that balances professional refinement with a welcoming, light-filled warmth. It is designed to be an immersive, sensory-focused environment where the kitchen's artistry takes center stage.",
+     "amenities_description": "The establishment offers bespoke multi-course tasting menus, including dedicated vegetarian options, expertly paired with a selection of fine wines. Guests are treated to attentive, high-level service and occasional opportunities to engage with the culinary team.",
+     "unique_selling_points": "A Michelin-starred experience that serves as a love letter to Portuguese produce, focusing on seasonal ingredients sourced from local suppliers. Each course is presented as a 'moment,' offering a creative, narrative-driven exploration of the land and sea.",
+     "neighborhood_description": "Situated in a prime riverside area known for its historic charm and cultural significance, the neighborhood offers a tranquil yet distinguished atmosphere ideal for an upscale dining destination.",
+     "physical_setting_description": "Located within a stylish hotel along the Tagus River, the space offers a bright, light-filled environment with serene water views. It provides a sophisticated backdrop that emphasizes a connection between the interior dining experience and the scenic outdoor surroundings.",
+     "customer_demographics_description": "The typical clientele consists of food enthusiasts, tourists, and fine dining seekers looking for a premium gastronomic experience. It attracts a mix of locals and international visitors who appreciate high-end culinary artistry, local product sourcing, and refined service.",
+     "image": {
+      "url": "https://images.qloo.com/i/13916007-26B1-45BD-8DCD-0EC63888824A-420x-auto.jpg"
+     }
+    },
+    "popularity": 0.949590115675452,
+    "location": {
+     "lat": 38.6934397,
+     "lon": -9.210497799999999,
+     "geohash": "eyckn7vjeggj"
+    },
+    "tags": [
+     {
+      "id": "urn:tag:event:place:birthday",
+      "name": "Birthday",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:fine_dining_enthusiasts",
+      "name": "Fine dining enthusiasts",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:modern",
+      "name": "Modern",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:contemporary_portuguese",
+      "name": "Contemporary portuguese",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:reservations_required",
+      "name": "Reservations required",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:view:qloo:sunset_view",
+      "name": "Sunset view",
+      "type": "urn:tag:view:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:allergy_friendly",
+      "name": "Allergy friendly",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:foodies",
+      "name": "Foodies",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:beer",
+      "name": "Beer",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:coffee_and_tea",
+      "name": "Coffee and tea",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:romantic",
+      "name": "Romantic",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:sophisticated",
+      "name": "Sophisticated",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:accessibility:place:wheelchair_accessible_seating",
+      "name": "Wheelchair accessible seating",
+      "type": "urn:tag:accessibility:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:portuguese",
+      "name": "Portuguese",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:tourists",
+      "name": "Tourists",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:cultural_district",
+      "name": "Cultural district",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:degustation_menus",
+      "name": "Degustation menus",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:contemporary",
+      "name": "Contemporary",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:delivery",
+      "name": "Delivery",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:anniversary",
+      "name": "Anniversary",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:waterfront",
+      "name": "Waterfront",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:alcohol",
+      "name": "Alcohol",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:seasonal",
+      "name": "Seasonal",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant",
+      "name": "Restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:bar_onsite",
+      "name": "Bar onsite",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:central",
+      "name": "Central",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:fine_dining_restaurant",
+      "name": "Fine dining restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:vegetarian",
+      "name": "Vegetarian",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:accessibility:place:wheelchair_accessible_restroom",
+      "name": "Wheelchair accessible restroom",
+      "type": "urn:tag:accessibility:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:visit_intent:qloo:destination",
+      "name": "Destination",
+      "type": "urn:tag:visit_intent:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:portuguese_viticulture",
+      "name": "Portuguese viticulture",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:couples",
+      "name": "Couples",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:reservations",
+      "name": "Reservations",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:urban",
+      "name": "Urban",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:tasting_menus",
+      "name": "Tasting menus",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:dinner_reservations_recommended",
+      "name": "Dinner reservations recommended",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:fine_dining",
+      "name": "Fine dining restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:romantic",
+      "name": "Romantic",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:scarlet_shrimp",
+      "name": "Scarlet shrimp",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:25_29",
+      "name": "25 29",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:belem_tower",
+      "name": "Belem tower",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:elegant",
+      "name": "Elegant",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:tuna_hamachi_and_citrus",
+      "name": "Tuna hamachi and citrus",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:seasonal_gastronomy",
+      "name": "Seasonal gastronomy",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:hotel_setting",
+      "name": "Hotel setting",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:parking:place:free_parking_lot",
+      "name": "Free parking lot",
+      "type": "urn:tag:parking:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:chef_interaction",
+      "name": "Chef interaction",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:spirits",
+      "name": "Spirits",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:tasting_experiences",
+      "name": "Tasting experiences",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:wi_fi",
+      "name": "Wi fi",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:gastronomic",
+      "name": "Gastronomic",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:wine_enthusiasts",
+      "name": "Wine enthusiasts",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:social",
+      "name": "Social",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:hard_liquor",
+      "name": "Hard liquor",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:seafood",
+      "name": "Seafood",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:upscale",
+      "name": "Upscale",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:nfc_mobile_payments",
+      "name": "Nfc mobile payments",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:coffee",
+      "name": "Coffee",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:takeout",
+      "name": "Takeout",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:michelin_star",
+      "name": "Michelin star",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:charming",
+      "name": "Charming",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:wine_pairing",
+      "name": "Wine pairing",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:view:qloo:river_view",
+      "name": "River view",
+      "type": "urn:tag:view:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:jeronimos_monastery",
+      "name": "Jeronimos monastery",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:vegetarian_options",
+      "name": "Vegetarian options",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:shrimp_rice_and_mushrooms",
+      "name": "Shrimp rice and mushrooms",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:accessibility:place:wheelchair_accessible_entrance",
+      "name": "Wheelchair accessible entrance",
+      "type": "urn:tag:accessibility:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place",
+      "name": "Place",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:business_professionals",
+      "name": "Business professionals",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:35_44",
+      "name": "35 44",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:gluten_free",
+      "name": "Gluten free",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:portuguese",
+      "name": "Portuguese",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:elegant",
+      "name": "Elegant",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:wine_pairing",
+      "name": "Wine pairing",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:30_34",
+      "name": "30 34",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:dining_drinking",
+      "name": "Dining drinking",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:fine_dining",
+      "name": "Fine dining",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:modern",
+      "name": "Modern",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:professional",
+      "name": "Professional",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:taco",
+      "name": "Taco",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:dine_in",
+      "name": "Dine in",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:table_service",
+      "name": "Table service",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:fine_dining",
+      "name": "Fine dining",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:wine",
+      "name": "Wine",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:parking:place:parking",
+      "name": "Parking",
+      "type": "urn:tag:parking:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:reservations",
+      "name": "Reservations",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:tasting_menu",
+      "name": "Tasting menu",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:work_dinner",
+      "name": "Work dinner",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:evening",
+      "name": "Evening",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:minimalist",
+      "name": "Minimalist",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:debit_cards",
+      "name": "Debit cards",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:portuguese_restaurant",
+      "name": "Portuguese restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:sustainable_agriculture",
+      "name": "Sustainable agriculture",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:culture_arts",
+      "name": "Culture arts",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:scenic",
+      "name": "Scenic",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:wine",
+      "name": "Wine",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:dinner",
+      "name": "Dinner",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:price_level",
+      "name": "Price level",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:restroom",
+      "name": "Restroom",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:accessibility:place:wheelchair_accessible_parking_lot",
+      "name": "Wheelchair accessible parking lot",
+      "type": "urn:tag:accessibility:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cost_description:place:€50_or_above",
+      "name": "€50 or above",
+      "type": "urn:tag:cost_description:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:noise_level:qloo:moderate",
+      "name": "Moderate",
+      "type": "urn:tag:noise_level:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:beer",
+      "name": "Beer",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:resort",
+      "name": "Resort",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:dessert",
+      "name": "Dessert",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:accepts_reservations",
+      "name": "Accepts reservations",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:visit_intent:qloo:special_occasion",
+      "name": "Special occasion",
+      "type": "urn:tag:visit_intent:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:private_dining",
+      "name": "Private dining",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:bright",
+      "name": "Bright",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:celebratory_diners",
+      "name": "Celebratory diners",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:date_night",
+      "name": "Date night",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:specialty_dish:place:taco",
+      "name": "Taco",
+      "type": "urn:tag:specialty_dish:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:contemporary",
+      "name": "Contemporary",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:vegetarian_options",
+      "name": "Vegetarian meals",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:innovative",
+      "name": "Innovative",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:sophisticated",
+      "name": "Sophisticated",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:dine_in",
+      "name": "Dine in",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:padrao_dos_descobrimentos",
+      "name": "Padrao dos descobrimentos",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:full_bar",
+      "name": "Full bar",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:credit_cards",
+      "name": "Credit cards",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:place:hidden_gem",
+      "name": "Hidden gem",
+      "type": "urn:tag:ambience:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:tasting_menu",
+      "name": "Tasting menu",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     }
+    ],
+    "references": null,
+    "query": {
+     "affinity": 0.7998966166128413,
+     "distance": 7230.230679538205,
+     "measurements": {
+      "audience_growth": -1.7320508075688774
+     },
+     "explainability": {
+      "signal.interests.entities": [
+       {
+        "entity_id": "3F659C60-D199-4E55-9B72-62DEEFB6AA11",
+        "score": 0.28158994956616834
+       },
+       {
+        "entity_id": "55E6BA87-F930-4AF0-AD01-D2A3AF0CF782",
+        "score": 0.25837047942852087
+       },
+       {
+        "entity_id": "273C2859-742C-4DD2-88A9-0A07C5551C55",
+        "score": 0.2521978507129023
+       },
+       {
+        "entity_id": "75A227CA-9221-44C0-96C4-A2F3CCD0CA24",
+        "score": 0.20784172029240847
+       }
+      ]
+     }
+    },
+    "disambiguation": "Altis Belem Hotel & Spa, Doca do Bom Sucesso 1400-038 Lisboa Portugal",
+    "external": {
+     "michelin": [
+      {
+       "id": "257754",
+       "stars": 1
+      }
+     ],
+     "tripadvisor": [
+      {
+       "id": "d1875055",
+       "rating": 4.5,
+       "rating_count": 785
+      }
+     ],
+     "google_place": [
+      {
+       "id": "898ca426c07c0192",
+       "place_id": "ChIJh32rQULLHg0RkgF8wCakjIk"
+      }
+     ]
+    }
+   },
+   {
+    "name": "Tapisco | Tapas e Petiscos",
+    "entity_id": "4A73E875-40EE-44B4-A6AC-0754DDDB47D4",
+    "type": "urn:entity",
+    "subtype": "urn:entity:place",
+    "properties": {
+     "hours": {
+      "friday": [
+       {
+        "opens": "T12:00:00",
+        "closed": false,
+        "closes": "T15:30:00"
+       }
+      ],
+      "monday": [
+       {
+        "opens": "T12:00:00",
+        "closed": false,
+        "closes": "T15:30:00"
+       }
+      ],
+      "sunday": [
+       {
+        "opens": "T12:00:00",
+        "closed": false,
+        "closes": "T23:30:00"
+       }
+      ],
+      "tuesday": [
+       {
+        "opens": "T12:00:00",
+        "closed": false,
+        "closes": "T15:30:00"
+       }
+      ],
+      "saturday": [
+       {
+        "opens": null,
+        "closed": true,
+        "closes": null
+       }
+      ],
+      "thursday": [
+       {
+        "opens": "T12:00:00",
+        "closed": false,
+        "closes": "T15:30:00"
+       }
+      ],
+      "wednesday": [
+       {
+        "opens": "T12:00:00",
+        "closed": false,
+        "closes": "T15:30:00"
+       }
+      ]
+     },
+     "phone": "+351213420681",
+     "images": [
+      {
+       "url": "https://images.qloo.com/i/4A73E875-40EE-44B4-A6AC-0754DDDB47D4-3UEZvg-420x-outside.jpg",
+       "type": "urn:image:place:unknown"
+      }
+     ],
+     "address": "R. Dom Pedro V 81 1250-096 Lisboa Portugal",
+     "geocode": {
+      "city": "Lisbon",
+      "name": "Mercês",
+      "metro": "Lisbon",
+      "country": "Portugal",
+      "country_code": "PT",
+      "admin1_region": null,
+      "admin2_region": "Lisbon"
+     },
+     "parking": false,
+     "website": "https://www.tapisco.pt/",
+     "good_for": [
+      {
+       "id": "urn:tag:children:place:good_kids",
+       "name": "Good for kids",
+       "type": "urn:tag:children:place",
+       "weight": 0.4375
+      },
+      {
+       "id": "urn:tag:event:place:anniversary",
+       "name": "Anniversary",
+       "type": "urn:tag:event:place",
+       "weight": 0.75
+      }
+     ],
+     "keywords": [
+      {
+       "name": "octopus salad",
+       "count": 49
+      },
+      {
+       "name": "tuna tartare",
+       "count": 37
+      },
+      {
+       "name": "bar seating",
+       "count": 41
+      },
+      {
+       "name": "bacalhau a bras",
+       "count": 43
+      },
+      {
+       "name": "jamon iberico",
+       "count": 24
+      },
+      {
+       "name": "squid ink paella",
+       "count": 21
+      },
+      {
+       "name": "Octopus Rice",
+       "count": 14
+      },
+      {
+       "name": "pan con tomate",
+       "count": 19
+      },
+      {
+       "name": "croquettes",
+       "count": 21
+      },
+      {
+       "name": "duck rice",
+       "count": 17
+      }
+     ],
+     "locality": {
+      "city": {
+       "name": "Lisbon",
+       "place": "city",
+       "boundary": "administrative",
+       "entity_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "admin_level": 7,
+       "locality_id": "r5400890",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "metro": {
+       "name": "Lisbon",
+       "place": "metro",
+       "boundary": "metro",
+       "entity_id": "8811AE53-6D57-49FA-8530-CD1292B706C9",
+       "admin_level": 12,
+       "locality_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "state": null,
+      "county": {
+       "name": "Lisbon",
+       "place": "distrito",
+       "boundary": "administrative",
+       "entity_id": "C4874F9D-BD5C-41E7-A895-99B6FD02A665",
+       "admin_level": 6,
+       "locality_id": "r2897141",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "country": {
+       "name": "Portugal",
+       "place": "country",
+       "boundary": "administrative",
+       "entity_id": "194581AB-5819-4E95-BA7F-317059A6793F",
+       "admin_level": 2,
+       "locality_id": "r295480",
+       "abbreviation": null,
+       "country_code": "PT"
+      },
+      "neighborhood": {
+       "name": "Mercês",
+       "place": "neighbourhood",
+       "boundary": null,
+       "entity_id": "1A369A49-A153-46D2-BD14-5D7496C6D970",
+       "admin_level": 10,
+       "locality_id": "n4360242983",
+       "abbreviation": null,
+       "country_code": null
+      }
+     },
+     "menu_url": null,
+     "is_closed": false,
+     "live_music": false,
+     "localities": [
+      {
+       "name": "Mercês",
+       "place": "neighbourhood",
+       "boundary": null,
+       "entity_id": "1A369A49-A153-46D2-BD14-5D7496C6D970",
+       "admin_level": 10,
+       "locality_id": "n4360242983",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Portugal",
+       "place": "country",
+       "boundary": "administrative",
+       "entity_id": "194581AB-5819-4E95-BA7F-317059A6793F",
+       "admin_level": 2,
+       "locality_id": "r295480",
+       "abbreviation": null,
+       "country_code": "PT"
+      },
+      {
+       "name": "Misericórdia",
+       "place": "freguesia",
+       "boundary": "administrative",
+       "entity_id": "82136BB7-0216-4628-8498-781A9A050119",
+       "admin_level": 8,
+       "locality_id": "r6427493",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "city",
+       "boundary": "administrative",
+       "entity_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "admin_level": 7,
+       "locality_id": "r5400890",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "distrito",
+       "boundary": "administrative",
+       "entity_id": "C4874F9D-BD5C-41E7-A895-99B6FD02A665",
+       "admin_level": 6,
+       "locality_id": "r2897141",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "metro",
+       "boundary": "metro",
+       "entity_id": "8811AE53-6D57-49FA-8530-CD1292B706C9",
+       "admin_level": 12,
+       "locality_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "abbreviation": null,
+       "country_code": null
+      }
+     ],
+     "description": "Casual Iberian tapas restaurant in Príncipe Real blending Portuguese petiscos and Spanish tapas with shareable plates and seafood specialties.",
+     "hotel_class": null,
+     "price_level": 4,
+     "price_range": {
+      "to": null,
+      "from": null,
+      "currency": "usd"
+     },
+     "star_rating": null,
+     "event_spaces": true,
+     "neighborhood": "Mercês",
+     "pet_friendly": false,
+     "check_in_time": null,
+     "primary_genre": {
+      "id": "urn:tag:genre:place:restaurant",
+      "name": "Restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     "check_out_time": null,
+     "business_rating": 4.300000190734863,
+     "loyalty_program": null,
+     "number_of_rooms": null,
+     "cost_description": null,
+     "specialty_dishes": [
+      {
+       "id": "urn:tag:specialty_dish:place:cuttlefish_tempura",
+       "name": "Cuttlefish Tempura",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 1
+      },
+      {
+       "id": "urn:tag:specialty_dish:place:tomato_bread",
+       "name": "Tomato Bread",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 0.8888888888888888
+      },
+      {
+       "id": "urn:tag:specialty_dish:place:cod_fish",
+       "name": "Cod Fish",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 0.7777777777777778
+      }
+     ],
+     "short_description": "Casual Iberian tapas restaurant in Príncipe Real blending Portuguese petiscos and Spanish tapas with shareable plates and seafood specialties.",
+     "number_of_stations": null,
+     "cuisine_description": "Tapisco offers a fusion of traditional Portuguese petiscos and Spanish tapas, focusing on high-quality, shareable plates. The menu highlights include seafood specialties, various Iberian pork dishes, and expertly prepared tapas like tomato bread and croquettes. The kitchen emphasizes fresh ingredients and authentic flavors, with a beverage selection featuring wines, cocktails, and coffee.",
+     "overall_description": "Tapisco is a popular dining destination in Lisbon that specializes in the creative fusion of Portuguese petiscos and Spanish tapas. Located in the heart of the trendy Príncipe Real district, it offers a sophisticated yet relaxed environment featuring an open kitchen that provides an engaging view for diners. While the menu highlights premium seafood and classic Iberian dishes like cod and octopus, the establishment is primarily recognized for its collaborative atmosphere and commitment to high-quality, shareable cuisine.",
+     "service_description": "Tapisco provides a vibrant and sophisticated dining environment with options for indoor and outdoor seating, including a bar counter overlooking the open kitchen. The restaurant is suitable for a variety of occasions, from business meetings and celebrations to solo dining. Reservations are highly encouraged due to its popularity, though walk-ins are occasionally accommodated.",
+     "ambience_description": "The atmosphere is relaxed and unpretentious, blending Iberian charm with a modern, sophisticated edge. The open kitchen serves as a focal point, adding a lively and transparent energy to the dining experience.",
+     "amenities_description": "The restaurant features a specialized bar area providing full views of the culinary team at work, alongside standard indoor and outdoor dining arrangements.",
+     "unique_selling_points": "The menu offers a distinct fusion of Portuguese petiscos and Spanish tapas, emphasizing high-quality ingredients and shareable plates prepared in an open-view kitchen.",
+     "neighborhood_description": "The neighborhood is a stylish and central area of Lisbon, known for its mix of historic architecture, boutique shopping, and a sophisticated, walkable urban vibe.",
+     "physical_setting_description": "Located in the vibrant Príncipe Real district of Lisbon, this establishment occupies an urban space that feels both intimate and bustling. The layout frequently features counter seating that allows diners to observe the open kitchen in action.",
+     "customer_demographics_description": "The restaurant attracts a diverse crowd of locals, international tourists, and food enthusiasts visiting Lisbon. It is popular among couples, groups of friends, and solo diners interested in experiencing a high-energy, modern fusion atmosphere in the Príncipe Real neighborhood.",
+     "image": {
+      "url": "https://images.qloo.com/i/4A73E875-40EE-44B4-A6AC-0754DDDB47D4-420x-auto.jpg"
+     }
+    },
+    "popularity": 0.8499365365563922,
+    "location": {
+     "lat": 38.7157598,
+     "lon": -9.1466386,
+     "geohash": "eyckpzgxeuee"
+    },
+    "tags": [
+     {
+      "id": "urn:tag:decor:qloo:contemporary",
+      "name": "Contemporary",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:casual",
+      "name": "Casual",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:late_night_food",
+      "name": "Late night food",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:no_contact_delivery",
+      "name": "No contact delivery",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:noise_level:qloo:moderate",
+      "name": "Moderate",
+      "type": "urn:tag:noise_level:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:locals",
+      "name": "Locals",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:specialty_dish:place:iberian_pork",
+      "name": "Iberian pork",
+      "type": "urn:tag:specialty_dish:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:salted_cod",
+      "name": "Salted cod",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:stylish",
+      "name": "Stylish",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:35_44",
+      "name": "35 44",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:onsite_services",
+      "name": "Onsite services",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:open_kitchen",
+      "name": "Open kitchen",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:evening",
+      "name": "Evening",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:chocolate_mousse",
+      "name": "Chocolate mousse",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:specialty_dish:place:tomato_bread",
+      "name": "Tomato bread",
+      "type": "urn:tag:specialty_dish:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:city_center",
+      "name": "City center",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:credit_card:place:american_express",
+      "name": "American express",
+      "type": "urn:tag:credit_card:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:visit_intent:qloo:destination",
+      "name": "Destination",
+      "type": "urn:tag:visit_intent:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:vegetarian_options",
+      "name": "Vegetarian meals",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:nfc_mobile_payments",
+      "name": "Nfc mobile payments",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:halal",
+      "name": "Halal",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:hard_liquor",
+      "name": "Hard liquor",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:wi_fi",
+      "name": "Wi fi",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:view:qloo:street_view",
+      "name": "Street view",
+      "type": "urn:tag:view:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant",
+      "name": "Restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:dessert",
+      "name": "Dessert",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:restaurant",
+      "name": "Restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:iberian_gastronomy",
+      "name": "Iberian gastronomy",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:small_plates",
+      "name": "Small plates",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:stylish",
+      "name": "Stylish",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:welcoming",
+      "name": "Welcoming",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:wine",
+      "name": "Wine",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:portuguese",
+      "name": "Portuguese",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:embaixada",
+      "name": "Embaixada",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:wine_appreciation",
+      "name": "Wine appreciation",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:organic_dishes",
+      "name": "Organic dishes",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:iberian_cool",
+      "name": "Iberian cool",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:historic_neighborhood",
+      "name": "Historic neighborhood",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:artisanal",
+      "name": "Artisanal",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:historic",
+      "name": "Historic",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:central",
+      "name": "Central",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:miradouro_de_sao_pedro_de_alcantara",
+      "name": "Miradouro de sao pedro de alcantara",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:casual",
+      "name": "Casual",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:duck_breast",
+      "name": "Duck breast",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:table_service",
+      "name": "Table service",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:30_34",
+      "name": "30 34",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:artisan_ingredient_sourcing",
+      "name": "Artisan ingredient sourcing",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:open_kitchen_concepts",
+      "name": "Open kitchen concepts",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:vegetarian",
+      "name": "Vegetarian",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:inclusivity:place:lgbtq_friendly",
+      "name": "Lgbtq+ friendly",
+      "type": "urn:tag:inclusivity:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:25_29",
+      "name": "25 29",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:outdoor_seating",
+      "name": "Outdoor seating",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:delivery",
+      "name": "Delivery",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:bar_onsite",
+      "name": "Bar onsite",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:cod_fish",
+      "name": "Cod fish",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:parking:place:free_street_parking",
+      "name": "Free street parking",
+      "type": "urn:tag:parking:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:date_night",
+      "name": "Date night",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:restroom",
+      "name": "Restroom",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:credit_cards",
+      "name": "Credit cards",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:culinary_fusion",
+      "name": "Culinary fusion",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:dining_drinking",
+      "name": "Dining drinking",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cost_description:place:€50_or_above",
+      "name": "€50 or above",
+      "type": "urn:tag:cost_description:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:reservations",
+      "name": "Reservations",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:credit_card:place:visa",
+      "name": "Visa",
+      "type": "urn:tag:credit_card:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:lunch_reservations_recommended",
+      "name": "Lunch reservations recommended",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:walk_ins",
+      "name": "Walk ins",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:outdoor_seating",
+      "name": "Outdoor seating",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:lunch",
+      "name": "Lunch",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:walkable",
+      "name": "Walkable",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:afternoon",
+      "name": "Afternoon",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:iberian",
+      "name": "Iberian",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:upscale_residential_and_commercial",
+      "name": "Upscale residential and commercial",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:tomato_bread",
+      "name": "Tomato bread",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:seafood",
+      "name": "Seafood",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:tuna_tartare",
+      "name": "Tuna tartare",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:urban",
+      "name": "Urban",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:couples",
+      "name": "Couples",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:lively",
+      "name": "Lively",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:squid_ink_paella",
+      "name": "Squid ink paella",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:takeout",
+      "name": "Takeout",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:birthday",
+      "name": "Birthday",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:patatas_bravas",
+      "name": "Patatas bravas",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:specialty_dish:place:cuttlefish_tempura",
+      "name": "Cuttlefish tempura",
+      "type": "urn:tag:specialty_dish:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:beer",
+      "name": "Beer",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:coffee_and_tea",
+      "name": "Coffee and tea",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:credit_card:place:mastercard",
+      "name": "Mastercard",
+      "type": "urn:tag:credit_card:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:work_dinner",
+      "name": "Work dinner",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:sweet_rice_pudding",
+      "name": "Sweet rice pudding",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:iberian_pork",
+      "name": "Iberian pork",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:children:place:good_for_kids",
+      "name": "Good for kids",
+      "type": "urn:tag:children:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:reservations_required",
+      "name": "Reservations required",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place",
+      "name": "Place",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:tourists",
+      "name": "Tourists",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:octopus_salad",
+      "name": "Octopus salad",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:coffee",
+      "name": "Coffee",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:debit_cards",
+      "name": "Debit cards",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:braille_menu",
+      "name": "Braille menu",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:iberian_charcuterie_board",
+      "name": "Iberian charcuterie board",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:soft_drinks",
+      "name": "Soft drinks",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:traditional",
+      "name": "Traditional",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:inclusivity:place:identifies_as_women_owned",
+      "name": "Identifies as women owned",
+      "type": "urn:tag:inclusivity:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:private_dining",
+      "name": "Private dining",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:dine_in",
+      "name": "Dine in",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:trendy",
+      "name": "Trendy",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:jardim_do_principe_real",
+      "name": "Jardim do principe real",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:business_professionals",
+      "name": "Business professionals",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:sophisticated",
+      "name": "Sophisticated",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:parking:place:parking",
+      "name": "Parking",
+      "type": "urn:tag:parking:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:solo_diners",
+      "name": "Solo diners",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:accepts_reservations",
+      "name": "Accepts reservations",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:parking:place:paid_street_parking",
+      "name": "Paid street parking",
+      "type": "urn:tag:parking:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:anniversary",
+      "name": "Anniversary",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:counter_service",
+      "name": "Counter service",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:dine_in",
+      "name": "Dine in",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:dinner",
+      "name": "Dinner",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:gluten_free",
+      "name": "Gluten free",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:foodies",
+      "name": "Foodies",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:vegan",
+      "name": "Vegan",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:visit_intent:qloo:special_occasion",
+      "name": "Special occasion",
+      "type": "urn:tag:visit_intent:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:bar_service",
+      "name": "Bar service",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:wine_list",
+      "name": "Wine list",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:delivery",
+      "name": "Delivery",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:groups_of_friends",
+      "name": "Groups of friends",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:fusion",
+      "name": "Fusion",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:spanish",
+      "name": "Spanish",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:socializing",
+      "name": "Socializing",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:seafood_paella",
+      "name": "Seafood paella",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:spirits",
+      "name": "Spirits",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:modern",
+      "name": "Modern",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:contemporary",
+      "name": "Contemporary",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:beer",
+      "name": "Beer",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:dinner_reservations_recommended",
+      "name": "Dinner reservations recommended",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:alcohol",
+      "name": "Alcohol",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:wine",
+      "name": "Wine",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:order_ahead",
+      "name": "Order ahead",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:price_level",
+      "name": "Price level",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:bar_seating",
+      "name": "Bar seating",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:iberian_chic",
+      "name": "Iberian chic",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:cuttlefish_tempura",
+      "name": "Cuttlefish tempura",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:lisbon_bomb",
+      "name": "Lisbon bomb",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:intimate",
+      "name": "Intimate",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     }
+    ],
+    "references": null,
+    "query": {
+     "affinity": 0.7966311734077316,
+     "distance": 3106.0126371007386,
+     "measurements": {
+      "audience_growth": -1
+     },
+     "explainability": {
+      "signal.interests.entities": [
+       {
+        "entity_id": "273C2859-742C-4DD2-88A9-0A07C5551C55",
+        "score": 0.2751654732828857
+       },
+       {
+        "entity_id": "3F659C60-D199-4E55-9B72-62DEEFB6AA11",
+        "score": 0.27301629375759784
+       },
+       {
+        "entity_id": "55E6BA87-F930-4AF0-AD01-D2A3AF0CF782",
+        "score": 0.24131465715533165
+       },
+       {
+        "entity_id": "75A227CA-9221-44C0-96C4-A2F3CCD0CA24",
+        "score": 0.21050357580418474
+       }
+      ]
+     }
+    },
+    "disambiguation": "R. Dom Pedro V 81 1250-096 Lisboa Portugal",
+    "external": {
+     "tripadvisor": [
+      {
+       "id": "d12190297",
+       "rating": 4,
+       "rating_count": 651
+      }
+     ],
+     "google_place": [
+      {
+       "id": "8183732b808e8c8a",
+       "place_id": "ChIJL9EDcn8zGQ0RioyOgCtzg4E"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "query": {
+  "explainability": {
+   "signal.interests.entities": {
+    "effect_on_top3_recs": [
+     {
+      "entity_id": "3F659C60-D199-4E55-9B72-62DEEFB6AA11",
+      "avg_score": 0.27166540477634543
+     },
+     {
+      "entity_id": "273C2859-742C-4DD2-88A9-0A07C5551C55",
+      "avg_score": 0.2630935668893617
+     },
+     {
+      "entity_id": "55E6BA87-F930-4AF0-AD01-D2A3AF0CF782",
+      "avg_score": 0.24938296233452714
+     },
+     {
+      "entity_id": "75A227CA-9221-44C0-96C4-A2F3CCD0CA24",
+      "avg_score": 0.21585806599976567
+     }
+    ],
+    "effect_on_top5_recs": [
+     {
+      "entity_id": "3F659C60-D199-4E55-9B72-62DEEFB6AA11",
+      "avg_score": 0.26678072476529574
+     },
+     {
+      "entity_id": "273C2859-742C-4DD2-88A9-0A07C5551C55",
+      "avg_score": 0.26349015708353124
+     },
+     {
+      "entity_id": "55E6BA87-F930-4AF0-AD01-D2A3AF0CF782",
+      "avg_score": 0.24498542566240555
+     },
+     {
+      "entity_id": "75A227CA-9221-44C0-96C4-A2F3CCD0CA24",
+      "avg_score": 0.22474369248876744
+     }
+    ],
+    "effect_on_top10_recs": [
+     {
+      "entity_id": "3F659C60-D199-4E55-9B72-62DEEFB6AA11",
+      "avg_score": 0.26678072476529574
+     },
+     {
+      "entity_id": "273C2859-742C-4DD2-88A9-0A07C5551C55",
+      "avg_score": 0.26349015708353124
+     },
+     {
+      "entity_id": "55E6BA87-F930-4AF0-AD01-D2A3AF0CF782",
+      "avg_score": 0.24498542566240555
+     },
+     {
+      "entity_id": "75A227CA-9221-44C0-96C4-A2F3CCD0CA24",
+      "avg_score": 0.22474369248876744
+     }
+    ],
+    "effect_on_all_recs": [
+     {
+      "entity_id": "3F659C60-D199-4E55-9B72-62DEEFB6AA11",
+      "avg_score": 0.26678072476529574
+     },
+     {
+      "entity_id": "273C2859-742C-4DD2-88A9-0A07C5551C55",
+      "avg_score": 0.26349015708353124
+     },
+     {
+      "entity_id": "55E6BA87-F930-4AF0-AD01-D2A3AF0CF782",
+      "avg_score": 0.24498542566240555
+     },
+     {
+      "entity_id": "75A227CA-9221-44C0-96C4-A2F3CCD0CA24",
+      "avg_score": 0.22474369248876744
+     }
+    ]
+   }
+  }
+ }
+}
