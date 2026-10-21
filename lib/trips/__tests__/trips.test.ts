@@ -116,7 +116,7 @@ describe.skipIf(!hasDatabase)("trips", () => {
     );
     expect(again[uva]).toBe(tripPlaceId);
     [row] = await db.select().from(tripPlaces).where(eq(tripPlaces.id, tripPlaceId));
-    expect(row).toMatchObject({ source: "ask", bestScore: 88, bestAffinity: "0.8123", explainability: [] });
+    expect(row).toMatchObject({ source: "ask", bestScore: 88, bestAffinity: 0.8123, explainability: [] });
 
     await upsertTripPlaces(trip.id, [{ ...base, source: "manual" }], run.owner);
     const rows = await db
