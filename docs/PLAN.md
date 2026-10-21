@@ -155,7 +155,14 @@ Implementation is in section 6.3.
 | `GET /api/chats/[chatId]` | re-hydrate | → `{ chat: { id, tripId, status, activeRunId, messages: UIMessage[], lastError } }` |
 | `POST /api/chats/[chatId]/messages` | prompt (fire and forget + stream) | body `{ message: UIMessage }` (only the new user message; history is loaded server-side) → UI message stream, headers `x-workflow-run-id`, `x-chat-id` |
 | `GET /api/chats/[chatId]/stream?startIndex=n` | listener | resolves `chats.active_run_id`; if none, returns 204; else replays `getRun(runId).getReadable({ startIndex: 0 })` through `createModelCallToUIChunkTransform({ uiStartIndex: n })`, plus the `ui` namespace stream merged (section 6.4) |
-| `POST /api/chats/[chatId]/stop` | stop | resumes the run's stop hook, falls back to `getRun(runId).cancel()` after 5 s, clears `active_run_id`, persists the partial assistant message from the stream (section 6.5) |
+| `POST /api/chats/[chatId]/stop` | stop | sets `stop_requested_at`, resumes the run's stop hook; the workflow persists the partial message and clears the lock; the route falls back to `getRun(runId).cancel()` plus its own partial save only if the chat is still running after 15 s (section 6.5) |
+
+Review findings folded in (Codex astra, 2026-10-21):
+- A crash between taking the lock and storing the run id leaves a locked chat with no run. Healing: a chat with `active_turn_id` set, `active_run_id` null and `updated_at` older than 60 s has its lock cleared on the next GET or POST.
+- Every write a turn makes checks ownership: `persistTurn`, `markIdle` and tool steps only write when `chats.active_turn_id = turnId`, so a cancelled or superseded run cannot overwrite a newer turn.
+- Tool effects are idempotent by `toolCallId` (asks, trip places, ask places, slots), so Workflow retries and replays never duplicate rows.
+- The projection keeps what later stateless calls need: assistant message ids, tool call ids with their results, and reasoning provider metadata (encrypted content). History trimming never splits a tool call from its result.
+- One stream per run. Progress travels as preliminary tool outputs on the main stream; the namespace variant is a last-resort fallback, never both.
 
 Turn lock and idempotency: the client mints a `turnId` (uuid) per send. The prompt route does `update chats set status='running', active_turn_id=$turnId where id=$id and active_turn_id is null returning id`. If no row returns and `active_turn_id = $turnId`, it is a repeat of the same send: respond with that run's stream (`getRun(active_run_id).getReadable`). If it is a different turn, respond 409 `conflict:chat`. On success the route appends the user message, calls `start(chatTurn, [{ chatId, turnId }])`, stores `active_run_id`, and streams. If `start()` throws, both columns are cleared. Healing: a `running` chat whose `getRun(active_run_id).status` is completed, failed or cancelled is reconciled on the next `GET` (clear the lock, persist what the stream has if the workflow did not), so there is no boot reset.
 
