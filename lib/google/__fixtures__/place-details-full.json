@@ -1,0 +1,62 @@
+{
+  "id": "ChIJh32rQULLHg0RkgF8wCakjIk",
+  "displayName": { "text": "Feitoria", "languageCode": "en" },
+  "formattedAddress": "Altis Belem Hotel & Spa, Doca do Bom Sucesso, 1400-038 Lisboa, Portugal",
+  "googleMapsUri": "https://maps.google.com/?cid=9911512543617106322",
+  "primaryType": "fine_dining_restaurant",
+  "primaryTypeDisplayName": { "text": "Fine dining restaurant", "languageCode": "en" },
+  "businessStatus": "OPERATIONAL",
+  "location": { "latitude": 38.6934397, "longitude": -9.2104978 },
+  "photos": [
+    {
+      "name": "places/ChIJh32rQULLHg0RkgF8wCakjIk/photos/AXCi2Q7Example0PhotoReference0One",
+      "widthPx": 4032,
+      "heightPx": 3024,
+      "authorAttributions": [
+        {
+          "displayName": "A Visitor",
+          "uri": "https://maps.google.com/maps/contrib/100000000000000000001",
+          "photoUri": "https://lh3.googleusercontent.com/a/example-avatar"
+        }
+      ],
+      "flagContentUri": "https://www.google.com/local/imagery/report/?cb_client=maps_api_places",
+      "googleMapsUri": "https://www.google.com/maps/place//data=!3m4!1e2"
+    }
+  ],
+  "rating": 4.7,
+  "userRatingCount": 812,
+  "regularOpeningHours": {
+    "openNow": false,
+    "periods": [{ "open": { "day": 2, "hour": 19, "minute": 0 }, "close": { "day": 2, "hour": 23, "minute": 0 } }],
+    "weekdayDescriptions": [
+      "Monday: Closed",
+      "Tuesday: 7:00 to 11:00 PM",
+      "Wednesday: 7:00 to 11:00 PM",
+      "Thursday: 7:00 to 11:00 PM",
+      "Friday: 7:00 to 11:00 PM",
+      "Saturday: 7:00 to 11:00 PM",
+      "Sunday: Closed"
+    ]
+  },
+  "websiteUri": "https://www.restaurantefeitoria.com/",
+  "nationalPhoneNumber": "21 040 0208",
+  "priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+  "editorialSummary": { "text": "Refined Portuguese tasting menus by the river.", "languageCode": "en" },
+  "reviews": [
+    {
+      "name": "places/ChIJh32rQULLHg0RkgF8wCakjIk/reviews/ChZDSUhNMG9nS0VJQ0FnSUR",
+      "relativePublishTimeDescription": "2 months ago",
+      "rating": 5,
+      "text": { "text": "A memorable dinner, every course was thoughtful.", "languageCode": "en" },
+      "originalText": { "text": "A memorable dinner, every course was thoughtful.", "languageCode": "en" },
+      "authorAttribution": {
+        "displayName": "Some Reviewer",
+        "uri": "https://www.google.com/maps/contrib/100000000000000000002/reviews",
+        "photoUri": "https://lh3.googleusercontent.com/a/example-reviewer"
+      },
+      "publishTime": "2026-08-14T20:11:03.123Z",
+      "flagContentUri": "https://www.google.com/local/review/rap/report",
+      "googleMapsUri": "https://www.google.com/maps/reviews/data=!4m6"
+    }
+  ]
+}

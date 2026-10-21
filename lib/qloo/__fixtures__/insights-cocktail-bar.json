@@ -1,0 +1,2212 @@
+{
+ "success": true,
+ "results": {
+  "entities": [
+   {
+    "name": "LUDO'S",
+    "entity_id": "125071B8-7832-4A03-AB4C-3601905666C9",
+    "type": "urn:entity",
+    "subtype": "urn:entity:place",
+    "properties": {
+     "hours": {
+      "friday": [
+       {
+        "opens": "T09:00:00",
+        "closed": false,
+        "closes": "T17:00:00"
+       }
+      ],
+      "monday": [
+       {
+        "opens": "T09:00:00",
+        "closed": false,
+        "closes": "T17:00:00"
+       }
+      ],
+      "sunday": [
+       {
+        "opens": "T09:00:00",
+        "closed": false,
+        "closes": "T17:00:00"
+       }
+      ],
+      "tuesday": [
+       {
+        "opens": "T09:00:00",
+        "closed": false,
+        "closes": "T17:00:00"
+       }
+      ],
+      "saturday": [
+       {
+        "opens": "T09:00:00",
+        "closed": false,
+        "closes": "T17:00:00"
+       }
+      ],
+      "thursday": [
+       {
+        "opens": "T09:00:00",
+        "closed": false,
+        "closes": "T17:00:00"
+       }
+      ],
+      "wednesday": [
+       {
+        "opens": "T09:00:00",
+        "closed": false,
+        "closes": "T17:00:00"
+       }
+      ]
+     },
+     "phone": "+351926478027",
+     "images": [
+      {
+       "url": "https://images.qloo.com/i/125071B8-7832-4A03-AB4C-3601905666C9-0JlYt6-420x-outside.jpg",
+       "type": "urn:image:place:unknown"
+      }
+     ],
+     "address": "Beco do Recolhimento 5 7-9 1100-244 Lisboa Portugal",
+     "geocode": {
+      "city": "Lisbon",
+      "name": "Santiago",
+      "metro": "Lisbon",
+      "country": "Portugal",
+      "country_code": "PT",
+      "admin1_region": null,
+      "admin2_region": "Lisbon"
+     },
+     "parking": false,
+     "website": "https://www.facebook.com/LudosLisbon",
+     "good_for": [
+      {
+       "id": "urn:tag:children:place:good_kids",
+       "name": "Good for kids",
+       "type": "urn:tag:children:place",
+       "weight": 0.5
+      }
+     ],
+     "keywords": null,
+     "locality": {
+      "city": {
+       "name": "Lisbon",
+       "place": "city",
+       "boundary": "administrative",
+       "entity_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "admin_level": 7,
+       "locality_id": "r5400890",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "metro": {
+       "name": "Lisbon",
+       "place": "metro",
+       "boundary": "metro",
+       "entity_id": "8811AE53-6D57-49FA-8530-CD1292B706C9",
+       "admin_level": 12,
+       "locality_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "state": null,
+      "county": {
+       "name": "Lisbon",
+       "place": "distrito",
+       "boundary": "administrative",
+       "entity_id": "C4874F9D-BD5C-41E7-A895-99B6FD02A665",
+       "admin_level": 6,
+       "locality_id": "r2897141",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "country": {
+       "name": "Portugal",
+       "place": "country",
+       "boundary": "administrative",
+       "entity_id": "194581AB-5819-4E95-BA7F-317059A6793F",
+       "admin_level": 2,
+       "locality_id": "r295480",
+       "abbreviation": null,
+       "country_code": "PT"
+      },
+      "neighborhood": {
+       "name": "Santiago",
+       "place": "neighbourhood",
+       "boundary": null,
+       "entity_id": "A8D3DF46-103C-4635-8194-B9D708035775",
+       "admin_level": 10,
+       "locality_id": "n4360243194",
+       "abbreviation": null,
+       "country_code": null
+      }
+     },
+     "menu_url": null,
+     "is_closed": false,
+     "live_music": false,
+     "localities": [
+      {
+       "name": "Santiago",
+       "place": "neighbourhood",
+       "boundary": null,
+       "entity_id": "A8D3DF46-103C-4635-8194-B9D708035775",
+       "admin_level": 10,
+       "locality_id": "n4360243194",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Portugal",
+       "place": "country",
+       "boundary": "administrative",
+       "entity_id": "194581AB-5819-4E95-BA7F-317059A6793F",
+       "admin_level": 2,
+       "locality_id": "r295480",
+       "abbreviation": null,
+       "country_code": "PT"
+      },
+      {
+       "name": "Lisbon",
+       "place": "city",
+       "boundary": "administrative",
+       "entity_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "admin_level": 7,
+       "locality_id": "r5400890",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "distrito",
+       "boundary": "administrative",
+       "entity_id": "C4874F9D-BD5C-41E7-A895-99B6FD02A665",
+       "admin_level": 6,
+       "locality_id": "r2897141",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "metro",
+       "boundary": "metro",
+       "entity_id": "8811AE53-6D57-49FA-8530-CD1292B706C9",
+       "admin_level": 12,
+       "locality_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Santa Maria Maior",
+       "place": "freguesia",
+       "boundary": "administrative",
+       "entity_id": "D99570E7-ECAB-47B0-8E90-4FE66233D510",
+       "admin_level": 8,
+       "locality_id": "r6427496",
+       "abbreviation": null,
+       "country_code": null
+      }
+     ],
+     "description": "Cozy vegetarian cafe serving brunch, cocktails and specialty veggie bowls in a tranquil tucked-away Lisbon location near the castle.",
+     "hotel_class": null,
+     "price_level": 2,
+     "price_range": {
+      "to": null,
+      "from": null,
+      "currency": "usd"
+     },
+     "star_rating": null,
+     "event_spaces": false,
+     "neighborhood": "Santiago",
+     "pet_friendly": true,
+     "check_in_time": null,
+     "primary_genre": {
+      "id": "urn:tag:genre:place:restaurant",
+      "name": "Restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     "check_out_time": null,
+     "business_rating": 4.900000095367432,
+     "loyalty_program": null,
+     "number_of_rooms": null,
+     "cost_description": null,
+     "specialty_dishes": [
+      {
+       "id": "urn:tag:specialty_dish:place:food_menu",
+       "name": "Food Menu",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 1
+      },
+      {
+       "id": "urn:tag:specialty_dish:place:passionfruit",
+       "name": "Passionfruit",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 0.5
+      },
+      {
+       "id": "urn:tag:specialty_dish:place:veggie_bowl",
+       "name": "Veggie Bowl",
+       "type": "urn:tag:specialty_dish:place",
+       "weight": 0
+      }
+     ],
+     "short_description": "Cozy vegetarian cafe serving brunch, cocktails and specialty veggie bowls in a tranquil tucked-away Lisbon location near the castle.",
+     "number_of_stations": null,
+     "cuisine_description": "Ludo's is a cozy, Mediterranean-inspired cafe specializing in healthy, fresh, and vibrant dishes. The menu features standout brunch items, veggie and halloumi bowls, creative toasts, and decadent desserts. Known for their iconic dragon fruit cocktails and signature golden lattes, the kitchen emphasizes fresh, high-quality ingredients, with ample vegan and vegetarian options tailored for a relaxed, sun-drenched dining experience.",
+     "overall_description": "A quintessential hidden gem in the heart of Lisbon’s historic district, this cozy café is a sanctuary for those looking to enjoy fresh, nutritious food and artisanal drinks away from the typical tourist trails. With a focus on vibrant veggie bowls, expertly crafted cocktails, and high-quality coffee, it serves as a perfect spot for brunch or a leisurely afternoon under the sun. The welcoming service and relaxed, music-filled atmosphere make it a beloved local favorite that captures the essence of a laid-back city escape.",
+     "service_description": "Ludo's provides a relaxed, welcoming environment offering all-day brunch, lunch, and cocktail services. Guests can enjoy their meals in a charming, sun-filled outdoor terrace or inside the cozy cafe. The venue is highly regarded for its friendly and energetic service, making it an ideal spot for spontaneous visits, social gatherings, or quiet moments while exploring the historic neighborhood near the castle.",
+     "ambience_description": "The atmosphere is warm, carefree, and inherently social, often accompanied by a lively music playlist. It feels like a genuine, welcoming neighborhood retreat where visitors feel instantly at home.",
+     "amenities_description": "The space features a sunny outdoor seating area perfect for people-watching and a cozy, well-decorated interior. It offers a relaxed service style with inclusive hospitality for all guests.",
+     "unique_selling_points": "Famous for its signature, vibrant dragon fruit cocktails and generous, fresh veggie-forward brunch bowls. It stands out as a charming, peaceful 'hidden gem' located just steps from a major historical castle.",
+     "neighborhood_description": "The surrounding area is a historic, charming neighborhood defined by narrow streets and authentic local character. It functions as a scenic, peaceful pocket within the heart of the city, just steps away from a major historic landmark.",
+     "physical_setting_description": "Located in a serene, hidden pedestrian street near a major castle, the restaurant offers an intimate terrace that catches the sun. Its setting provides a quiet, peaceful escape from the surrounding city energy.",
+     "customer_demographics_description": "The restaurant attracts a diverse crowd, ranging from local residents and young professionals to international tourists visiting the nearby castle. It is a popular destination for foodies, couples, and groups of friends seeking a relaxed, authentic atmosphere, and is noted for being an inclusive, LGBTQ+ friendly space.",
+     "image": {
+      "url": "https://images.qloo.com/i/125071B8-7832-4A03-AB4C-3601905666C9-420x-auto.jpg"
+     }
+    },
+    "popularity": 0.43727315579913234,
+    "location": {
+     "lat": 38.7127792,
+     "lon": -9.1322867,
+     "geohash": "eycs0pqn631p"
+    },
+    "tags": [
+     {
+      "id": "urn:tag:offerings:place:coffee",
+      "name": "Coffee",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:tourists",
+      "name": "Tourists",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:quiet",
+      "name": "Quiet",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:gluten_free",
+      "name": "Gluten free",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:18_24",
+      "name": "18 24",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:wine",
+      "name": "Wine",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:stylish",
+      "name": "Stylish",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:groups_of_friends",
+      "name": "Groups of friends",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:brunch",
+      "name": "Brunch",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:dine_in",
+      "name": "Dine in",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:evening",
+      "name": "Evening",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:restaurant",
+      "name": "Restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:ok_to_order_just_drinks",
+      "name": "Ok to order just drinks",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:people_watching",
+      "name": "People watching",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:fresh_juices",
+      "name": "Fresh juices",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:seasonal",
+      "name": "Seasonal",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant",
+      "name": "Restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:vegetarian_restaurant",
+      "name": "Vegetarian restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:classic_brunch_combo",
+      "name": "Classic brunch combo",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:lively",
+      "name": "Lively",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:cozy",
+      "name": "Cozy",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:casual",
+      "name": "Casual",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:dine_in",
+      "name": "Dine in",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:alcohol",
+      "name": "Alcohol",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:go_for_just_dessert",
+      "name": "Go for just dessert",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:seating",
+      "name": "Seating",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:modern_bohemian",
+      "name": "Modern bohemian",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:outdoor_seating",
+      "name": "Outdoor seating",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:veggie_bowl",
+      "name": "Veggie bowl",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:homemade_raspberry_brownie",
+      "name": "Homemade raspberry brownie",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:modern",
+      "name": "Modern",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:outdoor_seating",
+      "name": "Outdoor seating",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:authentic",
+      "name": "Authentic",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:carefree",
+      "name": "Carefree",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:lunch",
+      "name": "Lunch",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:25_29",
+      "name": "25 29",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:breakfast_restaurant",
+      "name": "Breakfast restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:welcoming",
+      "name": "Welcoming",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:price_level",
+      "name": "Price level",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:credit_cards",
+      "name": "Credit cards",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:beer",
+      "name": "Beer",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:foodies",
+      "name": "Foodies",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:dessert_restaurant",
+      "name": "Dessert restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:mediterranean",
+      "name": "Mediterranean",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:dragon_fruit_cocktail",
+      "name": "Dragon fruit cocktail",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:coffee_shop",
+      "name": "Coffee shop",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:breakfast",
+      "name": "Breakfast",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:cafe",
+      "name": "Cafe",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:intimate",
+      "name": "Intimate",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:morning",
+      "name": "Morning",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:vegan_options",
+      "name": "Vegan meals",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:table_service",
+      "name": "Table service",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:breakfast",
+      "name": "Breakfast",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:halloumi_bowl",
+      "name": "Halloumi bowl",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:takeout",
+      "name": "Takeout",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:bar_onsite",
+      "name": "Bar onsite",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:walkable",
+      "name": "Walkable",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:social_community",
+      "name": "Social community",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:coffee_shop",
+      "name": "Coffee shop",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:small_plates",
+      "name": "Small plates",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:cozy",
+      "name": "Cozy",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:serene",
+      "name": "Serene",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:cocktail_bar",
+      "name": "Cocktail bar",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:dining_drinking",
+      "name": "Dining drinking",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:castelo_de_s_jorge",
+      "name": "Castelo de s jorge",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:artisanal_cocktails",
+      "name": "Artisanal cocktails",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:healthy_options",
+      "name": "Healthy options",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:charming",
+      "name": "Charming",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:outdoor_seating",
+      "name": "Outdoor seating",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:wi_fi",
+      "name": "Wi fi",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:quick_bite",
+      "name": "Quick bite",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:chic",
+      "name": "Chic",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:city_center",
+      "name": "City center",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:lgbtq_",
+      "name": "Lgbtq+",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:30_34",
+      "name": "30 34",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:healthy_eating",
+      "name": "Healthy eating",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:cafe",
+      "name": "Cafe",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:vegan_restaurant",
+      "name": "Vegan restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:coffee_and_tea",
+      "name": "Coffee and tea",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:couples",
+      "name": "Couples",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:brunch",
+      "name": "Brunch",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:central",
+      "name": "Central",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:lunch",
+      "name": "Lunch restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:dessert",
+      "name": "Dessert",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:hidden",
+      "name": "Hidden",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:local_culture",
+      "name": "Local culture",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:wi_fi",
+      "name": "Wi fi",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:brunch",
+      "name": "Brunch",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:lunch_restaurant",
+      "name": "Lunch restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:casual",
+      "name": "Casual",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:locals",
+      "name": "Locals",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:accepts_reservations",
+      "name": "Accepts reservations",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:healthy",
+      "name": "Healthy",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:afternoon",
+      "name": "Afternoon",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:beer",
+      "name": "Beer",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:debit_cards",
+      "name": "Debit cards",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:inclusivity:place:lgbtq_friendly",
+      "name": "Lgbtq+ friendly",
+      "type": "urn:tag:inclusivity:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:view:qloo:city_view",
+      "name": "City view",
+      "type": "urn:tag:view:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:children:place:good_for_kids",
+      "name": "Good for kids",
+      "type": "urn:tag:children:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:onsite_services",
+      "name": "Onsite services",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:visit_intent:qloo:destination",
+      "name": "Destination",
+      "type": "urn:tag:visit_intent:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:fun",
+      "name": "Fun",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:delivery",
+      "name": "Delivery",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:parking:place:parking",
+      "name": "Parking",
+      "type": "urn:tag:parking:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:scenic",
+      "name": "Scenic",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:casual",
+      "name": "Casual",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:cafe",
+      "name": "Cafe",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:vegetarian",
+      "name": "Vegetarian",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:vegan",
+      "name": "Vegan",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:visit_intent:qloo:impulse_visit",
+      "name": "Impulse visit",
+      "type": "urn:tag:visit_intent:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cost_description:place:€10_to_€20",
+      "name": "€10 to €20",
+      "type": "urn:tag:cost_description:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:solo_diners",
+      "name": "Solo diners",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:trendy_crowd",
+      "name": "Trendy crowd",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:bright",
+      "name": "Bright",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:relaxing",
+      "name": "Relaxing",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:pedestrian_street",
+      "name": "Pedestrian street",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:vegetarian",
+      "name": "Vegetarian",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:specialty_coffee",
+      "name": "Specialty coffee",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:salmon_toast",
+      "name": "Salmon toast",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:dessert",
+      "name": "Dessert",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:urban_exploration",
+      "name": "Urban exploration",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:specialty_cocktails",
+      "name": "Specialty cocktails",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:wine",
+      "name": "Wine",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:hard_liquor",
+      "name": "Hard liquor",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:eggs_bernadette",
+      "name": "Eggs bernadette",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:gluten_free_options",
+      "name": "Gluten free options",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:social",
+      "name": "Social",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:reservations",
+      "name": "Reservations",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:vegetarian_options",
+      "name": "Vegetarian meals",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:high_chairs",
+      "name": "High chairs",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:historic",
+      "name": "Historic",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:historic",
+      "name": "Historic",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:chorizo_salad",
+      "name": "Chorizo salad",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:vegan",
+      "name": "Vegan",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place",
+      "name": "Place",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:cocktail_bar",
+      "name": "Cocktail bar",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:midday",
+      "name": "Midday",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:anniversary",
+      "name": "Anniversary",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:view:qloo:street_view",
+      "name": "Street view",
+      "type": "urn:tag:view:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:takeout",
+      "name": "Takeout",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:golden_latte",
+      "name": "Golden latte",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:brunch",
+      "name": "Brunch",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:brunch_restaurant",
+      "name": "Brunch restaurant",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:noise_level:qloo:moderate",
+      "name": "Moderate",
+      "type": "urn:tag:noise_level:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:granola_bowl",
+      "name": "Granola bowl",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:nfc_mobile_payments",
+      "name": "Nfc mobile payments",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:restroom",
+      "name": "Restroom",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     }
+    ],
+    "references": null,
+    "query": {
+     "affinity": 0.7810966941403011,
+     "distance": 3916.1740674865564,
+     "measurements": {
+      "audience_growth": 0
+     }
+    },
+    "disambiguation": "Beco do Recolhimento 5 7-9 1100-244 Lisboa Portugal",
+    "external": {
+     "google_place": [
+      {
+       "id": "9a738d6748c1d2b0",
+       "place_id": "ChIJ3RVSTHE1GQ0RsNLBSGeNc5o"
+      }
+     ]
+    }
+   },
+   {
+    "name": "Red Frog",
+    "entity_id": "22235B6D-2F04-4886-921A-5C767771CB6D",
+    "type": "urn:entity",
+    "subtype": "urn:entity:place",
+    "properties": {
+     "hours": {
+      "friday": [
+       {
+        "opens": "T18:00:00",
+        "closed": false,
+        "closes": "T01:00:00"
+       }
+      ],
+      "monday": [
+       {
+        "opens": null,
+        "closed": true,
+        "closes": null
+       }
+      ],
+      "sunday": [
+       {
+        "opens": null,
+        "closed": true,
+        "closes": null
+       }
+      ],
+      "tuesday": [
+       {
+        "opens": "T18:00:00",
+        "closed": false,
+        "closes": "T01:00:00"
+       }
+      ],
+      "saturday": [
+       {
+        "opens": "T18:00:00",
+        "closed": false,
+        "closes": "T01:00:00"
+       }
+      ],
+      "thursday": [
+       {
+        "opens": "T18:00:00",
+        "closed": false,
+        "closes": "T01:00:00"
+       }
+      ],
+      "wednesday": [
+       {
+        "opens": "T18:00:00",
+        "closed": false,
+        "closes": "T01:00:00"
+       }
+      ]
+     },
+     "phone": "+351215831120",
+     "images": [
+      {
+       "url": "https://images.qloo.com/i/22235B6D-2F04-4886-921A-5C767771CB6D-21Pq7E-420x-outside.jpg",
+       "type": "urn:image:place:unknown"
+      }
+     ],
+     "address": "Red Frog Speakeasy Praça da Alegria 66b 1250-004 Lisboa Portugal",
+     "geocode": {
+      "city": "Lisbon",
+      "name": "São José",
+      "metro": "Lisbon",
+      "country": "Portugal",
+      "country_code": "PT",
+      "admin1_region": null,
+      "admin2_region": "Lisbon"
+     },
+     "parking": false,
+     "website": "https://www.redfrog.pt/",
+     "good_for": null,
+     "keywords": [
+      {
+       "name": "speakeasy",
+       "count": 143
+      },
+      {
+       "name": "inventive cocktails",
+       "count": 25
+      },
+      {
+       "name": "intimate setting",
+       "count": 14
+      },
+      {
+       "name": "secret entrance",
+       "count": 12
+      },
+      {
+       "name": "craft cocktails",
+       "count": 11
+      },
+      {
+       "name": "secret bar",
+       "count": 7
+      },
+      {
+       "name": "chocolate cake",
+       "count": 6
+      },
+      {
+       "name": "umami sazerac",
+       "count": 2
+      },
+      {
+       "name": "small space",
+       "count": 15
+      },
+      {
+       "name": "drink recommendations",
+       "count": 19
+      }
+     ],
+     "locality": {
+      "city": {
+       "name": "Lisbon",
+       "place": "city",
+       "boundary": "administrative",
+       "entity_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "admin_level": 7,
+       "locality_id": "r5400890",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "metro": {
+       "name": "Lisbon",
+       "place": "metro",
+       "boundary": "metro",
+       "entity_id": "8811AE53-6D57-49FA-8530-CD1292B706C9",
+       "admin_level": 12,
+       "locality_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "state": null,
+      "county": {
+       "name": "Lisbon",
+       "place": "distrito",
+       "boundary": "administrative",
+       "entity_id": "C4874F9D-BD5C-41E7-A895-99B6FD02A665",
+       "admin_level": 6,
+       "locality_id": "r2897141",
+       "abbreviation": null,
+       "country_code": null
+      },
+      "country": {
+       "name": "Portugal",
+       "place": "country",
+       "boundary": "administrative",
+       "entity_id": "194581AB-5819-4E95-BA7F-317059A6793F",
+       "admin_level": 2,
+       "locality_id": "r295480",
+       "abbreviation": null,
+       "country_code": "PT"
+      },
+      "neighborhood": {
+       "name": "São José",
+       "place": "neighbourhood",
+       "boundary": null,
+       "entity_id": "527B19BD-6601-4248-AA1C-EC266F176279",
+       "admin_level": 10,
+       "locality_id": "n4360243201",
+       "abbreviation": null,
+       "country_code": null
+      }
+     },
+     "menu_url": null,
+     "is_closed": false,
+     "live_music": false,
+     "localities": [
+      {
+       "name": "São José",
+       "place": "neighbourhood",
+       "boundary": null,
+       "entity_id": "527B19BD-6601-4248-AA1C-EC266F176279",
+       "admin_level": 10,
+       "locality_id": "n4360243201",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Portugal",
+       "place": "country",
+       "boundary": "administrative",
+       "entity_id": "194581AB-5819-4E95-BA7F-317059A6793F",
+       "admin_level": 2,
+       "locality_id": "r295480",
+       "abbreviation": null,
+       "country_code": "PT"
+      },
+      {
+       "name": "Santo António",
+       "place": "freguesia",
+       "boundary": "administrative",
+       "entity_id": "F8F4ECB7-AEF8-4C75-994D-EC04F800D158",
+       "admin_level": 8,
+       "locality_id": "r6427497",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "city",
+       "boundary": "administrative",
+       "entity_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "admin_level": 7,
+       "locality_id": "r5400890",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "distrito",
+       "boundary": "administrative",
+       "entity_id": "C4874F9D-BD5C-41E7-A895-99B6FD02A665",
+       "admin_level": 6,
+       "locality_id": "r2897141",
+       "abbreviation": null,
+       "country_code": null
+      },
+      {
+       "name": "Lisbon",
+       "place": "metro",
+       "boundary": "metro",
+       "entity_id": "8811AE53-6D57-49FA-8530-CD1292B706C9",
+       "admin_level": 12,
+       "locality_id": "0A6150D0-E4CE-4CA6-A67B-78F9C9CD7405",
+       "abbreviation": null,
+       "country_code": null
+      }
+     ],
+     "description": "Intimate, stylish speakeasy offering craft cocktails and bar food in Lisbon.",
+     "hotel_class": null,
+     "price_level": 3,
+     "price_range": {
+      "to": null,
+      "from": null,
+      "currency": "usd"
+     },
+     "star_rating": null,
+     "event_spaces": false,
+     "neighborhood": "São José",
+     "pet_friendly": false,
+     "check_in_time": null,
+     "primary_genre": {
+      "id": "urn:tag:genre:place:restaurant:cocktail_bar",
+      "name": "Cocktail bar",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     "check_out_time": null,
+     "business_rating": 4.400000095367432,
+     "loyalty_program": null,
+     "number_of_rooms": null,
+     "cost_description": null,
+     "specialty_dishes": null,
+     "short_description": "Intimate, stylish speakeasy offering craft cocktails and bar food in Lisbon.",
+     "number_of_stations": null,
+     "cuisine_description": "A refined speakeasy specializing in highly creative, innovative, and artisanal craft cocktails. The menu features complex, unique drink concoctions with artistic presentations and story-driven flavor profiles. In addition to signature creations, the bar offers select quality small bites and snacks.",
+     "overall_description": "This acclaimed speakeasy serves as a premier destination for cocktail lovers seeking a highly curated and innovative drinking experience in Lisbon. Hidden from plain sight, the bar focuses on sensory exploration, utilizing an on-site laboratory to craft complex, artistic cocktails that challenge and delight the palate. With its intimate, moody atmosphere and expert service, it offers a sophisticated retreat that rewards those who appreciate deep attention to detail, flavor balance, and theatrical presentation.",
+     "service_description": "The restaurant provides an intimate, clandestine-style dining experience requiring reservations. Guests are guided into a stylish, low-lit basement space where service is attentive, professional, and educational, with bartenders explaining the complex flavor profiles of the drinks.",
+     "ambience_description": "The atmosphere is defined by its speakeasy-inspired, low-lit, and intimate surroundings that feel both refined and exclusive. A moody, sensory-driven environment makes it a sophisticated escape from the city bustle.",
+     "amenities_description": "The establishment provides personalized table service with knowledgeable mixologists who curate the drink experience for guests. Guests can also enjoy refined bar snacks that complement the creative cocktail menu.",
+     "unique_selling_points": "The venue is renowned for its clandestine entrance and on-site laboratory where staff innovate with rare, house-made ingredients to create complex, story-driven cocktails. Every drink is meticulously presented and often paired with specific edible components to enhance the tasting profile.",
+     "neighborhood_description": "Situated in a lively, central area of Lisbon, the neighborhood is characterized by its blend of historic charm and modern energy, making it highly accessible and appealing to those exploring the city's nightlife.",
+     "physical_setting_description": "Located in the heart of the city, this hidden, subterranean bar is tucked away behind an unassuming entrance that requires a buzzer for access. The interior features a dark, intimate, and moody atmosphere designed for privacy and focused conversation.",
+     "customer_demographics_description": "The clientele consists of cocktail aficionados, foodies, and tourists seeking a unique, upscale nightlife experience in Lisbon. It is popular among trendy young professionals, couples on dates, and groups of friends interested in high-end mixology.",
+     "image": {
+      "url": "https://images.qloo.com/i/22235B6D-2F04-4886-921A-5C767771CB6D-420x-auto.jpg"
+     }
+    },
+    "popularity": 0.845641006782435,
+    "location": {
+     "lat": 38.7181791,
+     "lon": -9.144732,
+     "geohash": "eyckrbmj8r3n"
+    },
+    "tags": [
+     {
+      "id": "urn:tag:service_type:qloo:dine_in",
+      "name": "Dine in",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:sensual",
+      "name": "Sensual",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:date_night",
+      "name": "Date night",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:trendy_crowd",
+      "name": "Trendy crowd",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:urban",
+      "name": "Urban",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant",
+      "name": "Restaurant",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:bustling_city_center",
+      "name": "Bustling city center",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:credit_card:place:visa",
+      "name": "Visa",
+      "type": "urn:tag:credit_card:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:modern",
+      "name": "Modern",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:noise_level:qloo:moderate",
+      "name": "Moderate",
+      "type": "urn:tag:noise_level:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:innovative",
+      "name": "Innovative",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:red_poison",
+      "name": "Red poison",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:ok_to_order_just_coffee",
+      "name": "Ok to order just coffee",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenities:place:wi_fi",
+      "name": "Wi fi",
+      "type": "urn:tag:amenities:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:experimental_gastronomy",
+      "name": "Experimental gastronomy",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:25_29",
+      "name": "25 29",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:delivery",
+      "name": "Delivery",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:modern",
+      "name": "Modern",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:tourist_attraction",
+      "name": "Tourist attraction",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:full_bar",
+      "name": "Full bar",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:bar",
+      "name": "Bar",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:onsite_services",
+      "name": "Onsite services",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:30_34",
+      "name": "30 34",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:groups_of_friends",
+      "name": "Groups of friends",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:central",
+      "name": "Central",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:historical_landmark",
+      "name": "Historical landmark",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:table_service",
+      "name": "Table service",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:food",
+      "name": "Food",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cost_description:place:expensive",
+      "name": "Expensive",
+      "type": "urn:tag:cost_description:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:walkable",
+      "name": "Walkable",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:inclusivity:place:lgbtq_friendly",
+      "name": "Lgbtq+ friendly",
+      "type": "urn:tag:inclusivity:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:elegant",
+      "name": "Elegant",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:table_service",
+      "name": "Table service",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:sophisticated",
+      "name": "Sophisticated",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:1920s_speakeasy",
+      "name": "1920s speakeasy",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:nightlife",
+      "name": "Nightlife",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:romantic",
+      "name": "Romantic",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:couples",
+      "name": "Couples",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:nightlife_culture",
+      "name": "Nightlife culture",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:debit_cards",
+      "name": "Debit cards",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:small_plates",
+      "name": "Small plates",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:birthday",
+      "name": "Birthday",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:credit_card:place:american_express",
+      "name": "American express",
+      "type": "urn:tag:credit_card:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:late_night",
+      "name": "Late night",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:event:place:anniversary",
+      "name": "Anniversary",
+      "type": "urn:tag:event:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:not_for_display:place:staff_required_to_disinfect_surfaces_between_visits",
+      "name": "Staff required to disinfect surfaces between visits",
+      "type": "urn:tag:not_for_display:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:cocktail_tasting",
+      "name": "Cocktail tasting",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:hacienda",
+      "name": "Hacienda",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:classic",
+      "name": "Classic",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:trendy",
+      "name": "Trendy",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:monkey_mash",
+      "name": "Monkey mash",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:underground",
+      "name": "Underground",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:takeout",
+      "name": "Takeout",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:accepts_reservations",
+      "name": "Accepts reservations",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:quiet",
+      "name": "Quiet",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:price_level",
+      "name": "Price level",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:dining_drinking",
+      "name": "Dining drinking",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:spiced_rusty_cherry",
+      "name": "Spiced rusty cherry",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:casual",
+      "name": "Casual",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:credit_cards",
+      "name": "Credit cards",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:planning:place:reservations_required",
+      "name": "Reservations required",
+      "type": "urn:tag:planning:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:umami_sazerac",
+      "name": "Umami sazerac",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_type:qloo:reservations",
+      "name": "Reservations",
+      "type": "urn:tag:service_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:intimate",
+      "name": "Intimate",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:unique",
+      "name": "Unique",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:food_at_bar",
+      "name": "Food at bar",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:payments:place:nfc_mobile_payments",
+      "name": "Nfc mobile payments",
+      "type": "urn:tag:payments:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:cocktail_bar",
+      "name": "Cocktail bar",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:amenity:qloo:counter_seating",
+      "name": "Counter seating",
+      "type": "urn:tag:amenity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:cocktail_enthusiasts",
+      "name": "Cocktail enthusiasts",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:restaurant:bar",
+      "name": "Bar",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:mixology",
+      "name": "Mixology",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:cocktails",
+      "name": "Cocktails",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:craft_spirits",
+      "name": "Craft spirits",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:clandestine",
+      "name": "Clandestine",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:romantic",
+      "name": "Romantic",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:foodies",
+      "name": "Foodies",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dietary_option:qloo:vegetarian",
+      "name": "Vegetarian",
+      "type": "urn:tag:dietary_option:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:interests:qloo:upscale_socializing",
+      "name": "Upscale socializing",
+      "type": "urn:tag:interests:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:city_center",
+      "name": "City center",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:neighborhood_characteristic:qloo:upscale",
+      "name": "Upscale",
+      "type": "urn:tag:neighborhood_characteristic:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place:historical_landmark",
+      "name": "Historical landmark",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:artisanal",
+      "name": "Artisanal",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:service_options:place:dine_in",
+      "name": "Dine in",
+      "type": "urn:tag:service_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:specialty_cocktails",
+      "name": "Specialty cocktails",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:genre:place",
+      "name": "Place",
+      "type": "urn:tag:genre:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:dark",
+      "name": "Dark",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:visit_intent:qloo:destination",
+      "name": "Destination",
+      "type": "urn:tag:visit_intent:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:hard_liquor",
+      "name": "Hard liquor",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:nearby_attraction:qloo:praca_da_alegria",
+      "name": "Praca da alegria",
+      "type": "urn:tag:nearby_attraction:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:alcohol",
+      "name": "Alcohol",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:solo_diners",
+      "name": "Solo diners",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:elegant",
+      "name": "Elegant",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:tourists",
+      "name": "Tourists",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:stylish",
+      "name": "Stylish",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:lively",
+      "name": "Lively",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:vieux_carre",
+      "name": "Vieux carre",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:time_of_day_fit:qloo:evening",
+      "name": "Evening",
+      "type": "urn:tag:time_of_day_fit:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:qloo:stylish",
+      "name": "Stylish",
+      "type": "urn:tag:ambience:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:offerings:place:ok_to_order_just_drinks",
+      "name": "Ok to order just drinks",
+      "type": "urn:tag:offerings:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:parking:place:parking",
+      "name": "Parking",
+      "type": "urn:tag:parking:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:setting:qloo:speakeasy",
+      "name": "Speakeasy",
+      "type": "urn:tag:setting:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:bar",
+      "name": "Bar",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:zeppelin_funk_punch",
+      "name": "Zeppelin funk punch",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:cuisine:qloo:bar_snacks",
+      "name": "Bar snacks",
+      "type": "urn:tag:cuisine:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:menu_highlight:qloo:american_gangster",
+      "name": "American gangster",
+      "type": "urn:tag:menu_highlight:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:dining_options:place:seating",
+      "name": "Seating",
+      "type": "urn:tag:dining_options:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:credit_card:place:mastercard",
+      "name": "Mastercard",
+      "type": "urn:tag:credit_card:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:ambience:place:large_group",
+      "name": "Large group",
+      "type": "urn:tag:ambience:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:customer_identity:qloo:locals",
+      "name": "Locals",
+      "type": "urn:tag:customer_identity:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:age_range:qloo:35_44",
+      "name": "35 44",
+      "type": "urn:tag:age_range:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:category:place:cocktail_bar",
+      "name": "Cocktail bar",
+      "type": "urn:tag:category:place",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:traditional",
+      "name": "Traditional",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:activity_type:qloo:mixology_experience",
+      "name": "Mixology experience",
+      "type": "urn:tag:activity_type:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:culinary_style:qloo:contemporary",
+      "name": "Contemporary",
+      "type": "urn:tag:culinary_style:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:visit_intent:qloo:special_occasion",
+      "name": "Special occasion",
+      "type": "urn:tag:visit_intent:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:decor:qloo:classic",
+      "name": "Classic",
+      "type": "urn:tag:decor:qloo",
+      "weight": null
+     },
+     {
+      "id": "urn:tag:beverage_offering:qloo:spirits",
+      "name": "Spirits",
+      "type": "urn:tag:beverage_offering:qloo",
+      "weight": null
+     }
+    ],
+    "references": null,
+    "query": {
+     "affinity": 0.7796398172491275,
+     "distance": 2899.439614147535,
+     "measurements": {
+      "audience_growth": 0
+     }
+    },
+    "disambiguation": "Red Frog Speakeasy Praça da Alegria 66b 1250-004 Lisboa Portugal",
+    "external": {
+     "google_place": [
+      {
+       "id": "d844784c537c16a6",
+       "place_id": "ChIJPbXenngzGQ0RphZ8U0x4RNg"
+      }
+     ]
+    }
+   }
+  ]
+ }
+}
