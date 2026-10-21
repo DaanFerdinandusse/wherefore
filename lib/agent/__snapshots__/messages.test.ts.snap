@@ -1,0 +1,120 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`turn message projection vs stream read > builds the same assistant message from both sources > projected 1`] = `
+{
+  "id": "a-t1",
+  "metadata": {
+    "kind": "turn",
+    "turnId": "t1",
+  },
+  "parts": [
+    {
+      "type": "step-start",
+    },
+    {
+      "providerMetadata": {
+        "openai": {
+          "itemId": "rs_1",
+          "reasoningEncryptedContent": "gAAA-secret",
+        },
+      },
+      "state": "done",
+      "text": "Thinking",
+      "type": "reasoning",
+    },
+    {
+      "callProviderMetadata": {
+        "openai": {
+          "itemId": "fc_1",
+        },
+      },
+      "input": {
+        "q": "wine",
+      },
+      "output": {
+        "found": 2,
+        "q": "wine",
+      },
+      "state": "output-available",
+      "toolCallId": "call_1",
+      "type": "tool-lookup",
+    },
+    {
+      "type": "step-start",
+    },
+    {
+      "providerMetadata": {
+        "openai": {
+          "itemId": "msg_1",
+        },
+      },
+      "state": "done",
+      "text": "Found two.",
+      "type": "text",
+    },
+  ],
+  "role": "assistant",
+}
+`;
+
+exports[`turn message projection vs stream read > builds the same assistant message from both sources > streamed 1`] = `
+{
+  "id": "a-t1",
+  "metadata": {
+    "kind": "turn",
+    "turnId": "t1",
+  },
+  "parts": [
+    {
+      "type": "step-start",
+    },
+    {
+      "id": "rs_1:0",
+      "providerMetadata": {
+        "openai": {
+          "itemId": "rs_1",
+          "reasoningEncryptedContent": "gAAA-secret",
+        },
+      },
+      "state": "done",
+      "text": "Thinking",
+      "type": "reasoning",
+    },
+    {
+      "callProviderMetadata": {
+        "openai": {
+          "itemId": "fc_1",
+        },
+      },
+      "errorText": undefined,
+      "input": {
+        "q": "wine",
+      },
+      "output": {
+        "found": 2,
+        "q": "wine",
+      },
+      "providerExecuted": undefined,
+      "rawInput": undefined,
+      "state": "output-available",
+      "title": undefined,
+      "toolCallId": "call_1",
+      "type": "tool-lookup",
+    },
+    {
+      "type": "step-start",
+    },
+    {
+      "providerMetadata": {
+        "openai": {
+          "itemId": "msg_1",
+        },
+      },
+      "state": "done",
+      "text": "Found two.",
+      "type": "text",
+    },
+  ],
+  "role": "assistant",
+}
+`;
