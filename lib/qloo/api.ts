@@ -16,6 +16,7 @@ import type {
   FindTags,
   GetEntities,
   LoosenedFilter,
+  NormalizedPlace,
   PlaceResult,
   QlooCall,
   ResolveLocality,
@@ -28,10 +29,12 @@ import { QlooLocalityMismatchError } from "./errors";
 import {
   categoryOf,
   checkLocality,
-  isUnpricedTagFilter,
-  countryCodeOfPlace,
   displayScore,
+  distanceFromDestination,
   explainabilityFor,
+  isTooFar,
+  isUnpricedTagFilter,
+  majorityLocalityLabel,
   normalizeLocality,
   normalizePlace,
   signalScoresOf,
@@ -54,6 +57,8 @@ export const MIN_RESULTS = 5;
 const PORTRAIT_TAG_TYPES = ["urn:tag:ambience:qloo", "urn:tag:cuisine:qloo", "urn:tag:decor:qloo"];
 const ENTITY_CHUNK = 25;
 const SCORE_CHUNK = 50;
+
+type RawInsightsPlace = InsightsPlacesResponse["results"]["entities"][number];
 
 function clientOf(ctx: CallContext | undefined) {
   return ctx?.client ?? getQlooClient();
@@ -122,11 +127,13 @@ export const searchEntities: SearchEntities = async (query, options, ctx) => {
 /**
  * Recommendations near the destination for the client's signals, with
  * per-result explainability. Location is always POINT(lon lat) plus radius (the
- * text geocoder picks the wrong city for ambiguous names). With fewer than 5
- * results it drops filter.tags, then the price cap, and says so in `loosened`;
- * stricter results stay in the set ahead of the extra ones.
- * @throws QlooLocalityMismatchError when none of the results is in the
- *   destination's country.
+ * text geocoder picks the wrong city for ambiguous names), and every result
+ * farther than 1.5x the radius is dropped (distance from the API, or computed
+ * from the coordinates). With fewer than 5 kept results it drops filter.tags,
+ * then the price cap, and says so in `loosened`. Strict results always come
+ * first; looser steps only fill the slots that are left.
+ * @throws QlooLocalityMismatchError when results came back but none of them is
+ *   near the destination.
  */
 export const findPlaces: FindPlaces = async (input, ctx) => {
   const client = clientOf(ctx);
@@ -134,8 +141,9 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
   const hasSignals = signals.length > 0;
   const hasTags = (input.tags?.length ?? 0) > 0;
   // Places without a price level (museums, hotels) never pass a price filter,
-  // so a cap on a see or stay ask is not applied at all.
-  const hasPrice = input.priceMax !== undefined && !(hasTags && isUnpricedTagFilter(input.tags ?? []));
+  // so a cap on a see or stay ask is not applied at all, and the result says so.
+  const priceNotApplicable = input.priceMax !== undefined && hasTags && isUnpricedTagFilter(input.tags ?? []);
+  const hasPrice = input.priceMax !== undefined && !priceNotApplicable;
 
   const base: QlooParams = {
     "filter.type": PLACE,
@@ -162,8 +170,13 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
 
   const enough = Math.min(MIN_RESULTS, input.take);
   const calls: QlooCall[] = [];
-  const loosened: LoosenedFilter[] = [];
-  const collected = new Map<string, InsightsPlacesResponse["results"]["entities"][number]>();
+  const loosened: LoosenedFilter[] = priceNotApplicable ? ["price_not_applicable"] : [];
+  // One list per step, in step order, so a looser result never outranks a
+  // stricter one. Entity ids are unique across all of them.
+  const stages: Candidate[][] = [];
+  const seen = new Set<string>();
+  const far: PlaceResult[] = [];
+  let kept = 0;
   let localityLabel: string | undefined;
 
   for (const step of steps) {
@@ -174,31 +187,45 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
     });
     calls.push(call);
     localityLabel ??= data.query?.localities?.filter?.[0]?.disambiguation ?? undefined;
-    for (const raw of data.results.entities) if (!collected.has(raw.entity_id)) collected.set(raw.entity_id, raw);
-    if (collected.size >= enough) break;
+    const stage: Candidate[] = [];
+    for (const raw of data.results.entities) {
+      if (seen.has(raw.entity_id)) continue;
+      seen.add(raw.entity_id);
+      const place = normalizePlace(raw);
+      const distanceM = distanceFromDestination(destination, place, raw.query.distance);
+      if (isTooFar(destination, distanceM)) far.push(toResult({ raw, place, distanceM }, []));
+      else stage.push({ raw, place, distanceM });
+    }
+    stage.sort((a, b) => b.raw.query.affinity - a.raw.query.affinity);
+    stages.push(stage);
+    kept += stage.length;
+    if (kept >= enough) break;
   }
 
-  const raws = [...collected.values()].sort((a, b) => b.query.affinity - a.query.affinity).slice(0, input.take);
-  const affinities = raws.map((r) => r.query.affinity);
-  const results: PlaceResult[] = raws.map((raw) => {
-    const place = normalizePlace(raw);
-    return {
-      place,
-      category: categoryOf(place),
-      affinity: raw.query.affinity,
-      score: displayScore(raw.query.affinity, affinities),
-      signalScores: signalScoresOf(raw),
-      distanceM: raw.query.distance ?? null,
-    };
-  });
-
-  const localityCheck = checkLocality(destination, results, localityLabel);
-  if (!localityCheck.ok && destination.countryCode && results.length > 0) {
-    const inCountry = results.some((r) => countryCodeOfPlace(r) === destination.countryCode?.toUpperCase());
-    if (!inCountry) throw new QlooLocalityMismatchError(localityCheck.requested, localityCheck.resolved);
+  if (kept === 0 && far.length > 0) {
+    const requested = destination.disambiguation ?? destination.name;
+    throw new QlooLocalityMismatchError(requested, localityLabel ?? majorityLocalityLabel(far) ?? "unknown");
   }
+
+  const picked = stages.flat().slice(0, input.take);
+  const affinities = picked.map((c) => c.raw.query.affinity);
+  const results = picked.map((c) => toResult(c, affinities));
+  const localityCheck = checkLocality(destination, results, localityLabel, far.length);
   return { results, loosened, localityCheck, calls };
 };
+
+type Candidate = { raw: RawInsightsPlace; place: NormalizedPlace; distanceM: number | null };
+
+function toResult({ raw, place, distanceM }: Candidate, affinities: readonly number[]): PlaceResult {
+  return {
+    place,
+    category: categoryOf(place),
+    affinity: raw.query.affinity,
+    score: displayScore(raw.query.affinity, affinities),
+    signalScores: signalScoresOf(raw),
+    distanceM,
+  };
+}
 
 // ------------------------------------------------------------------- scoring
 

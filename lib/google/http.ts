@@ -3,13 +3,20 @@ import "server-only";
 // HTTP mapping for the place routes: one place that decides which Google
 // failure becomes which status and sentence.
 
-import { GoogleApiError, GoogleInputError, GoogleNotConfiguredError, GoogleSchemaError } from "./errors";
+import {
+  GoogleApiError,
+  GoogleInputError,
+  GoogleNotConfiguredError,
+  GooglePhotoTooLargeError,
+  GoogleSchemaError,
+} from "./errors";
 
 export type GoogleErrorCode =
   | "google_not_configured"
   | "google_bad_input"
   | "google_not_found"
   | "google_rate_limited"
+  | "google_photo_too_large"
   | "google_unavailable";
 
 const COPY: Record<GoogleErrorCode, string> = {
@@ -17,6 +24,7 @@ const COPY: Record<GoogleErrorCode, string> = {
   google_bad_input: "That is not a valid Google place or photo reference.",
   google_not_found: "Google has no place with this id. It may have closed or moved.",
   google_rate_limited: "Too many Google requests just now. Try again in a minute.",
+  google_photo_too_large: "This photo is too large to show here. Open the place on Google Maps to see it.",
   google_unavailable: "Google did not answer. Try again in a minute.",
 };
 
@@ -34,6 +42,10 @@ export function googleErrorResponse(error: unknown): Response {
     if (error.status === 400) return body("google_bad_input", 400);
     console.error("[google]", error.message);
     return body("google_unavailable", 502);
+  }
+  if (error instanceof GooglePhotoTooLargeError) {
+    console.error("[google]", error.message);
+    return body("google_photo_too_large", 502);
   }
   if (error instanceof GoogleSchemaError) {
     console.error("[google]", error.message);

@@ -22,6 +22,19 @@ export const getPlace: GetPlace = async (id) => {
   return row ?? null;
 };
 
+/** The Google place id stored on a places row (`places.id`, what cards carry
+ *  as `placeId`), or null when the row has none or the id is not a uuid. One
+ *  column read for the profile's Google section. */
+export const getGooglePlaceIdForPlace = async (placeId: string): Promise<string | null> => {
+  if (!isUuid(placeId)) return null;
+  const [row] = await db
+    .select({ googlePlaceId: places.googlePlaceId })
+    .from(places)
+    .where(eq(places.id, placeId))
+    .limit(1);
+  return row?.googlePlaceId ?? null;
+};
+
 export const getPlacesByEntityIds: GetPlacesByEntityIds = async (entityIds) => {
   const ids = [...new Set(entityIds)];
   if (ids.length === 0) return [];

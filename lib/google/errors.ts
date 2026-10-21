@@ -30,6 +30,16 @@ export class GoogleSchemaError extends GoogleError {
   }
 }
 
+/** The upstream photo is larger than the proxy passes on. */
+export class GooglePhotoTooLargeError extends GoogleError {
+  constructor(
+    readonly bytes: number,
+    readonly maxBytes: number,
+  ) {
+    super(`Google photo is ${bytes} bytes, over the ${maxBytes} byte cap`);
+  }
+}
+
 /** A place id or photo name that does not look like one. Checked before any
  *  request so the proxy cannot be pointed at another path. */
 export class GoogleInputError extends GoogleError {}

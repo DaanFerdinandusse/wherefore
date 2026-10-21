@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import fullFixture from "./__fixtures__/place-details-full.json";
-import { GoogleApiError, GoogleInputError, GoogleNotConfiguredError } from "./errors";
+import { GoogleApiError, GoogleInputError, GoogleNotConfiguredError, GooglePhotoTooLargeError } from "./errors";
 import { googleErrorResponse } from "./http";
-import { fetchPhoto, isPhotoName, photoProxyUrl } from "./photos";
+import { MAX_PHOTO_BYTES, fetchPhoto, isPhotoName, limitBytes, photoProxyUrl } from "./photos";
 import { createPlaceDetails, fieldMask } from "./places";
 
 const PLACE_ID = "ChIJh32rQULLHg0RkgF8wCakjIk";
@@ -51,7 +51,8 @@ describe("placeDetails", () => {
     expect(headers.get("X-Goog-FieldMask")).toBe(fieldMask("basic"));
     expect(fieldMask("basic")).toContain("photos");
     expect(fieldMask("basic")).not.toContain("reviews");
-    for (const field of ["rating", "userRatingCount", "regularOpeningHours", "websiteUri", "nationalPhoneNumber", "priceLevel", "reviews", "editorialSummary"]) {
+    expect(fieldMask("basic")).not.toContain("OpeningHours");
+    for (const field of ["rating", "userRatingCount", "currentOpeningHours", "regularOpeningHours", "websiteUri", "nationalPhoneNumber", "priceLevel", "reviews", "editorialSummary"]) {
       expect(fieldMask("full").split(",")).toContain(field);
     }
   });
@@ -83,6 +84,43 @@ describe("placeDetails", () => {
       relativeTime: "2 months ago",
       author: { displayName: "Some Reviewer" },
     });
+  });
+
+  it("takes open now from currentOpeningHours and the weekly table from regularOpeningHours", async () => {
+    const current = {
+      openNow: true,
+      weekdayDescriptions: ["Monday: 6:00 to 10:00 PM (holiday)"],
+    };
+    const withCurrent = { ...fullFixture, currentOpeningHours: current };
+    const place = await createPlaceDetails({ fetch: fakeFetch(() => Response.json(withCurrent)) })(PLACE_ID, "full");
+    expect(place.openNow).toBe(true);
+    expect(place.openingHours).toEqual(fullFixture.regularOpeningHours.weekdayDescriptions);
+
+    // Without regular hours, the current week's table still shows.
+    const onlyCurrent = { ...fullFixture, regularOpeningHours: undefined, currentOpeningHours: current };
+    const fallback = await createPlaceDetails({ fetch: fakeFetch(() => Response.json(onlyCurrent)) })(PLACE_ID, "full");
+    expect(fallback.openNow).toBe(true);
+    expect(fallback.openingHours).toEqual(current.weekdayDescriptions);
+  });
+
+  it("shares one request between concurrent misses for the same place", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => {
+      await gate;
+      return Response.json(fullFixture);
+    });
+    const details = createPlaceDetails({ fetch: fetch });
+    const all = Promise.all([details(PLACE_ID, "full"), details(PLACE_ID, "full"), details(PLACE_ID, "basic")]);
+    release();
+    const [a, b, c] = await all;
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(a).toBe(b);
+    expect(c.name).toBe("Feitoria");
+    // Once settled, the next miss goes upstream again.
+    details.clearCache();
+    await details(PLACE_ID, "full");
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("leaves full-tier fields out of a basic answer", async () => {
@@ -122,7 +160,7 @@ describe("photos", () => {
 
   it("builds the proxy URL with an encoded name and a clamped width", () => {
     expect(photoProxyUrl(PHOTO, 640)).toBe(`/api/places/photo?name=${encodeURIComponent(PHOTO)}&w=640`);
-    expect(photoProxyUrl(PHOTO, 99999)).toMatch(/&w=4800$/);
+    expect(photoProxyUrl(PHOTO, 99999)).toMatch(/&w=1600$/);
   });
 
   it("accepts only Google photo names", () => {
@@ -131,11 +169,49 @@ describe("photos", () => {
     expect(isPhotoName("https://evil.test/x")).toBe(false);
   });
 
-  it("fetches the media endpoint and returns the bytes", async () => {
+  it("fetches the media endpoint and streams the bytes", async () => {
     const fetch = fakeFetch(() => new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/jpeg" } }));
     const photo = await fetchPhoto(PHOTO, 640, { fetch: fetch });
     expect(String(fetch.mock.calls[0][0])).toBe(`https://places.googleapis.com/v1/${PHOTO}/media?maxWidthPx=640`);
     expect(photo.contentType).toBe("image/jpeg");
-    expect(photo.body.byteLength).toBe(3);
+    expect(photo.body).toBeInstanceOf(ReadableStream);
+    expect((await new Response(photo.body).arrayBuffer()).byteLength).toBe(3);
+  });
+
+  it("never asks Google for more than 1600 px", async () => {
+    const fetch = fakeFetch(() => new Response(new Uint8Array([1]), { headers: { "content-type": "image/jpeg" } }));
+    await fetchPhoto(PHOTO, 4800, { fetch: fetch });
+    expect(String(fetch.mock.calls[0][0])).toMatch(/maxWidthPx=1600$/);
+  });
+
+  it("refuses a declared body over 4 MB before reading it", async () => {
+    const fetch = fakeFetch(
+      () =>
+        new Response(new Uint8Array([1]), {
+          headers: { "content-type": "image/jpeg", "content-length": String(MAX_PHOTO_BYTES + 1) },
+        }),
+    );
+    const error = await fetchPhoto(PHOTO, 800, { fetch: fetch }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(GooglePhotoTooLargeError);
+    expect(googleErrorResponse(error).status).toBe(502);
+  });
+
+  it("errors the stream once an undeclared body passes 4 MB", async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    const upstream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < 5; i++) controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const fetch = fakeFetch(() => new Response(upstream, { headers: { "content-type": "image/jpeg" } }));
+    const photo = await fetchPhoto(PHOTO, 800, { fetch: fetch });
+    await expect(new Response(photo.body).arrayBuffer()).rejects.toBeInstanceOf(GooglePhotoTooLargeError);
+  });
+
+  it("passes a body under the cap through unchanged", async () => {
+    const bytes = new Uint8Array(MAX_PHOTO_BYTES).fill(7);
+    const out = new Response(new Response(bytes).body!.pipeThrough(limitBytes(MAX_PHOTO_BYTES)));
+    expect((await out.arrayBuffer()).byteLength).toBe(MAX_PHOTO_BYTES);
   });
 });

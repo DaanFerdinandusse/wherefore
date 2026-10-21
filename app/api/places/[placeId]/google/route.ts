@@ -3,7 +3,8 @@ import type { NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth/server";
 import { type DetailsTier, placeDetails } from "@/lib/google";
 import { googleErrorResponse } from "@/lib/google/http";
-import { googlePlaceIdForRow, isPlaceRowId } from "@/lib/google/lookup";
+import { isUuid } from "@/lib/auth/scope";
+import { getGooglePlaceIdForPlace } from "@/lib/places/queries";
 
 // Google details for the place profile. `placeId` is either the app's place row
 // id (a uuid, what cards carry) or a Google place id. ?tier=basic (default)
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
   const tier: DetailsTier = tierParam;
 
-  const googlePlaceId = isPlaceRowId(placeId) ? await googlePlaceIdForRow(placeId) : placeId;
+  const googlePlaceId = isUuid(placeId) ? await getGooglePlaceIdForPlace(placeId) : placeId;
   if (!googlePlaceId) {
     return Response.json({ error: "This place has no Google listing linked." }, { status: 404 });
   }

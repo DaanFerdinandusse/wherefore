@@ -11,8 +11,11 @@ import {
   checkLocality,
   cidFromHex,
   cidToHex,
+  OTHER_FAVORITES_ID,
   displayScore,
+  distanceFromDestination,
   explainabilityFor,
+  isTooFar,
   normalizeLocality,
   normalizePlace,
   radiusFromBoundary,
@@ -227,13 +230,14 @@ describe("explainabilityFor", () => {
     expect(because.reduce((s, b) => s + b.share, 0)).toBe(100);
   });
 
-  it("drops inputs without a name and rescales the rest", () => {
+  it("keeps inputs without a name as one Other favorites entry, never rescaled away", () => {
     const because = explainabilityFor(
       {
         signalScores: [
           { entityId: "a", score: 0.3 },
-          { entityId: "unknown", score: 0.5 },
+          { entityId: "unknown", score: 0.4 },
           { entityId: "b", score: 0.1 },
+          { entityId: "unknown-2", score: 0.1 },
         ],
       },
       [
@@ -241,10 +245,18 @@ describe("explainabilityFor", () => {
         { entityId: "b", name: "B" },
       ],
     );
+    // 0.3 / 0.9 = 33.3, 0.1 / 0.9 = 11.1, 0.5 / 0.9 = 55.6 (other, listed last).
     expect(because).toEqual([
-      { entityId: "a", name: "A", share: 75 },
-      { entityId: "b", name: "B", share: 25 },
+      { entityId: "a", name: "A", share: 33 },
+      { entityId: "b", name: "B", share: 11 },
+      { entityId: OTHER_FAVORITES_ID, name: "Other favorites", share: 56 },
     ]);
+    expect(because.reduce((s, b) => s + b.share, 0)).toBe(100);
+  });
+
+  it("is empty when no driver has a name", () => {
+    const because = explainabilityFor({ signalScores: [{ entityId: "unknown", score: 0.9 }] }, FAVORITES);
+    expect(because).toEqual([]);
   });
 
   it("is empty without explainability", () => {
@@ -299,8 +311,45 @@ describe("localities", () => {
       }),
     );
     const lisbon = { name: "Lisboa", countryCode: "PT", lat: 38.74, lon: -9.15, radiusM: 8500 };
-    expect(checkLocality(lisbon, results)).toEqual({ requested: "Lisboa", resolved: "Lisbon, Portugal", ok: true });
+    expect(checkLocality(lisbon, results)).toEqual({
+      requested: "Lisboa",
+      resolved: "Lisbon, Portugal",
+      ok: true,
+      dropped: 0,
+    });
     expect(checkLocality({ ...lisbon, countryCode: "US" }, results).ok).toBe(false);
     expect(checkLocality({ ...lisbon, radiusM: 1000 }, results).ok).toBe(false);
+    expect(checkLocality(lisbon, results, undefined, 3).dropped).toBe(3);
+  });
+
+  it("computes a missing distance from the coordinates instead of counting it as near", () => {
+    const [raw] = insights.results.entities;
+    const place = normalizePlace(raw);
+    const result: PlaceResult = { place, category: "eat", affinity: 0.8, score: 0, signalScores: [], distanceM: null };
+    // Feitoria sits about 7 km from this point.
+    const near = { name: "Lisboa", countryCode: "PT", lat: 38.74, lon: -9.15, radiusM: 8500 };
+    expect(checkLocality(near, [result]).ok).toBe(true);
+    // Porto: same country, about 270 km away. Without a distance this used to pass.
+    const porto = { name: "Porto", countryCode: "PT", lat: 41.1579, lon: -8.6291, radiusM: 8000 };
+    expect(checkLocality(porto, [result]).ok).toBe(false);
+    // No distance and no coordinates: not near.
+    const bare: PlaceResult = { ...result, place: { ...place, lat: null, lon: null } };
+    expect(checkLocality(near, [bare]).ok).toBe(false);
+  });
+
+  it("measures distance from the API first, then from the coordinates", () => {
+    const point = { lat: 38.74, lon: -9.15 };
+    expect(distanceFromDestination(point, { lat: 0, lon: 0 }, 1234)).toBe(1234);
+    expect(distanceFromDestination(point, { lat: 38.74, lon: -9.15 }, null)).toBe(0);
+    expect(distanceFromDestination(point, { lat: null, lon: null })).toBeNull();
+    const d = distanceFromDestination(point, { lat: 41.1579, lon: -8.6291 }) ?? 0;
+    expect(d).toBeGreaterThan(260_000);
+    expect(d).toBeLessThan(280_000);
+  });
+
+  it("calls a result too far only past 1.5x the radius", () => {
+    expect(isTooFar({ radiusM: 8000 }, 12_000)).toBe(false);
+    expect(isTooFar({ radiusM: 8000 }, 12_001)).toBe(true);
+    expect(isTooFar({ radiusM: 8000 }, null)).toBe(false);
   });
 });
