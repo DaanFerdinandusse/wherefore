@@ -23,7 +23,7 @@ export type NormalizedPlace = {
   types: string[];
   priceLevel: number | null;
   /** business_rating as numeric(3,2) text, e.g. "4.40". */
-  rating: string | null;
+  rating: number | null;
   ratingCount: number | null;
   description: string | null;
   images: { url: string; width?: number; height?: number; source?: string }[];

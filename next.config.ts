@@ -1,11 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // The Next agent-rules block contains an em dash, which this repo bans.
+  agentRules: false,
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
   turbopack: {
+    // Worktrees symlink node_modules from the main checkout; Turbopack then
+    // needs a root above both. Set TURBOPACK_ROOT=/Users/<you> in .env.local.
+    ...(process.env.TURBOPACK_ROOT ? { root: process.env.TURBOPACK_ROOT } : {}),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

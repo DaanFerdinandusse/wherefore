@@ -50,7 +50,7 @@ describe("normalizePlace", () => {
       neighborhood: "West Village",
       primaryType: "urn:tag:genre:place:restaurant:italian",
       priceLevel: 3,
-      rating: "4.40",
+      rating: 4.4,
       ratingCount: null,
       googlePlaceId: "ChIJr7FOf5NZwokRu3CDYtzVmuQ",
       googleCid: "16472713729583313083",
@@ -77,7 +77,7 @@ describe("normalizePlace", () => {
     expect(place.googlePlaceId).toBe("ChIJh32rQULLHg0RkgF8wCakjIk");
     expect(place.googleCid).toBe("9911477366280683922");
     expect(place.priceLevel).toBe(4);
-    expect(place.rating).toBe("4.80");
+    expect(place.rating).toBe(4.8);
     expect(place.city).toBe("Lisbon");
     expect(place.neighborhood).toBe("Pedrouços");
     expect(place.properties).toHaveProperty("keywords");

@@ -37,7 +37,8 @@ Next.js 16 App Router (React 19, Node 22+, ESM), Tailwind v4 tokens in `app/glob
 
 ## Working in a worktree
 
-- Your worktree has no `.env.local` and no `node_modules`. Run `ln -s /Users/daanferdinandusse/qloo/node_modules node_modules` and copy the env file named in your brief from `/Users/daanferdinandusse/qloo/.env.agents/` to `.env.local`. If you add a dependency, run `npm install <pkg>` (it lands in the shared `node_modules`) and say so in your report.
+- Your worktree has no `.env.local` and no `node_modules`. Run `ln -s /Users/daanferdinandusse/qloo/node_modules node_modules` and copy the env file named in your brief from `/Users/daanferdinandusse/qloo/.env.agents/` to `.env.local`, then append `TURBOPACK_ROOT=/Users/daanferdinandusse` to it so `next dev` resolves packages through the symlink. If you add a dependency, run `npm install <pkg>` (it lands in the shared `node_modules`) and say so in your report.
+- Signatures in `lib/clients`, `lib/trips`, `lib/places` take a trailing `scope` (an owner id, `{ ownerId, orgIds }` or the `AuthUser` from `requireUser()`); out-of-scope rows return null or throw `NotFoundError`. Route handlers map errors with `errorResponse(e)` from `lib/auth/errors.ts`.
 - Touch only the files and folders your brief lists as yours. If you must change a shared file (`lib/contracts.ts`, `package.json`, `app/globals.css`, `app/layout.tsx`), keep the change minimal and additive and call it out in your report.
 - `npm run typecheck` and `npm run lint` must pass before you report done. Write Vitest tests for pure logic.
 - Commit on your branch with clear messages. Do not merge, rebase or push.

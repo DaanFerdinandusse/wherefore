@@ -77,7 +77,7 @@ export function normalizePlace(raw: RawPlace): NormalizedPlace {
     primaryType: p.primary_genre?.id ?? null,
     types: tags.filter((t) => t.type === CATEGORY_TAG_TYPE).map((t) => t.tagId),
     priceLevel: priceLevelOf(p.price_level),
-    rating: typeof p.business_rating === "number" ? p.business_rating.toFixed(2) : null,
+    rating: typeof p.business_rating === "number" ? Math.round(p.business_rating * 100) / 100 : null,
     // business_rating comes without a count; the external counts (Tripadvisor,
     // Resy) rate something else, so they stay in properties.external.
     ratingCount: null,

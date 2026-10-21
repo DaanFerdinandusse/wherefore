@@ -118,7 +118,7 @@ export const places = pgTable(
     primaryType: text("primary_type"),
     types: jsonb("types").$type<string[]>().notNull().default([]),
     priceLevel: integer("price_level"),
-    rating: numeric("rating", { precision: 3, scale: 2 }),
+    rating: numeric("rating", { precision: 3, scale: 2, mode: "number" }),
     ratingCount: integer("rating_count"),
     description: text("description"),
     images: jsonb("images").$type<PlaceImage[]>().notNull().default([]),
@@ -257,7 +257,7 @@ export const tripPlaces = pgTable(
     source: text("source").notNull(),
     // eat | drink | coffee | see | stay | other
     category: text("category").notNull().default("other"),
-    bestAffinity: numeric("best_affinity", { precision: 6, scale: 4 }),
+    bestAffinity: numeric("best_affinity", { precision: 6, scale: 4, mode: "number" }),
     bestScore: integer("best_score"),
     explainability: jsonb("explainability").$type<Explainability>().notNull().default([]),
     sharedTags: jsonb("shared_tags").$type<TasteTag[]>().notNull().default([]),
@@ -287,7 +287,7 @@ export const askPlaces = pgTable(
       .notNull()
       .references(() => tripPlaces.id, { onDelete: "cascade" }),
     rank: integer("rank").notNull(),
-    affinity: numeric("affinity", { precision: 6, scale: 4 }),
+    affinity: numeric("affinity", { precision: 6, scale: 4, mode: "number" }),
     score: integer("score"),
     explainability: jsonb("explainability").$type<Explainability>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

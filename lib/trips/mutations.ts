@@ -208,7 +208,7 @@ export const upsertTripPlaces: UpsertTripPlaces = async (tripId, rows, scope) =>
         placeId: row.placeId,
         source: row.source,
         category: row.category,
-        bestAffinity: row.bestAffinity == null ? null : String(row.bestAffinity),
+        bestAffinity: row.bestAffinity ?? null,
         bestScore: row.bestScore ?? null,
         explainability: row.explainability ?? [],
         sharedTags: row.sharedTags ?? [],
@@ -335,7 +335,7 @@ export const addAskPlaces: AddAskPlaces = async (askId, rows, scope) => {
     askId,
     tripPlaceId: r.tripPlaceId,
     rank: r.rank,
-    affinity: r.affinity == null ? null : String(r.affinity),
+    affinity: r.affinity ?? null,
     score: r.score ?? null,
     explainability: r.explainability ?? [],
   }));
