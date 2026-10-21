@@ -9,6 +9,7 @@ import { findPlaces, findTags, scoreEntities, tastePortrait } from "./api";
 import { memoryCacheStore } from "./cache";
 import { createQlooClient } from "./client";
 import { QlooLocalityMismatchError } from "./errors";
+import { CATEGORY_FILTER_TAGS, isUnpricedTagFilter } from "./normalize";
 
 const template = insightsFixture.results.entities[0];
 
@@ -100,6 +101,32 @@ describe("findPlaces", () => {
     expect(urls).toHaveLength(2);
   });
 
+  it("does not apply a price cap to a see or stay ask, and does not report it as loosened", async () => {
+    for (const tags of [CATEGORY_FILTER_TAGS.see, CATEGORY_FILTER_TAGS.stay]) {
+      const { client, urls } = clientFor((url) =>
+        url.searchParams.has("filter.tags")
+          ? { results: { entities: entities(2, "strict") } }
+          : { results: { entities: entities(6, "loose") } },
+      );
+      const out = await findPlaces(
+        { destination: lisbon, signals, tags, tagsOperator: "union", priceMax: 2, take: 8 },
+        { client },
+      );
+      expect(urls.every((u) => !u.searchParams.has("filter.price_level.max"))).toBe(true);
+      expect(out.loosened).toEqual(["tags"]);
+      expect(urls).toHaveLength(2);
+    }
+  });
+
+  it("still applies the price cap when an ask mixes in a priced category", async () => {
+    const { client, urls } = clientFor(() => ({ results: { entities: entities(6, "strict") } }));
+    await findPlaces(
+      { destination: lisbon, signals, tags: [...CATEGORY_FILTER_TAGS.see, ...CATEGORY_FILTER_TAGS.eat], priceMax: 2, take: 6 },
+      { client },
+    );
+    expect(urls[0].searchParams.get("filter.price_level.max")).toBe("2");
+  });
+
   it("throws when no result is in the destination's country", async () => {
     const { client } = clientFor(() => ({ results: { entities: entities(5, "strict") } }));
     await expect(
@@ -162,5 +189,17 @@ describe("tastePortrait and findTags", () => {
       name: "Natural Wine",
       type: "urn:tag:genre:place",
     });
+  });
+});
+
+describe("isUnpricedTagFilter", () => {
+  it("is true only when every tag is a see or stay category", () => {
+    expect(isUnpricedTagFilter(["urn:tag:category:place:museum", "urn:tag:category:place:tourist_attraction"])).toBe(true);
+    expect(isUnpricedTagFilter(["urn:tag:category:place:hotel"])).toBe(true);
+    expect(isUnpricedTagFilter(["urn:tag:category:place:art_gallery"])).toBe(true);
+    expect(isUnpricedTagFilter(["urn:tag:category:place:hotel", "urn:tag:category:place:wine_bar"])).toBe(false);
+    expect(isUnpricedTagFilter(["urn:tag:genre:place:restaurant:natural_wine"])).toBe(false);
+    expect(isUnpricedTagFilter(["urn:tag:ambience:qloo:cozy"])).toBe(false);
+    expect(isUnpricedTagFilter([])).toBe(false);
   });
 });

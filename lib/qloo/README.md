@@ -48,7 +48,7 @@ Key: `qloo:` + sha256 of the endpoint and its sorted serialized params. TTLs: in
 
 ## Fallbacks
 
-Fewer than 5 results (or `take` if smaller): drop `filter.tags`, then the price cap. `loosened` lists what was dropped (`"tags"`, `"price"`). Results from stricter steps stay in the set; the set is re-ranked by affinity and capped at `take`. Note: the price filter drops places without a `price_level` (museums, hotels), so do not pass `priceMax` for see or stay.
+Fewer than 5 results (or `take` if smaller): drop `filter.tags`, then the price cap. `loosened` lists what was dropped (`"tags"`, `"price"`). Results from stricter steps stay in the set; the set is re-ranked by affinity and capped at `take`. The price filter drops places without a `price_level` (museums, hotels), so when every tag is a see or stay category (`isUnpricedTagFilter`), `findPlaces` does not apply `priceMax` at all, and `"price"` appears in `loosened` only when a cap was applied and then dropped.
 
 ## The category re-check
 

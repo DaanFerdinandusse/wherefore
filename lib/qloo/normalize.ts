@@ -247,6 +247,21 @@ export function categoryOf(place: Pick<NormalizedPlace, "primaryType" | "types">
   return "other";
 }
 
+/**
+ * True when every tag is a see or stay category (museum, hotel, attraction).
+ * Those places carry no price_level, and the upstream drops them under any
+ * price filter, so findPlaces does not apply a price cap to such an ask.
+ */
+export function isUnpricedTagFilter(tags: readonly string[]): boolean {
+  if (tags.length === 0) return false;
+  return tags.every((tag) => {
+    const prefix = tag.startsWith("urn:tag:category:place:") || tag.startsWith(GENRE_PREFIX);
+    if (!prefix) return false;
+    const category = categoryOfLeaf(tag.slice(tag.lastIndexOf(":") + 1));
+    return category === "see" || category === "stay";
+  });
+}
+
 /** Category filters that fetch a board group. Union, then re-checked with categoryOf. */
 export const CATEGORY_FILTER_TAGS: Record<Exclude<Category, "other">, string[]> = {
   eat: ["urn:tag:category:place:restaurant"],

@@ -28,6 +28,7 @@ import { QlooLocalityMismatchError } from "./errors";
 import {
   categoryOf,
   checkLocality,
+  isUnpricedTagFilter,
   countryCodeOfPlace,
   displayScore,
   explainabilityFor,
@@ -132,7 +133,9 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
   const { destination, signals } = input;
   const hasSignals = signals.length > 0;
   const hasTags = (input.tags?.length ?? 0) > 0;
-  const hasPrice = input.priceMax !== undefined;
+  // Places without a price level (museums, hotels) never pass a price filter,
+  // so a cap on a see or stay ask is not applied at all.
+  const hasPrice = input.priceMax !== undefined && !(hasTags && isUnpricedTagFilter(input.tags ?? []));
 
   const base: QlooParams = {
     "filter.type": PLACE,
