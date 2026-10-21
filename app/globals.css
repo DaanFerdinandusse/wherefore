@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+/*
+  Design tokens from the Paper v2 designs ("v2 Itinerary builder").
+  Every color and type size used in a component comes from here.
+  No hex values in components.
+*/
+@theme {
+  /* Surfaces */
+  --color-canvas: #e8e3d9;
+  --color-surface: #f1ede6;
+  --color-surface-raised: #fbf9f5;
+  --color-avatar: #ddd6ca;
+
+  /* Ink and text */
+  --color-ink: #1c1a17;
+  --color-text-2: #5e5850;
+  --color-text-3: #4a453e;
+  --color-text-4: #3b3732;
+
+  /* Lines */
+  --color-rule: rgb(28 26 23 / 0.12);
+  --color-rule-strong: rgb(28 26 23 / 0.16);
+  --color-pill-outline: rgb(28 26 23 / 0.42);
+  --color-nav-pill: rgb(28 26 23 / 0.55);
+  --color-scrim: rgb(28 26 23 / 0.55);
+
+  /* Accents */
+  --color-amber: #8a5a1e;
+  --color-glow: #e2a85a;
+  --color-glow-halo: rgb(233 176 96 / 0.6);
+  --color-green: #5b6650;
+
+  /* Glass dock */
+  --color-glass: rgb(241 237 230 / 0.6);
+
+  /* Type */
+  --font-display: var(--font-bodoni), "Bodoni Moda", Georgia, serif;
+  --font-sans: var(--font-hanken), "Hanken Grotesk", system-ui, sans-serif;
+
+  --text-label: 11px;
+  --text-label--line-height: 1.2;
+  --text-label--letter-spacing: 0.16em;
+  --text-label--font-weight: 500;
+
+  --text-body: 15px;
+  --text-body--line-height: 1.45;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 1.5;
+
+  --text-card-sm: 26px;
+  --text-card-sm--line-height: 1.1;
+  --text-card-md: 30px;
+  --text-card-md--line-height: 1.1;
+  --text-card-lg: 44px;
+  --text-card-lg--line-height: 1.05;
+
+  --text-wordmark: 28px;
+  --text-wordmark--letter-spacing: -0.025em;
+  --text-title: 48px;
+  --text-title--line-height: 1.05;
+  --text-title--letter-spacing: -0.025em;
+  --text-name: 56px;
+  --text-name--line-height: 1.02;
+  --text-name--letter-spacing: -0.025em;
+  --text-place: 64px;
+  --text-place--line-height: 1;
+  --text-place--letter-spacing: -0.025em;
+  --text-hero: 92px;
+  --text-hero--line-height: 0.98;
+  --text-hero--letter-spacing: -0.025em;
+
+  /* Radii */
+  --radius-pill: 999px;
+  --radius-card: 20px;
+  --radius-sheet: 28px;
+
+  /* Motion: one ease for the authored moments */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  color-scheme: light;
+  --glass-blur: 18px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Browser surfaces carry the design too. */
+::selection {
+  background: var(--color-glow-halo);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-glow);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(28 26 23 / 0.2) transparent;
+}
+
+input,
+textarea {
+  caret-color: var(--color-amber);
+}
+
+/* Shared utilities that are not worth a component. */
+@utility label-caps {
+  font-size: var(--text-label);
+  letter-spacing: var(--text-label--letter-spacing);
+  font-weight: var(--text-label--font-weight);
+  text-transform: uppercase;
+  line-height: var(--text-label--line-height);
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.025em;
+}
+
+@utility glass {
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+@utility film {
+  filter: saturate(0.72) contrast(0.9) sepia(0.08);
+}
+
+@utility arch-top {
+  border-radius: 999px 999px 24px 24px;
+}
+
+@utility hairline {
+  border-color: var(--color-rule);
+  border-width: 1px;
+}
+
+@utility glow-ring {
+  box-shadow:
+    0 0 0 2px var(--color-glow),
+    0 0 18px 4px var(--color-glow-halo);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility rise-in {
+  animation: rise-in 320ms var(--ease-out-expo) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: none;
+  }
+}
