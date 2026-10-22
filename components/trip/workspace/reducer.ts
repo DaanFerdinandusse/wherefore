@@ -35,8 +35,28 @@ export type SlotWrite = {
   note?: string;
   /** Show the note to the traveler. Kept from the row when left out. */
   noteForTraveler?: boolean;
+  /** Who wrote the note. Left out: kept while the note text is unchanged, the advisor's once it is rewritten. */
+  noteSource?: "advisor" | "agent";
   date?: string;
 };
+
+/**
+ * The note's author after a write: an agent note stays the agent's until its
+ * text changes, so moving it or toggling nothing never makes it the advisor's.
+ */
+export function writtenNoteSource(
+  write: Pick<SlotWrite, "note" | "noteSource">,
+  existing: Pick<ItinerarySlot, "note" | "noteSource"> | undefined,
+): "advisor" | "agent" {
+  if (write.noteSource) return write.noteSource;
+  if (write.note === undefined || write.note.trim() === (existing?.note ?? "").trim()) return existing?.noteSource ?? "advisor";
+  return "advisor";
+}
+
+/** Agent notes never reach the traveler, whatever the write asked. */
+function travelerFlag(source: "advisor" | "agent", flag: boolean): boolean {
+  return source === "agent" ? false : flag;
+}
 
 export type WorkspaceEvent =
   | { type: "snapshot"; snapshot: TripSnapshot }
@@ -228,6 +248,7 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
         slots = index === -1 ? state.slots : state.slots.filter((_, i) => i !== index);
       } else {
         const existing = index === -1 ? undefined : state.slots[index];
+        const source = writtenNoteSource(write, existing);
         const slot: ItinerarySlot = {
           id: existing?.id ?? `optimistic:${key}`,
           day: write.day,
@@ -236,7 +257,8 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
           date: write.date ?? existing?.date,
           tripPlaceId: write.tripPlaceId ?? undefined,
           note: write.note ?? existing?.note ?? "",
-          noteForTraveler: write.noteForTraveler ?? existing?.noteForTraveler ?? false,
+          noteForTraveler: travelerFlag(source, write.noteForTraveler ?? existing?.noteForTraveler ?? false),
+          ...(source === "agent" ? { noteSource: "agent" as const } : {}),
         };
         slots = index === -1 ? [...state.slots, slot] : state.slots.map((s, i) => (i === index ? slot : s));
       }
@@ -446,9 +468,21 @@ export function swapWrites(slots: ItinerarySlot[], from: SlotRef, to: SlotRef): 
   if (!source?.tripPlaceId) return [];
   const target = slotAt(slots, b.day, b.slot, b.position);
   return [
-    { ...b, tripPlaceId: source.tripPlaceId, note: source.note, noteForTraveler: source.noteForTraveler ?? false },
+    {
+      ...b,
+      tripPlaceId: source.tripPlaceId,
+      note: source.note,
+      noteForTraveler: source.noteForTraveler ?? false,
+      noteSource: source.noteSource ?? "advisor",
+    },
     target
-      ? { ...a, tripPlaceId: target.tripPlaceId ?? null, note: target.note, noteForTraveler: target.noteForTraveler ?? false }
+      ? {
+          ...a,
+          tripPlaceId: target.tripPlaceId ?? null,
+          note: target.note,
+          noteForTraveler: target.noteForTraveler ?? false,
+          noteSource: target.noteSource ?? "advisor",
+        }
       : { ...a, tripPlaceId: null },
   ];
 }
@@ -462,6 +496,7 @@ export type SlotContent = {
   tripPlaceId: string | null;
   note: string;
   noteForTraveler: boolean;
+  noteSource: "advisor" | "agent";
 };
 
 /**
@@ -470,7 +505,16 @@ export type SlotContent = {
  * Pure, so the server action and the tests share it.
  */
 export function applySlotWrites(
-  rows: readonly { day: number; slot: SlotName; position: number; date?: string | null; tripPlaceId?: string | null; note: string; noteForTraveler?: boolean }[],
+  rows: readonly {
+    day: number;
+    slot: SlotName;
+    position: number;
+    date?: string | null;
+    tripPlaceId?: string | null;
+    note: string;
+    noteForTraveler?: boolean;
+    noteSource?: "advisor" | "agent";
+  }[],
   writes: readonly SlotWrite[],
 ): SlotContent[] {
   const byKey = new Map<string, SlotContent>();
@@ -483,6 +527,7 @@ export function applySlotWrites(
       tripPlaceId: r.tripPlaceId ?? null,
       note: r.note,
       noteForTraveler: r.noteForTraveler ?? false,
+      noteSource: r.noteSource ?? "advisor",
     });
   }
   for (const w of writes) {
@@ -499,7 +544,11 @@ export function applySlotWrites(
       date: w.date ?? existing?.date ?? null,
       tripPlaceId: w.tripPlaceId,
       note: w.note ?? existing?.note ?? "",
-      noteForTraveler: w.noteForTraveler ?? existing?.noteForTraveler ?? false,
+      noteForTraveler: travelerFlag(
+        writtenNoteSource(w, existing),
+        w.noteForTraveler ?? existing?.noteForTraveler ?? false,
+      ),
+      noteSource: writtenNoteSource(w, existing),
     });
   }
   return [...byKey.values()];

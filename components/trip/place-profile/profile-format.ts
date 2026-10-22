@@ -3,8 +3,7 @@
 // the "why" sentence. No React, no I/O; tested in profile-format.test.ts.
 
 import type { Category, Explainability, ItinerarySlot, SlotName } from "@/lib/contracts";
-
-export const OTHER_DRIVER_ID = "other";
+import { favoriteDrivers } from "@/lib/qloo/normalize";
 
 export const SLOT_LABELS: Record<SlotName, string> = {
   morning: "Morning",
@@ -150,9 +149,9 @@ export function tripsLabel(count: number): string | null {
   return count === 1 ? "In 1 trip" : `In ${count} trips`;
 }
 
-/** Named drivers only: "Other favorites" is never presented as a favorite. */
+/** Named drivers only: "Your places" and "Other favorites" are never presented as a favorite. */
 export function namedDrivers(because: Explainability): Explainability {
-  return because.filter((d) => d.entityId !== OTHER_DRIVER_ID && d.name.trim().length > 0);
+  return favoriteDrivers(because);
 }
 
 /**

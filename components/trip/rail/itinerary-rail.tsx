@@ -12,6 +12,7 @@ import { Pill } from "@/components/ui/pill";
 import type { ItinerarySlot, SlotName, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
 import { cn } from "@/lib/ui/cn";
 
+import { AgentNoteLabel, isAgentNote } from "../agent-note";
 import { useTripStore } from "../store";
 import { carriesPlace, draggedPlace, TRIP_PLACE_TYPE } from "../workspace/dnd";
 import { CATEGORY_LABELS, dayLabel, firstName, SLOT_LABELS } from "../workspace/format";
@@ -89,8 +90,11 @@ function FilledSlotRow({
         </span>
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-body leading-5 font-semibold text-ink">{card.name}</span>
-          <span className="truncate text-ui-sm leading-[18px] text-text-muted">
-            {SLOT_LABELS[slot.slot]} · {CATEGORY_LABELS[card.category]}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-ui-sm leading-[18px] text-text-muted">
+              {SLOT_LABELS[slot.slot]} · {CATEGORY_LABELS[card.category]}
+            </span>
+            {isAgentNote(slot) ? <AgentNoteLabel note={slot.note} /> : null}
           </span>
         </span>
       </button>

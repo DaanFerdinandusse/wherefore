@@ -6,7 +6,7 @@ import { inScope, isUuid, type ScopeInput } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
 import { askPlaces, places, tripAsks, tripPlaces, trips } from "@/lib/db/schema";
 import { getAdvisorPlaceForPlace, getPlacesByEntityIds } from "@/lib/places";
-import { OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
+import { favoriteDrivers } from "@/lib/qloo/normalize";
 
 import { buildProfilePlace, type TripPlaceProfile } from "./profile-types";
 import { listTripPlaceCards } from "./queries";
@@ -40,7 +40,7 @@ export async function loadTripPlaceProfile(tripPlaceId: string, scope: ScopeInpu
   const card = cards[0];
   if (!card) return null;
 
-  const named = card.because.filter((driver) => driver.entityId !== OTHER_FAVORITES_ID);
+  const named = favoriteDrivers(card.because);
   const [driverPlaces, inTrips] = await Promise.all([
     getPlacesByEntityIds(named.map((driver) => driver.entityId)),
     advisorPlace

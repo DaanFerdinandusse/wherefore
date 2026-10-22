@@ -45,15 +45,27 @@ export function findCard(grouped: TripsBoardState, tripId: string): TripCard | u
 /**
  * The board after moving one trip to another stage: the card leaves its
  * column and goes to the top of the target, as the server's updated_at order
- * would put it. Returns the same object when nothing changes.
+ * would put it. Returns the same object when nothing changes. A move by
+ * hand sets the override to the target stage; a reset passes `override:
+ * null` and may land in the same column.
  */
-export function moveCard(grouped: TripsBoardState, tripId: string, to: TripStage): TripsBoardState {
+export function moveCard(
+  grouped: TripsBoardState,
+  tripId: string,
+  to: TripStage,
+  override?: TripStage | null,
+): TripsBoardState {
   const card = findCard(grouped, tripId);
-  if (!card || card.stage === to) return grouped;
+  if (!card) return grouped;
+  const stageOverride = override === undefined ? to : override;
+  if (card.stage === to) {
+    if (override === undefined || card.stageOverride === stageOverride) return grouped;
+    return { ...grouped, [to]: grouped[to].map((c) => (c.id === tripId ? { ...c, stageOverride } : c)) };
+  }
   return {
     ...grouped,
     [card.stage]: grouped[card.stage].filter((c) => c.id !== tripId),
-    [to]: [{ ...card, stage: to }, ...grouped[to]],
+    [to]: [{ ...card, stage: to, stageOverride }, ...grouped[to]],
   };
 }
 

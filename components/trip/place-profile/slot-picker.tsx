@@ -8,6 +8,7 @@ import { Popover } from "@/components/ui/popover";
 import type { Category, ItinerarySlot } from "@/lib/contracts";
 import { cn } from "@/lib/ui/cn";
 
+import { isAgentNote } from "../agent-note";
 import { SLOT_LABELS, isSlotTaken, pickerSlots, slotChoiceLabel, type SlotChoice, type TripDay } from "./profile-format";
 
 // "Day 2 · Lunch": the slot the place will be added to. Opens upward (it sits
@@ -61,6 +62,7 @@ export function SlotPicker({
                 const holder = slots.find((s) => s.day === day.day && s.slot === slot && s.tripPlaceId);
                 const taken = isSlotTaken(choice, slots) && holder?.tripPlaceId !== tripPlaceId;
                 const here = holder?.tripPlaceId === tripPlaceId;
+                const agentNote = slots.find((s) => s.day === day.day && s.slot === slot && isAgentNote(s));
                 return (
                   <button
                     key={slot}
@@ -79,6 +81,11 @@ export function SlotPicker({
                     {SLOT_LABELS[slot]}
                     {here ? <span className={selected ? "text-surface/70" : "text-text-2"}>· here now</span> : null}
                     {taken ? <span className={selected ? "text-surface/70" : "text-text-2"}>· taken</span> : null}
+                    {agentNote ? (
+                      <span title={agentNote.note} className={selected ? "text-surface/70" : "text-text-2"}>
+                        · Agent note
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}

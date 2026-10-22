@@ -3,7 +3,7 @@
 // and only ever built from data we have (no invented facts).
 
 import type { BuiltFrom, Category, Explainability, SlotName, TripSnapshot } from "@/lib/contracts";
-import { OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
+import { favoriteDrivers } from "@/lib/qloo/normalize";
 
 export const SLOT_LABELS: Record<SlotName, string> = {
   morning: "Morning",
@@ -69,9 +69,9 @@ function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/** The favorites a place is credited to by name: never the synthetic "Other favorites" bucket. */
+/** The favorites a place is credited to by name: never "Your places" or "Other favorites". */
 export function namedDrivers(because: Explainability): Explainability {
-  return because.filter((d) => d.entityId !== OTHER_FAVORITES_ID && d.name.trim().length > 0);
+  return favoriteDrivers(because);
 }
 
 /** "Because Ana loves Via Carota and Lilia", from the top two named drivers. Empty without one. */

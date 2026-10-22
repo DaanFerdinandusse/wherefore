@@ -1,5 +1,5 @@
 import type { SharedTripDay, SharedTripPlace, SharedTripSlot, SharedTripView, SlotName } from "@/lib/contracts";
-import { OTHER_FAVORITES_NAME } from "@/lib/qloo/normalize";
+import { ADVISOR_DRIVER_NAME, OTHER_FAVORITES_NAME } from "@/lib/qloo/normalize";
 
 // Pure helpers for the traveler view. Everything the page says about a place
 // comes from the shared view (names, explainability, tags, advisor notes);
@@ -37,12 +37,13 @@ function isoOf(date: Date): string {
 
 /**
  * A favorite the traveler can be told about: a real name. The shared view
- * carries no entity ids, and the server already drops the "Other favorites"
- * bucket; its name is filtered too for views written before that.
+ * carries no entity ids, and the server already drops the "Your places" and
+ * "Other favorites" entries; their names are filtered too for views written
+ * before that.
  */
 function isNamedFavorite(item: { name: string }): boolean {
   const name = item.name.trim();
-  return name !== "" && name !== OTHER_FAVORITES_NAME;
+  return name !== "" && name !== OTHER_FAVORITES_NAME && name !== ADVISOR_DRIVER_NAME;
 }
 
 /** "Because you love Via Carota and Lilia": the top two favorites by share. Null without any. */

@@ -210,7 +210,7 @@ export function ChatDock({
   return (
     <section
       ref={sectionRef}
-      aria-label="Planning assistant"
+      aria-label="Trip agent"
       data-testid="chat-dock"
       data-busy={busy ? "true" : "false"}
       data-list={mode}
@@ -222,7 +222,7 @@ export function ChatDock({
     >
       {toggle ? <div className="absolute bottom-full left-1/2 mb-[17px] -translate-x-1/2">{toggle}</div> : null}
       <header className="flex shrink-0 items-center justify-between gap-2 px-1">
-        <span className="label-caps text-text-2">Assistant</span>
+        <span className="label-caps text-text-2">Agent</span>
         <div className="flex items-center gap-2">
           {busy ? <span className="label-caps text-amber">{stopping ? "Stopping" : "Working"}</span> : null}
           <button

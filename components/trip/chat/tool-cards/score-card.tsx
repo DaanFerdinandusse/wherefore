@@ -2,6 +2,7 @@
 
 import { BookmarkMark } from "@/components/ui/bookmark-mark";
 import type { ScorePlacesOutput } from "@/lib/contracts";
+import { isPlainDriver } from "@/lib/qloo/normalize";
 import { cn } from "@/lib/ui/cn";
 
 import { CardFrame, CardHeader, ErrorRow, type PlaceHandlers } from "./parts";
@@ -57,7 +58,10 @@ export function ScoreCard({ state, preliminary, output, errorText, onRetry, onPl
                         <span key={driver.entityId} className="flex items-center gap-2">
                           <span className="w-28 shrink-0 truncate text-meta text-text-2">{driver.name}</span>
                           <span className="h-1 grow overflow-hidden rounded-pill bg-rule">
-                            <span className="block h-full rounded-pill bg-ink" style={{ width: `${driver.share}%` }} />
+                            <span
+                              className={cn("block h-full rounded-pill", isPlainDriver(driver.entityId) ? "bg-text-2" : "bg-ink")}
+                              style={{ width: `${driver.share}%` }}
+                            />
                           </span>
                           <span className="w-9 shrink-0 text-right text-meta text-text-2 tabular-nums">{driver.share}%</span>
                         </span>

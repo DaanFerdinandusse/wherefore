@@ -3,7 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { applySlotWrites, swapWrites } from "@/components/trip/workspace/reducer";
+import { applySlotWrites, swapWrites, writtenNoteSource } from "@/components/trip/workspace/reducer";
 import { InvalidInputError, isAppError, NotFoundError } from "@/lib/auth/errors";
 import { requireUser } from "@/lib/auth/server";
 import type { Ask, ItinerarySlot, TripPlaceStatus } from "@/lib/contracts";
@@ -60,30 +60,32 @@ async function tripSlots(tripId: string): Promise<ItinerarySlot[]> {
 /**
  * Puts a place in one slot (or writes a slot's note). A note written without
  * the traveler flag keeps the stored row's flag, so an edit that did not say
- * so never unpublishes a note the traveler sees.
+ * so never unpublishes a note the traveler sees. An agent note stays the
+ * agent's (and off the traveler view) until the advisor rewrites its text.
  */
 export async function saveSlotAction(tripId: string, input: z.input<typeof slotInput>): Promise<ActionResult<ItinerarySlot>> {
   return run(async () => {
     const user = await requireUser();
     const trip = id.parse(tripId);
-    const slot = slotInput.parse(input);
-    if (slot.note !== undefined && slot.noteForTraveler === undefined) {
-      if (!(await getTrip(trip, user))) throw new NotFoundError("trip");
-      const [row] = await db
-        .select({ noteForTraveler: itinerarySlots.noteForTraveler })
-        .from(itinerarySlots)
-        .where(
-          and(
-            eq(itinerarySlots.tripId, trip),
-            eq(itinerarySlots.day, slot.day),
-            eq(itinerarySlots.slot, slot.slot),
-            eq(itinerarySlots.position, slot.position ?? 0),
-          ),
-        )
-        .limit(1);
-      slot.noteForTraveler = row?.noteForTraveler ?? false;
-    }
-    return upsertSlot(trip, slot, user);
+    const parsed = slotInput.parse(input);
+    if (parsed.note === undefined) return upsertSlot(trip, parsed, user);
+    if (!(await getTrip(trip, user))) throw new NotFoundError("trip");
+    const [row] = await db
+      .select({ note: itinerarySlots.note, noteForTraveler: itinerarySlots.noteForTraveler, noteSource: itinerarySlots.noteSource })
+      .from(itinerarySlots)
+      .where(
+        and(
+          eq(itinerarySlots.tripId, trip),
+          eq(itinerarySlots.day, parsed.day),
+          eq(itinerarySlots.slot, parsed.slot),
+          eq(itinerarySlots.position, parsed.position ?? 0),
+        ),
+      )
+      .limit(1);
+    const stored = row ? { note: row.note, noteSource: row.noteSource === "agent" ? ("agent" as const) : undefined } : undefined;
+    const noteSource = writtenNoteSource({ note: parsed.note }, stored);
+    const noteForTraveler = noteSource === "agent" ? false : (parsed.noteForTraveler ?? row?.noteForTraveler ?? false);
+    return upsertSlot(trip, { ...parsed, noteForTraveler, noteSource }, user);
   });
 }
 

@@ -8,7 +8,8 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Toast } from "@/components/ui/toast";
 import type { TripStage } from "@/lib/contracts";
-import { moveTripToStage } from "@/lib/trips/actions";
+import { moveTripToStage, resetTripStage } from "@/lib/trips/actions";
+import { computeStage } from "@/lib/trips/stage";
 import type { TripsBoardState } from "./columns";
 import { cn } from "@/lib/ui/cn";
 
@@ -43,6 +44,23 @@ export function TripsBoard({ initial, today }: { initial: TripsBoardState; today
       setGrouped((current) => restoreCard(current, card));
       setAnnouncement("");
       setError(result.error);
+    }
+  }
+
+  /** Drops the override: the card moves to the stage its dates and share link give it. */
+  async function resetStage(tripId: string) {
+    const card = findCard(grouped, tripId);
+    if (!card || !card.stageOverride) return;
+    const to = computeStage({ ...card, stageOverride: null }, today);
+    setGrouped((current) => moveCard(current, tripId, to, null));
+    setAnnouncement(`${card.title} is back in ${stageLabel(to)}.`);
+    const result = await resetTripStage(tripId);
+    if (!result.ok) {
+      setGrouped((current) => restoreCard(current, card));
+      setAnnouncement("");
+      setError(result.error);
+    } else if (result.stage !== to) {
+      setGrouped((current) => moveCard(current, tripId, result.stage, null));
     }
   }
 
@@ -108,11 +126,13 @@ export function TripsBoard({ initial, today }: { initial: TripsBoardState; today
                 <span className="text-ui text-text-muted">{cards.length}</span>
               </h2>
 
-              {visible.map((card) => (
+              {visible.map((card, index) => (
                 <TripCard
                   key={card.id}
                   card={card}
                   today={today}
+                  eager={index < 3}
+                  onResetStage={(id) => void resetStage(id)}
                   dragging={dragId === card.id}
                   onDragStart={setDragId}
                   onDragEnd={() => {

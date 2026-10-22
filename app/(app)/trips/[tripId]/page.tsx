@@ -11,6 +11,8 @@ import type { ChatSnapshot } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { advisors, chats } from "@/lib/db/schema";
 import { getTripSnapshot, listTrips } from "@/lib/trips";
+import type { TripCard } from "@/lib/trips/contracts";
+import { DEV_TRIP_PREFIX, showDevTrips } from "@/lib/trips/dev";
 import { shareUrl } from "@/lib/trips/share-actions";
 
 // /trips/[tripId]: the trip workspace. Loads the snapshot, the chat row and
@@ -72,7 +74,11 @@ export default async function TripPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [{ tripId }, query, user] = await Promise.all([params, searchParams, requirePageUser()]);
-  const [snapshot, byStage] = await Promise.all([getTripSnapshot(tripId, user), listTrips(user)]);
+  const [snapshot, byStage, devByStage] = await Promise.all([
+    getTripSnapshot(tripId, user),
+    listTrips(user),
+    showDevTrips() ? listTrips(user, { dev: "only" }) : Promise.resolve(null),
+  ]);
   if (!snapshot) notFound();
   const [chat, advisorName, origin] = await Promise.all([
     loadChat(snapshot.trip.chatId, snapshot.trip.id),
@@ -80,18 +86,22 @@ export default async function TripPage({
     requestOrigin(),
   ]);
 
-  const otherTrips: TripSwitcherItem[] = Object.values(byStage)
-    .flatMap((column) => column.trips)
-    .filter((t) => t.id !== snapshot.trip.id)
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-    .slice(0, 6)
-    .map((t) => ({
-      id: t.id,
-      title: `${t.clientName} · ${t.destination.name}`,
-      subtitle: datesLabel({ startDate: t.startDate ?? undefined, endDate: t.endDate ?? undefined }),
-      href: `/trips/${t.id}`,
-      imageSrc: t.imageUrl ?? undefined,
-    }));
+  // The switcher: the newest real trips, then (in development only) the dev trips in their own group.
+  const switcherItems = (columns: typeof byStage | null, limit: number, dev: boolean): TripSwitcherItem[] =>
+    Object.values(columns ?? {})
+      .flatMap((column): TripCard[] => column.trips)
+      .filter((t) => t.id !== snapshot.trip.id)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, limit)
+      .map((t) => ({
+        id: t.id,
+        title: dev ? t.title.slice(DEV_TRIP_PREFIX.length) : `${t.clientName} · ${t.destination.name}`,
+        subtitle: datesLabel({ startDate: t.startDate ?? undefined, endDate: t.endDate ?? undefined }),
+        href: `/trips/${t.id}`,
+        imageSrc: t.imageUrl ?? undefined,
+        ...(dev ? { dev: true } : {}),
+      }));
+  const otherTrips = [...switcherItems(byStage, 6, false), ...switcherItems(devByStage, 3, true)];
 
   return (
     <TripWorkspace
