@@ -59,7 +59,7 @@ export default async function TripPage({
   const chat = await loadChat(snapshot.trip.chatId, snapshot.trip.id);
 
   const otherTrips: TripSwitcherItem[] = Object.values(byStage)
-    .flat()
+    .flatMap((column) => column.trips)
     .filter((t) => t.id !== snapshot.trip.id)
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .slice(0, 6)
