@@ -1,7 +1,6 @@
 "use client";
 
 import { isToolUIPart } from "ai";
-import { useEffect, useRef } from "react";
 
 import type { AppUIMessage } from "@/lib/contracts";
 
@@ -10,7 +9,8 @@ import { ToolCard } from "./tool-card";
 // The transcript: user bubbles, assistant text with a streaming cursor, and a
 // tool card per tool part, in part order. Reasoning parts are kept in the
 // message (Codex needs them replayed) but never shown. Hidden messages (the
-// seed turn's synthetic prompt) are not rendered.
+// seed turn's synthetic prompt) are not rendered. Scrolling belongs to the
+// dock (chat-dock.tsx), which keeps the list pinned to the bottom.
 
 type Props = {
   messages: AppUIMessage[];
@@ -26,13 +26,8 @@ function Cursor() {
 }
 
 export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, onPlaceClick, placeName }: Props) {
-  const endRef = useRef<HTMLDivElement>(null);
   const visible = messages.filter((m) => !m.metadata?.hidden);
   const last = visible.at(-1);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
 
   return (
     <ol className="flex flex-col gap-3" data-testid="message-list">
@@ -82,7 +77,6 @@ export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, on
           <Cursor />
         </li>
       ) : null}
-      <div ref={endRef} />
     </ol>
   );
 }

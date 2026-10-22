@@ -19,14 +19,13 @@ async function Lab({ searchParams }: Props) {
   const chatId = chat ?? (await ensureDevTrip(user.userId)).chatId;
   const snapshot = await loadChatSnapshot(chatId, user).catch(() => undefined);
   if (!snapshot) notFound();
+  // Placed like the trip workspace places it: 920 px, 24 px above the bottom.
   return (
-    <ChatDock
-      key={chatId}
-      chatId={chatId}
-      tripId={snapshot.chat.tripId}
-      initial={snapshot}
-      className="h-[calc(100dvh-7rem)] w-full max-w-[440px]"
-    />
+    <div className="pointer-events-none fixed inset-x-0 bottom-6 z-30 flex justify-center px-6">
+      <div className="pointer-events-auto relative w-[920px] max-w-full">
+        <ChatDock key={chatId} chatId={chatId} tripId={snapshot.chat.tripId} initial={snapshot} />
+      </div>
+    </div>
   );
 }
 
