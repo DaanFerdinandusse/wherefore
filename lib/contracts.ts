@@ -146,7 +146,7 @@ export type TripContextOutput = {
   trip: TripSnapshot["trip"];
   travelers: { name: string; role: string; favorites: string[]; tasteTags: string[]; rules: string[] }[];
   advisorPlaces: { placeId: string; name: string; note: string; score?: number }[];
-  board: { category: Category; count: number }[] & { asks?: Ask[] };
+  board: { categories: { category: Category; count: number }[]; asks: Ask[] };
   itinerary: ItinerarySlot[];
 };
 
