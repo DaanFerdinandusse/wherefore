@@ -1,0 +1,117 @@
+"use server";
+
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+
+import { inScope } from "@/lib/auth/scope";
+import { requireUser } from "@/lib/auth/server";
+import { createClient, listClients, type ClientSummary } from "@/lib/clients";
+import { selectClientSummaries } from "@/lib/clients/queries";
+import type { TripStage } from "@/lib/contracts";
+import { clients } from "@/lib/db/schema";
+import { advisorCities } from "@/lib/places";
+
+import { clientPastDestinations, listRecentClientsForTripBar, setStageOverride } from "./index";
+import type { PastDestination } from "./contracts";
+import { isTripStage } from "./stage";
+
+// Server actions for the Trips board and the New trip panel. Every action
+// starts with requireUser() and validates its input; reads are scoped to the
+// signed-in advisor through the data slices.
+
+const uuid = z.uuid();
+
+export type TripBarClient = {
+  id: string;
+  name: string;
+  homeCity: string | null;
+  avatarUrl: string | null;
+  favoritesCount: number;
+  nextTrip: { id: string; title: string; startDate: string | null } | null;
+};
+
+export type TripBarContext = {
+  recentClients: TripBarClient[];
+  /** The client from `?client=<id>`, when it is the advisor's. */
+  prefill: TripBarClient | null;
+  /** Advisor cities with place counts, most first. */
+  cities: { city: string; count: number }[];
+  /** Where the prefilled client went before. */
+  pastDestinations: PastDestination[];
+};
+
+function toTripBarClient(summary: ClientSummary): TripBarClient {
+  return {
+    id: summary.id,
+    name: summary.name,
+    homeCity: summary.homeCity,
+    avatarUrl: summary.avatarUrl,
+    favoritesCount: summary.favoritesCount,
+    nextTrip: summary.nextTrip,
+  };
+}
+
+/** Everything the panel shows before the advisor types: recent clients, cities, the prefill. */
+export async function loadTripBarContext(input: { clientId?: string | null }): Promise<TripBarContext> {
+  const user = await requireUser();
+  const clientId = input.clientId && uuid.safeParse(input.clientId).success ? input.clientId : null;
+
+  const [recent, cities, prefillRows, pastDestinations] = await Promise.all([
+    listRecentClientsForTripBar(user, 4),
+    advisorCities(user),
+    clientId
+      ? selectClientSummaries(and(eq(clients.id, clientId), inScope(clients, user)), { limit: 1 })
+      : Promise.resolve([]),
+    clientId ? clientPastDestinations(clientId, user) : Promise.resolve([]),
+  ]);
+  const prefill = prefillRows[0] ? toTripBarClient(prefillRows[0]) : null;
+
+  return { recentClients: recent.map(toTripBarClient), prefill, cities, pastDestinations };
+}
+
+const searchSchema = z.string().trim().min(1).max(80);
+
+/** "Find a client" and "Add a traveler": clients by name or home city, best match first. */
+export async function searchTripBarClients(q: string): Promise<TripBarClient[]> {
+  const user = await requireUser();
+  const parsed = searchSchema.safeParse(q);
+  if (!parsed.success) return [];
+  const rows = await listClients(user, { q: parsed.data, limit: 8 });
+  return rows.map(toTripBarClient);
+}
+
+/** "<Client> went before" for a client picked in the bar. */
+export async function loadPastDestinations(clientId: string): Promise<PastDestination[]> {
+  const user = await requireUser();
+  if (!uuid.safeParse(clientId).success) return [];
+  return clientPastDestinations(clientId, user);
+}
+
+const guestNameSchema = z.string().trim().min(1).max(80);
+
+/**
+ * "Add favorites" on a companion: a client row with status guest, so the
+ * favorites picker on the client screen has somewhere to save.
+ */
+export async function createGuestClient(name: string): Promise<{ id: string; name: string }> {
+  const user = await requireUser();
+  const parsed = guestNameSchema.parse(name);
+  const client = await createClient({ name: parsed, status: "guest" }, user);
+  return { id: client.id, name: client.name };
+}
+
+export type MoveTripResult = { ok: true; stage: TripStage } | { ok: false; error: string };
+
+/** A drag on the Trips board, or "Move to ..." in the card menu. */
+export async function moveTripToStage(tripId: string, stage: TripStage): Promise<MoveTripResult> {
+  const user = await requireUser();
+  if (!uuid.safeParse(tripId).success || !isTripStage(stage)) {
+    return { ok: false, error: "That trip or stage does not exist." };
+  }
+  try {
+    await setStageOverride(tripId, stage, user);
+    return { ok: true, stage };
+  } catch {
+    return { ok: false, error: "Could not move the trip. Try again." };
+  }
+}
