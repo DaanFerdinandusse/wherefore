@@ -2,10 +2,15 @@ import "server-only";
 
 import { and, asc, desc, eq, ne, sql, type SQL } from "drizzle-orm";
 
-import { inScope, isUuid } from "@/lib/auth/scope";
+import { inScope, inScopeAs, isUuid, type ScopeInput } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
 import { clientFavorites, clients, places, trips } from "@/lib/db/schema";
-import { normalizeQuery, trgmMatch, trgmRank } from "@/lib/search/trgm";
+import {
+  normalizeQuery,
+  trgmMatch,
+  trgmRank,
+  withTrgmThreshold,
+} from "@/lib/search/trgm";
 
 import type {
   ClientStatus,
@@ -30,16 +35,23 @@ const outer = {
   clientUpdatedAt: sql.raw(`"clients"."updated_at"`),
 };
 
-const summaryFields = {
-  id: clients.id,
-  name: clients.name,
-  homeCity: clients.homeCity,
-  avatarUrl: clients.avatarUrl,
-  status: sql<ClientStatus>`${clients.status}`,
-  favoritesCount: sql<number>`(
+/**
+ * The summary columns. Every subquery over trips carries the caller's scope
+ * too: a client id alone would also match trips another advisor made for a
+ * client row they cannot see.
+ */
+function summaryFields(scope: ScopeInput) {
+  const tripInScope = inScopeAs("t", scope);
+  return {
+    id: clients.id,
+    name: clients.name,
+    homeCity: clients.homeCity,
+    avatarUrl: clients.avatarUrl,
+    status: sql<ClientStatus>`${clients.status}`,
+    favoritesCount: sql<number>`(
     select count(*)::int from client_favorites f where f.client_id = ${outer.clientId}
   )`,
-  favoriteImages: sql<string[]>`coalesce((
+    favoriteImages: sql<string[]>`coalesce((
     select json_agg(x.url order by x.position)
     from (
       select f.position, p.images -> 0 ->> 'url' as url
@@ -50,47 +62,68 @@ const summaryFields = {
       limit 4
     ) x
   ), '[]'::json)`,
-  nextTrip: sql<ClientSummary["nextTrip"]>`(
+    nextTrip: sql<ClientSummary["nextTrip"]>`(
     select json_build_object('id', t.id, 'title', t.title, 'startDate', t.start_date)
     from trips t
-    where t.client_id = ${outer.clientId} and (t.end_date is null or t.end_date >= current_date)
+    where t.client_id = ${outer.clientId} and ${tripInScope}
+      and (t.end_date is null or t.end_date >= current_date)
     order by t.start_date asc nulls last, t.created_at desc
     limit 1
   )`,
-  lastActivityAt: sql<Date>`greatest(${outer.clientUpdatedAt}, (
-    select max(t.updated_at) from trips t where t.client_id = ${outer.clientId}
+    lastActivityAt: sql<Date>`greatest(${outer.clientUpdatedAt}, (
+    select max(t.updated_at) from trips t where t.client_id = ${outer.clientId} and ${tripInScope}
   ))`.mapWith(clients.updatedAt),
-};
+  };
+}
 
-/** Summary rows for any filter, best match first when `q` is given. */
+/**
+ * Summary rows for the clients in `scope`, narrowed by `where`, best match
+ * first when `q` is given. The scope applies to the clients and to every
+ * trip subquery.
+ */
 export async function selectClientSummaries(
+  scope: ScopeInput,
   where: SQL | undefined,
-  options: { q?: string | null; orderBy?: "activity" | "name"; limit?: number } = {},
+  options: {
+    q?: string | null;
+    orderBy?: "activity" | "name";
+    limit?: number;
+  } = {},
 ): Promise<ClientSummary[]> {
   const q = normalizeQuery(options.q);
+  const fields = summaryFields(scope);
   const order =
     options.orderBy === "name"
       ? [asc(clients.name)]
-      : [desc(summaryFields.lastActivityAt)];
-  return db
-    .select(summaryFields)
+      : [desc(fields.lastActivityAt)];
+  const query = db
+    .select(fields)
     .from(clients)
-    .where(and(where, q ? trgmMatch(clients.search, q) : undefined))
+    .where(
+      and(
+        inScope(clients, scope),
+        where,
+        q ? trgmMatch(clients.search, q) : undefined,
+      ),
+    )
     .orderBy(...(q ? [desc(trgmRank(clients.search, q)), ...order] : order))
     .limit(options.limit ?? 200);
+  return q ? withTrgmThreshold(query) : query;
 }
 
 export const listClients: ListClients = (ownerId, options = {}) =>
   selectClientSummaries(
-    and(
-      inScope(clients, ownerId),
-      options.includeArchived ? undefined : ne(clients.status, "archived"),
-    ),
-    { q: options.q, orderBy: "activity", limit: options.limit },
+    ownerId,
+    options.includeArchived ? undefined : ne(clients.status, "archived"),
+    {
+      q: options.q,
+      orderBy: "activity",
+      limit: options.limit,
+    },
   );
 
 export const listRecentClients: ListRecentClients = (ownerId, limit = 4) =>
-  selectClientSummaries(and(inScope(clients, ownerId), eq(clients.status, "active")), {
+  selectClientSummaries(ownerId, eq(clients.status, "active"), {
     orderBy: "activity",
     limit,
   });
@@ -123,7 +156,9 @@ function favoritesQuery(clientId: string) {
     .orderBy(asc(clientFavorites.position), asc(clientFavorites.createdAt));
 }
 
-function toFavoriteWithPlace(row: Awaited<ReturnType<typeof favoritesQuery>>[number]): FavoriteWithPlace {
+function toFavoriteWithPlace(
+  row: Awaited<ReturnType<typeof favoritesQuery>>[number],
+): FavoriteWithPlace {
   return { ...row.favorite, place: row.place };
 }
 
@@ -174,5 +209,9 @@ export const getClientProfile: GetClientProfile = async (id, scope) => {
     .map(toRow)
     .reverse();
 
-  return { client, favorites: favoriteRows.map(toFavoriteWithPlace), trips: { upcoming, past } };
+  return {
+    client,
+    favorites: favoriteRows.map(toFavoriteWithPlace),
+    trips: { upcoming, past },
+  };
 };

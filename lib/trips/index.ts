@@ -8,9 +8,11 @@ export * from "./contracts";
 export { computeStage, tripDayCount, todayIso, TRIP_STAGES } from "./stage";
 export { SOURCE_PRIORITY, mergeTripPlace } from "./merge";
 export { SLOT_ORDER, defaultTripTitle } from "./map";
+export { toSharedTripView } from "./share";
 export {
   clientPastDestinations,
-  getSharedTripSnapshot,
+  DEFAULT_TRIPS_PER_STAGE,
+  getSharedTripView,
   getTrip,
   getTripSnapshot,
   listRecentClientsForTripBar,

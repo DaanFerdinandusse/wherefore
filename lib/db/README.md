@@ -12,7 +12,7 @@ Drizzle on Neon over HTTP (`drizzle-orm/neon-http`). `lib/db/index.ts` holds the
 | `advisor_places` | yes | My places: saved place, city, private note | `lib/places` |
 | `trips`, `trip_travelers` | yes (travelers through their trip) | Trip setup, stage override, share token, `built_from` | `lib/trips` |
 | `trip_places`, `ask_places`, `trip_asks` | through the trip | Board cards, ask tabs and their ranked members | `lib/trips` |
-| `itinerary_slots` | through the trip | Day, slot, trip place, note | `lib/trips` (`setSlots`, `upsertSlot`, `clearSlot`) |
+| `itinerary_slots` | through the trip | Day, slot, trip place, note, `note_for_traveler` | `lib/trips` (`setSlots`, `upsertSlot`, `clearSlot`) |
 | `trip_calls` | through the trip | The "How we got this" log | `logTripCall` in `lib/trips` |
 | `chats`, `codex_credentials`, `api_cache` | see `chat.ts`, `cache.ts` | Agent runtime and provider cache | agent and recommendation slices |
 
@@ -26,7 +26,9 @@ A row is in scope when `owner_id = <user id>` or `org_id` is one of the user's o
 - Children (favorites, trip places, asks, slots, calls) filter through their parent: `trip_id in (select id from trips where <in scope>)`, or the trip is checked first with `requireTripId`.
 - Every helper takes a scope: a bare owner id, `{ ownerId, orgIds }`, or the `AuthUser` that `requireUser()` returns. Rows outside the scope read as `null` or throw `NotFoundError`. "Not yours" and "not there" are the same answer.
 - Ids from URLs are checked with `isUuid` first, so a malformed id is a 404, not a 500.
-- `places` is shared and unowned. The public traveler view (`getSharedTripSnapshot`) is keyed by the share token alone.
+- Hand-written correlated subqueries use `inScopeAs(alias, scope)`. A child id is not a scope: the client summaries filter their `trips t` subqueries by scope too, because a client id alone also matches trips another advisor wrote for it.
+- A trip place's "Your place" link (`advisor_place_id`) is checked twice: `upsertTripPlaces` stores it only when the saved place is in the caller's scope and saves the same place, and the card query joins it only for the trip's own owner (or org) and the same place.
+- `places` is shared and unowned. The public traveler view (`getSharedTripView`) is keyed by the share token alone, so it never reuses the advisor snapshot: it selects only traveler-facing columns and returns a `SharedTripView` (no ids, scores, asks, removed places or advisor place notes; a slot note only when `note_for_traveler` is set).
 
 Route handlers map the typed errors with `errorResponse()` from `lib/auth/errors.ts`: 401, 404, 400, 503.
 
@@ -39,14 +41,26 @@ Route handlers map the typed errors with `errorResponse()` from `lib/auth/errors
 - `refreshAdvisorPlaceSearch`: place name + city + note. `advisor_places.place_name` is copied from `places.name` on save.
 - Renaming a client also rewrites `trips.client_name` and `trips.search` for that client's trips (`updateClientFields`).
 
-New rows get their uuid in JS (`randomUUID()`), so the insert and the refresh can share one batch. Queries go through `lib/search/trgm.ts`: a substring `ilike`, `%` similarity, or `word_similarity >= 0.45`, ranked by word similarity. That threshold is what lets "Anna Ruis" find "Ana Ruiz".
+New rows get their uuid in JS (`randomUUID()`), so the insert and the refresh can share one batch. A trip's `client_name` is read inside the trip insert (`select name from clients ... for share`), so a rename running at the same time either lands first or waits and then rewrites the new trip.
+
+Queries go through `lib/search/trgm.ts`: a substring `ilike`, `%` similarity, or `q <% search` (word similarity), ranked by word similarity. All three are gin_trgm_ops operators, so the index serves the whole predicate. `<%` reads `pg_trgm.word_similarity_threshold` (default 0.6); `withTrgmThreshold(query)` runs `set_config(..., '0.45', true)` and the query in one `db.batch`, so the setting lasts exactly that transaction. 0.45 is what lets "Anna Ruis" find "Ana Ruiz". A query that uses `trgmMatch` without `withTrgmThreshold` still works, at the stricter 0.6.
 
 ## Other invariants
 
 - `trip_places` is unique on `(trip_id, place_id)`. `upsertTripPlaces` keeps the stronger source (seed < ask < advisor < manual) and the best score together with its explainability and tags. The same rules live in `lib/trips/merge.ts` for duplicates inside one call.
 - `trip_places.status` follows the itinerary: a place in a slot is `added`, otherwise `suggested`. `removed` is never overwritten.
 - `createTrip` writes the trip, its chat and its travelers in one batch and sets `trips.chat_id`.
-- The stage is computed by `computeStage` in `lib/trips/stage.ts` and never stored, except as a manual `stage_override`.
+- The stage is computed by `computeStage` in `lib/trips/stage.ts` and never stored, except as a manual `stage_override`. `listTrips` pages each stage in SQL with `stageSql`, the same rule written as a `case`; a test checks they agree. Each stage returns at most 30 cards (newest first) with `total` and `hasMore`, and the card counts come from grouped joins over that page.
+- An ask's result count is counted from `ask_places` on read. `trip_asks.result_count` is the final count, written once by `updateAsk` when the ask moves to `done`.
+- `upsertPlaces` runs one upsert per set of supplied fields, in one batch, so a row that omits `images` never resets another row's images.
+
+## Concurrency over neon-http
+
+`drizzle-orm/neon-http` has no interactive transactions. A `db.batch` is one transaction (READ COMMITTED), but JS cannot read a row, decide, and then write while holding a lock: every round trip is its own transaction. So:
+
+- Writes that depend on other rows check them in SQL, inside the statement that writes. Slot writes insert from `jsonb_to_recordset(...)` and keep only rows whose trip place is on the trip and not `removed`, with `for share` on those trip place rows. A removal running at the same time either commits first (the slot row is skipped and comes back in `rejected`) or waits for the slot batch and then clears the slot in its own later statement.
+- The status sync runs as the last statement of the same batch. `clearSlot` syncs and deletes in one batch: the sync runs first and ignores the slot being deleted.
+- What this does not give: serializable batches. Two slot writes on the same trip at the same moment each sync statuses from their own snapshot, so a status can briefly lag until the next write on that trip resyncs it. Ownership checks (`requireTripId`) may run in a separate round trip because `owner_id` never changes.
 
 ## Adding a column
 

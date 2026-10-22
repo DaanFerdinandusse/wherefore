@@ -88,7 +88,43 @@ export type ItinerarySlot = {
   slot: SlotName;
   tripPlaceId?: string;
   note: string;
+  /** The note shows on the public traveler view ("From your advisor") only when true. */
+  noteForTraveler?: boolean;
   position: number;
+};
+
+// The public traveler view (/s/[token]). Only what the traveler sees: no ids,
+// no asks, no removed places, no private advisor place notes, no scores.
+export type SharedTripPlace = {
+  name: string;
+  category: Category;
+  imageUrl?: string;
+  neighborhood?: string;
+  /** "Because you love Via Carota and Lilia": the favorite names and their shares. */
+  because: { name: string; share: number }[];
+  sharedTags: string[];
+  reason?: string;
+};
+
+export type SharedTripSlot = {
+  slot: SlotName;
+  position: number;
+  place?: SharedTripPlace;
+  /** Present only when the advisor marked the slot note for the traveler. */
+  advisorNote?: string;
+};
+
+export type SharedTripDay = { day: number; date?: string; slots: SharedTripSlot[] };
+
+export type SharedTripView = {
+  title: string;
+  destinationName: string;
+  startDate?: string;
+  endDate?: string;
+  /** The trip client's first name, for "Prepared for Ana". */
+  preparedFor: string;
+  advisorName: string | null;
+  days: SharedTripDay[];
 };
 
 // The snapshot a trip page loads on the server and the store starts from.

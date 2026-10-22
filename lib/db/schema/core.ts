@@ -313,6 +313,8 @@ export const itinerarySlots = pgTable(
       onDelete: "set null",
     }),
     note: text("note").notNull().default(""),
+    // The note shows on the public traveler view only when this is set.
+    noteForTraveler: boolean("note_for_traveler").notNull().default(false),
     position: integer("position").notNull().default(0),
     ...stamps,
   },

@@ -1,22 +1,30 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createClient } from "@/lib/clients";
+import { createClient, updateClientFields } from "@/lib/clients";
 import { db } from "@/lib/db";
 import { cleanup, hasDatabase, LISBON, testRun } from "@/lib/db/__tests__/fixtures";
-import { chats, itinerarySlots, tripPlaces, tripTravelers } from "@/lib/db/schema";
+import { chats, clients, itinerarySlots, tripAsks, tripPlaces, trips, tripTravelers } from "@/lib/db/schema";
 import { listAdvisorPlaces, saveAdvisorPlace, upsertPlaces } from "@/lib/places";
 import {
   addAskPlaces,
+  clearSlot,
+  computeStage,
   createAsk,
   createTrip,
+  getSharedTripView,
+  getTrip,
   getTripSnapshot,
+  listTripPlaceCards,
   listTrips,
   setShareToken,
   setSlots,
   setStageOverride,
+  setTripPlaceStatus,
   todayIso,
+  updateAsk,
   updateTrip,
+  upsertSlot,
   upsertTripPlaces,
 } from "@/lib/trips";
 
@@ -116,7 +124,7 @@ describe.skipIf(!hasDatabase)("trips", () => {
     );
     expect(again[uva]).toBe(tripPlaceId);
     [row] = await db.select().from(tripPlaces).where(eq(tripPlaces.id, tripPlaceId));
-    expect(row).toMatchObject({ source: "ask", bestScore: 88, bestAffinity: "0.8123", explainability: [] });
+    expect(row).toMatchObject({ source: "ask", bestScore: 88, bestAffinity: 0.8123, explainability: [] });
 
     await upsertTripPlaces(trip.id, [{ ...base, source: "manual" }], run.owner);
     const rows = await db
@@ -233,7 +241,7 @@ describe.skipIf(!hasDatabase)("trips", () => {
     });
     expect(snapshot!.places.find((p) => p.placeId === museum)?.status).toBe("added");
     expect(snapshot!.slots).toEqual([
-      { id: expect.any(String), day: 2, date: undefined, slot: "lunch", tripPlaceId: ids[museum], note: "Garden first", position: 0 },
+      { id: expect.any(String), day: 2, date: undefined, slot: "lunch", tripPlaceId: ids[museum], note: "Garden first", noteForTraveler: false, position: 0 },
     ]);
 
     // My places counts the trip.
@@ -260,10 +268,264 @@ describe.skipIf(!hasDatabase)("trips", () => {
     await setStageOverride(trip.id, "done", run.owner);
     expect(await stage()).toBe("done");
     const board = await listTrips(run.owner);
-    expect(board.done.map((t) => t.id)).toContain(trip.id);
+    expect(board.done.trips.map((t) => t.id)).toContain(trip.id);
 
     await setStageOverride(trip.id, null, run.owner);
     expect(await stage()).toBe("traveling");
+  });
+
+  it("never links another advisor's saved place or a different place", async () => {
+    const { trip } = await newTrip();
+    const uva = f.placeIds[entity("senhor-uva")]!;
+    const museum = f.placeIds[entity("gulbenkian")]!;
+    const theirs = await saveAdvisorPlace(run.otherOwner, { placeId: uva, note: "Their private note" });
+    const mine = await saveAdvisorPlace(run.owner, { placeId: museum, note: "Mine, for the museum" });
+
+    const ids = await upsertTripPlaces(
+      trip.id,
+      [
+        // Another owner's saved place for the same place id.
+        { placeId: uva, source: "advisor", category: "drink", advisorPlaceId: theirs.id },
+        // My saved place, but for a different place.
+        { placeId: f.placeIds[entity("cervejaria")]!, source: "advisor", category: "eat", advisorPlaceId: mine.id },
+      ],
+      run.owner,
+    );
+    const stored = await db.select().from(tripPlaces).where(eq(tripPlaces.tripId, trip.id));
+    expect(stored.map((row) => row.advisorPlaceId)).toEqual([null, null]);
+
+    // A link written past the helper still does not join on read.
+    await db.update(tripPlaces).set({ advisorPlaceId: theirs.id }).where(eq(tripPlaces.id, ids[uva]!));
+    const cards = await listTripPlaceCards(trip.id, run.owner);
+    expect(cards.find((c) => c.placeId === uva)?.yourPlace).toBeUndefined();
+    expect(JSON.stringify(cards)).not.toContain("Their private note");
+
+    // My own saved place for the same place does link.
+    await upsertTripPlaces(trip.id, [{ placeId: museum, source: "advisor", category: "see", advisorPlaceId: mine.id }], run.owner);
+    const card = (await listTripPlaceCards(trip.id, run.owner, { placeIds: [museum] }))[0];
+    expect(card?.yourPlace).toEqual({ advisorPlaceId: mine.id, note: "Mine, for the museum" });
+  });
+
+  it("getSharedTripView returns only the traveler projection", async () => {
+    const { trip } = await newTrip();
+    const uva = f.placeIds[entity("senhor-uva")]!;
+    const museum = f.placeIds[entity("gulbenkian")]!;
+    const ramiro = f.placeIds[entity("cervejaria")]!;
+    const saved = await saveAdvisorPlace(run.owner, { placeId: uva, note: "Advisor eyes only" });
+    const ids = await upsertTripPlaces(
+      trip.id,
+      [
+        {
+          placeId: uva,
+          source: "advisor",
+          category: "drink",
+          bestScore: 91,
+          advisorPlaceId: saved.id,
+          explainability: [{ entityId: "e-lilia", name: "Lilia", share: 100 }],
+          sharedTags: [{ tagId: "t1", name: "natural wine" }],
+          reason: "Natural wine, like Lilia.",
+        },
+        { placeId: museum, source: "seed", category: "see" },
+        { placeId: ramiro, source: "seed", category: "eat" },
+      ],
+      run.owner,
+    );
+    await createAsk(trip.id, { label: "Secret ask label" }, run.owner);
+    await setSlots(
+      trip.id,
+      [
+        { day: 1, slot: "night", tripPlaceId: ids[uva], note: "Sit at the bar", noteForTraveler: true },
+        { day: 1, slot: "lunch", tripPlaceId: ids[museum], note: "Client is slow in the mornings" },
+        { day: 2, slot: "dinner", tripPlaceId: ids[ramiro] },
+      ],
+      "replace",
+      run.owner,
+    );
+    await setTripPlaceStatus(ids[ramiro]!, "removed", run.owner);
+
+    expect(await getSharedTripView("not-a-real-token-at-all")).toBeNull();
+    const { shareToken } = await setShareToken(trip.id, run.owner);
+    const view = await getSharedTripView(shareToken!);
+    expect(view).toMatchObject({ title: "Lisbon for Ana", destinationName: "Lisbon", preparedFor: "Ana" });
+    expect(view!.days.map((d) => [d.day, d.date, d.slots.map((s) => [s.slot, s.place?.name, s.advisorNote])])).toEqual([
+      [
+        1,
+        "2026-05-14",
+        [
+          ["lunch", "Gulbenkian Museum", undefined],
+          ["night", "Senhor Uva", "Sit at the bar"],
+        ],
+      ],
+    ]);
+    expect(view!.days[0]!.slots[1]!.place).toEqual({
+      name: "Senhor Uva",
+      category: "drink",
+      imageUrl: "https://example.test/uva.jpg",
+      neighborhood: undefined,
+      because: [{ name: "Lilia", share: 100 }],
+      sharedTags: ["natural wine"],
+      reason: "Natural wine, like Lilia.",
+    });
+    const json = JSON.stringify(view);
+    for (const leak of [trip.id, ids[uva]!, saved.id, "Advisor eyes only", "Client is slow", "Secret ask", "Cervejaria", "e-lilia"]) {
+      expect(json).not.toContain(leak);
+    }
+  });
+
+  it("counts ask results on read and stores the final count when the ask completes", async () => {
+    const { trip } = await newTrip();
+    const uva = f.placeIds[entity("senhor-uva")]!;
+    const museum = f.placeIds[entity("gulbenkian")]!;
+    const ids = await upsertTripPlaces(
+      trip.id,
+      [
+        { placeId: uva, source: "ask", category: "drink" },
+        { placeId: museum, source: "ask", category: "see" },
+      ],
+      run.owner,
+    );
+    const ask = await createAsk(trip.id, { label: "Wine and art" }, run.owner);
+    // Two writers at once: neither can leave a stale count behind.
+    await Promise.all([
+      addAskPlaces(ask.id, [{ tripPlaceId: ids[uva]!, rank: 1 }], run.owner),
+      addAskPlaces(ask.id, [{ tripPlaceId: ids[museum]!, rank: 2 }], run.owner),
+    ]);
+    const [stored] = await db.select().from(tripAsks).where(eq(tripAsks.id, ask.id));
+    expect(stored?.resultCount).toBe(0);
+    expect((await getTripSnapshot(trip.id, run.owner))!.asks[0]?.resultCount).toBe(2);
+
+    const done = await updateAsk(ask.id, { status: "done", elapsedMs: 900 }, run.owner);
+    expect(done.resultCount).toBe(2);
+    const [final] = await db.select().from(tripAsks).where(eq(tripAsks.id, ask.id));
+    expect(final?.resultCount).toBe(2);
+  });
+
+  it("slot writes skip removed places and clearSlot syncs statuses in the same batch", async () => {
+    const { trip } = await newTrip();
+    const uva = f.placeIds[entity("senhor-uva")]!;
+    const museum = f.placeIds[entity("gulbenkian")]!;
+    const ids = await upsertTripPlaces(
+      trip.id,
+      [
+        { placeId: uva, source: "seed", category: "drink" },
+        { placeId: museum, source: "seed", category: "see" },
+      ],
+      run.owner,
+    );
+    await setTripPlaceStatus(ids[museum]!, "removed", run.owner);
+
+    const result = await setSlots(
+      trip.id,
+      [
+        { day: 1, slot: "night", tripPlaceId: ids[uva] },
+        { day: 1, slot: "lunch", tripPlaceId: ids[museum] },
+        { day: 1, slot: "dinner", tripPlaceId: "not-a-uuid" },
+        // Same key twice: the last valid one wins.
+        { day: 2, slot: "dinner", tripPlaceId: ids[uva], note: "First" },
+        { day: 2, slot: "dinner", tripPlaceId: ids[uva], note: "Second", noteForTraveler: true },
+      ],
+      "merge",
+      run.owner,
+    );
+    expect(result.applied.map((s) => [s.day, s.slot, s.note, s.noteForTraveler])).toEqual(
+      expect.arrayContaining([
+        [1, "night", "", false],
+        [2, "dinner", "Second", true],
+      ]),
+    );
+    expect(result.applied).toHaveLength(2);
+    expect(result.rejected).toEqual([
+      { tripPlaceId: ids[museum], reason: "This place was removed from the trip." },
+      { tripPlaceId: "not-a-uuid", reason: "This place is not on this trip." },
+    ]);
+    await expect(upsertSlot(trip.id, { day: 3, slot: "lunch", tripPlaceId: ids[museum] }, run.owner)).rejects.toThrow(
+      "This place was removed from the trip.",
+    );
+
+    // An empty note in merge mode keeps the stored note and its flag.
+    const merged = await setSlots(trip.id, [{ day: 2, slot: "dinner", tripPlaceId: ids[uva] }], "merge", run.owner);
+    expect(merged.applied[0]).toMatchObject({ note: "Second", noteForTraveler: true });
+
+    const status = async () => (await db.select().from(tripPlaces).where(eq(tripPlaces.id, ids[uva]!)))[0]?.status;
+    expect(await status()).toBe("added");
+    const slots = await db.select().from(itinerarySlots).where(eq(itinerarySlots.tripId, trip.id));
+    const night = slots.find((s) => s.slot === "night")!;
+    const dinner = slots.find((s) => s.slot === "dinner")!;
+
+    await expect(clearSlot(night.id, run.otherOwner)).rejects.toThrow("No slot with that id.");
+    await clearSlot(night.id, run.owner);
+    expect(await status()).toBe("added"); // still in the day 2 dinner slot
+    await clearSlot(dinner.id, run.owner);
+    expect(await status()).toBe("suggested");
+  });
+
+  it("createTrip reads the client name inside the insert", async () => {
+    const lea = await createClient({ name: "Lea Park" }, run.owner);
+    const [{ trip }] = await Promise.all([
+      createTrip(run.owner, { ...baseInput(), clientId: lea.id }),
+      updateClientFields(lea.id, { name: "Lea Parker" }, run.owner),
+    ]);
+    // Whichever finished first, the stored name and search match the client now.
+    const after = await getTrip(trip.id, run.owner);
+    expect(after?.clientName).toBe("Lea Parker");
+    expect(after?.search).toContain("Lea Parker");
+  });
+
+  it("listTrips pages each stage and agrees with computeStage", async () => {
+    const owner = `${run.owner}-board`;
+    const client = await createClient({ name: "Board Client" }, owner);
+    try {
+      const planned: string[] = [];
+      for (let i = 0; i < 3; i += 1) {
+        const { trip } = await createTrip(owner, {
+          ...baseInput(),
+          clientId: client.id,
+          startDate: "2099-01-01",
+          endDate: "2099-01-03",
+          datesMode: "exact",
+        });
+        planned.push(trip.id);
+      }
+      const { trip: past } = await createTrip(owner, {
+        ...baseInput(),
+        clientId: client.id,
+        startDate: "2020-01-01",
+        endDate: "2020-01-02",
+        datesMode: "exact",
+      });
+      const uva = f.placeIds[entity("senhor-uva")]!;
+      const tp = await upsertTripPlaces(past.id, [{ placeId: uva, source: "seed", category: "drink", bestScore: 80 }], owner);
+      await setSlots(past.id, [{ day: 1, slot: "night", tripPlaceId: tp[uva] }], "replace", owner);
+
+      const first = await listTrips(owner, { perStage: 2 });
+      expect(first.planning).toMatchObject({ total: 3, hasMore: true });
+      expect(first.planning.trips.map((t) => t.id)).toEqual([planned[2], planned[1]]);
+      expect(first.done).toMatchObject({ total: 1, hasMore: false });
+      expect(first.done.trips[0]).toMatchObject({
+        id: past.id,
+        stage: "done",
+        imageUrl: "https://example.test/uva.jpg",
+        counts: { places: 1, added: 1, filledSlots: 1, days: 2, emptyDays: 1 },
+      });
+
+      const next = await listTrips(owner, { perStage: 2, offset: 2 });
+      expect(next.planning.trips.map((t) => t.id)).toEqual([planned[0]]);
+      expect(next.planning.hasMore).toBe(false);
+
+      // The SQL stage and computeStage agree for every card.
+      const all = await listTrips(owner);
+      for (const column of Object.values(all)) {
+        for (const card of column.trips) {
+          const t = await getTrip(card.id, owner);
+          expect(card.stage).toBe(computeStage(t!));
+        }
+      }
+      expect(Object.values(await listTrips(run.otherOwner)).every((c) => c.trips.length === 0)).toBe(true);
+    } finally {
+      await db.delete(trips).where(eq(trips.ownerId, owner));
+      await db.delete(chats).where(eq(chats.ownerId, owner));
+      await db.delete(clients).where(eq(clients.ownerId, owner));
+    }
   });
 });
 

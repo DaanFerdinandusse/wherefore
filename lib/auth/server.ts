@@ -16,9 +16,15 @@ import { AuthUnavailableError, UnauthorizedError } from "./errors";
 // so with Cache Components a component that calls these must sit inside a
 // <Suspense> boundary.
 
-export const auth = createNeonAuth({
+/** The Neon Auth settings, shared with the proxy's session probe. */
+export const authConfig = {
   baseUrl: env("NEON_AUTH_BASE_URL"),
-  cookies: { secret: env("NEON_AUTH_COOKIE_SECRET") },
+  cookieSecret: env("NEON_AUTH_COOKIE_SECRET"),
+};
+
+export const auth = createNeonAuth({
+  baseUrl: authConfig.baseUrl,
+  cookies: { secret: authConfig.cookieSecret },
 });
 
 export type AuthUser = {

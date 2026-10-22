@@ -2,13 +2,14 @@ import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
 
-import { and, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, ne, sql, type SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { InvalidInputError, NotFoundError } from "@/lib/auth/errors";
 import { inScope, isUuid, toScope, type ScopeInput } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
 import {
+  advisorPlaces,
   askPlaces,
   chats,
   clients,
@@ -30,6 +31,7 @@ import type {
   RevokeShare,
   SetShareToken,
   SetSlots,
+  SetSlotsResult,
   SetStageOverride,
   SetTripPlaceStatus,
   SlotInput,
@@ -119,7 +121,10 @@ export const createTrip: CreateTrip = async (ownerId, input) => {
       adults: input.adults,
       children: input.children,
       chatId,
-      clientName: client.name,
+      // Read inside the insert, with a share lock on the client row: a rename
+      // running at the same time either finishes first (we read the new
+      // name) or waits for this batch and then rewrites this trip too.
+      clientName: sql`(select ${clients.name} from ${clients} where ${clients.id} = ${client.id} for share)`,
     }),
     db.insert(chats).values({ id: chatId, tripId, ownerId: scope.ownerId }),
     db
@@ -190,6 +195,26 @@ export const setStageOverride: SetStageOverride = (id, stage, scope) =>
 const PRIORITY = sql.raw(`array[${SOURCE_PRIORITY.map((s) => `'${s}'`).join(", ")}]::text[]`);
 const ex = (column: string) => sql.raw(`excluded.${column}`);
 
+/**
+ * The advisor place link, checked in the insert itself: the id only sticks
+ * when that saved place is in the caller's scope and saves this same place.
+ * Anything else (another advisor's place, a mismatch, a deleted save) stores
+ * null, so a card can never show someone else's private note.
+ */
+function ownAdvisorPlace(advisorPlaceId: string | null | undefined, placeId: string, scope: ScopeInput) {
+  if (!advisorPlaceId || !isUuid(advisorPlaceId)) return null;
+  return sql`(${db
+    .select({ id: advisorPlaces.id })
+    .from(advisorPlaces)
+    .where(
+      and(
+        eq(advisorPlaces.id, advisorPlaceId),
+        eq(advisorPlaces.placeId, placeId),
+        inScope(advisorPlaces, scope),
+      ),
+    )})`;
+}
+
 export const upsertTripPlaces: UpsertTripPlaces = async (tripId, rows, scope) => {
   await requireTripId(tripId, scope);
   const folded = foldTripPlaces(rows.filter((row) => isUuid(row.placeId)));
@@ -212,7 +237,7 @@ export const upsertTripPlaces: UpsertTripPlaces = async (tripId, rows, scope) =>
         bestScore: row.bestScore ?? null,
         explainability: row.explainability ?? [],
         sharedTags: row.sharedTags ?? [],
-        advisorPlaceId: row.advisorPlaceId ?? null,
+        advisorPlaceId: ownAdvisorPlace(row.advisorPlaceId, row.placeId, scope),
         reason: row.reason ?? null,
         position: row.position ?? 0,
       })),
@@ -234,16 +259,6 @@ export const upsertTripPlaces: UpsertTripPlaces = async (tripId, rows, scope) =>
     .returning({ id: tripPlaces.id, placeId: tripPlaces.placeId });
   return Object.fromEntries(returned.map((row) => [row.placeId, row.id]));
 };
-
-/** In a slot means "added", otherwise "suggested". Removed places stay removed. */
-function syncPlaceStatuses(tripId: string) {
-  const inItinerary = sql`exists (select 1 from itinerary_slots s where s.trip_place_id = ${tripPlaces.id})`;
-  const wanted = sql`case when ${inItinerary} then 'added' else 'suggested' end`;
-  return db
-    .update(tripPlaces)
-    .set({ status: wanted, updatedAt: sql`now()` })
-    .where(and(eq(tripPlaces.tripId, tripId), ne(tripPlaces.status, "removed"), sql`${tripPlaces.status} <> ${wanted}`));
-}
 
 export const setTripPlaceStatus: SetTripPlaceStatus = async (tripPlaceId, status, scope) => {
   if (!isUuid(tripPlaceId)) throw new NotFoundError("trip place");
@@ -269,6 +284,11 @@ export const setTripPlaceStatus: SetTripPlaceStatus = async (tripPlaceId, status
 
 // Asks
 
+// The ask's live result count. Qualified by hand: inside `returning` drizzle
+// prints the target's columns bare, which the subquery would read as its own.
+const ASK_PLACE_COUNT = sql<number>`(select count(*)::int from ask_places ap where ap.ask_id = "trip_asks"."id")`;
+const askWithCount = { ...getTableColumns(tripAsks), liveCount: ASK_PLACE_COUNT };
+
 function ownedAsk(askId: string, scope: ScopeInput): SQL {
   return and(eq(tripAsks.id, askId), inArray(tripAsks.tripId, ownedTripIds(scope))) as SQL;
 }
@@ -291,18 +311,32 @@ export const createAsk: CreateAsk = async (tripId, input, scope) => {
       set: { updatedAt: sql`now()` },
       setWhere: eq(tripAsks.tripId, tripId),
     })
-    .returning();
-  return toAsk(single(rows, "ask"));
+    .returning(askWithCount);
+  const row = single(rows, "ask");
+  return toAsk(row, row.liveCount);
 };
 
+/**
+ * Patch an ask. `result_count` is the final count, written once: when the
+ * ask moves to "done" without an explicit count, the number of its
+ * ask_places rows is stored. The returned Ask carries the live count.
+ */
 export const updateAsk: UpdateAsk = async (askId, patch, scope) => {
   if (!isUuid(askId)) throw new NotFoundError("ask");
+  const finalCount =
+    patch.status === "done" && patch.resultCount === undefined ? { resultCount: ASK_PLACE_COUNT } : {};
   const rows = await db
     .update(tripAsks)
-    .set({ ...patch, ...(patch.label ? { label: patch.label.trim() } : {}), updatedAt: sql`now()` })
+    .set({
+      ...patch,
+      ...finalCount,
+      ...(patch.label ? { label: patch.label.trim() } : {}),
+      updatedAt: sql`now()`,
+    })
     .where(ownedAsk(askId, scope))
-    .returning();
-  return toAsk(single(rows, "ask"));
+    .returning(askWithCount);
+  const row = single(rows, "ask");
+  return toAsk(row, row.liveCount);
 };
 
 export const archiveAsk: ArchiveAsk = (askId, scope) => updateAsk(askId, { status: "archived" }, scope);
@@ -340,114 +374,186 @@ export const addAskPlaces: AddAskPlaces = async (askId, rows, scope) => {
     explainability: r.explainability ?? [],
   }));
 
-  const recount = db
-    .update(tripAsks)
-    .set({
-      resultCount: sql`(select count(*)::int from ask_places ap where ap.ask_id = ${askId})`,
-      updatedAt: sql`now()`,
-    })
-    .where(eq(tripAsks.id, askId));
-
-  if (values.length === 0) {
-    await recount;
-    return { added: 0, rejected };
-  }
-  await db.batch([
-    db
-      .insert(askPlaces)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [askPlaces.askId, askPlaces.tripPlaceId],
-        set: {
-          rank: sql`excluded.rank`,
-          affinity: sql`excluded.affinity`,
-          score: sql`excluded.score`,
-          explainability: sql`excluded.explainability`,
-        },
-      }),
-    recount,
-  ]);
+  // No recount here: readers count ask_places themselves, so two writers
+  // adding results at once can never leave a stale number behind.
+  if (values.length === 0) return { added: 0, rejected };
+  await db
+    .insert(askPlaces)
+    .values(values)
+    .onConflictDoUpdate({
+      target: [askPlaces.askId, askPlaces.tripPlaceId],
+      set: {
+        rank: sql`excluded.rank`,
+        affinity: sql`excluded.affinity`,
+        score: sql`excluded.score`,
+        explainability: sql`excluded.explainability`,
+      },
+    });
   return { added: values.length, rejected };
 };
 
 // Itinerary slots
+//
+// neon-http has no interactive transactions: a db.batch is one transaction,
+// but JS cannot read a row, decide, and write while holding a lock. So a slot
+// write never trusts an earlier read. The insert itself keeps only the rows
+// whose trip place is on this trip and not removed, and takes a share lock on
+// those trip place rows until the batch commits. A removal running at the
+// same time then either commits first (the row is skipped) or waits for this
+// batch and clears the slot afterwards (setTripPlaceStatus clears slots in a
+// later statement of its own batch). The status sync runs last in the same
+// batch. See lib/db/README.md for what this does not cover.
 
-const slotKey = (s: { day: number; slot: string; position?: number }) => `${s.day}|${s.slot}|${s.position ?? 0}`;
+type SlotMode = "replace" | "merge" | "single";
 
-/** Splits slots into ones safe to write and rejections, deduped by (day, slot, position). */
-async function checkSlots(
-  tripId: string,
-  slots: SlotInput[],
-): Promise<{ valid: SlotInput[]; rejected: SlotRejection[] }> {
+/** One input slot as the insert source reads it from jsonb. */
+type SlotRow = {
+  ord: number;
+  day: number;
+  date: string | null;
+  slot: string;
+  trip_place_id: string | null;
+  note: string;
+  note_for_traveler: boolean;
+  position: number;
+};
+
+const slotKey = (s: { day: number; slot: string; position?: number | null }) =>
+  `${s.day}|${s.slot}|${s.position ?? 0}`;
+
+function assertSlotShapes(slots: SlotInput[]): void {
   for (const s of slots) {
     if (!Number.isInteger(s.day) || s.day < 1) throw new InvalidInputError(`Day ${s.day} is not a trip day.`);
     if (!isSlotName(s.slot)) throw new InvalidInputError(`"${s.slot}" is not a slot.`);
   }
-  const referenced = [...new Set(slots.map((s) => s.tripPlaceId).filter((id): id is string => !!id))];
-  const known = new Map<string, string>();
-  const uuids = referenced.filter(isUuid);
-  if (uuids.length > 0) {
-    const rows = await db
-      .select({ id: tripPlaces.id, status: tripPlaces.status })
-      .from(tripPlaces)
-      .where(and(eq(tripPlaces.tripId, tripId), inArray(tripPlaces.id, uuids)));
-    for (const row of rows) known.set(row.id, row.status);
-  }
-
-  const rejected: SlotRejection[] = [];
-  const byKey = new Map<string, SlotInput>();
-  for (const s of slots) {
-    const id = s.tripPlaceId;
-    if (id && !known.has(id)) {
-      rejected.push({ tripPlaceId: id, reason: "This place is not on this trip." });
-      continue;
-    }
-    if (id && known.get(id) === "removed") {
-      rejected.push({ tripPlaceId: id, reason: "This place was removed from the trip." });
-      continue;
-    }
-    byKey.set(slotKey(s), s);
-  }
-  return { valid: [...byKey.values()], rejected };
 }
 
-function slotValues(tripId: string, slots: SlotInput[]) {
-  return slots.map((s) => ({
-    tripId,
+function toSlotRow(s: SlotInput, ord: number): SlotRow {
+  return {
+    ord,
     day: s.day,
     date: s.date ?? null,
     slot: s.slot,
-    tripPlaceId: s.tripPlaceId ?? null,
+    trip_place_id: s.tripPlaceId ?? null,
     note: s.note?.trim() ?? "",
+    note_for_traveler: s.noteForTraveler ?? false,
     position: s.position ?? 0,
-  }));
+  };
+}
+
+/**
+ * The insert source: input rows whose trip place is on this trip and not
+ * removed (or that name no place), one per (day, slot, position), the last
+ * one winning. Columns follow the itinerary_slots column order.
+ */
+function slotSource(tripId: string, rows: SlotRow[]): SQL {
+  return sql`
+    select gen_random_uuid(), ${tripId}::uuid, v.day, v.date, v.slot, v.trip_place_id,
+      v.note, v.note_for_traveler, v.position, now(), now()
+    from (
+      select distinct on (r.day, r.slot, r.position) r.*
+      from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(
+        ord int, day int, date date, slot text, trip_place_id uuid,
+        note text, note_for_traveler boolean, position int
+      )
+      where r.trip_place_id is null or exists (
+        select 1 from trip_places tp
+        where tp.id = r.trip_place_id and tp.trip_id = ${tripId}::uuid and tp.status <> 'removed'
+        for share
+      )
+      order by r.day, r.slot, r.position, r.ord desc
+    ) v`;
+}
+
+/**
+ * How a repeat of (day, slot, position) treats the stored note. `merge` keeps
+ * the stored note when the new one is empty; `single` keeps it when no note
+ * was given. The traveler flag belongs to the note and moves with it.
+ */
+function noteSet(mode: SlotMode, noteGiven: boolean): Record<string, SQL> {
+  if (mode === "merge") {
+    return {
+      note: sql`case when excluded.note = '' then ${itinerarySlots.note} else excluded.note end`,
+      noteForTraveler: sql`case when excluded.note = '' then ${itinerarySlots.noteForTraveler} else excluded.note_for_traveler end`,
+    };
+  }
+  if (mode === "single" && noteGiven) {
+    return { note: sql`excluded.note`, noteForTraveler: sql`excluded.note_for_traveler` };
+  }
+  return {};
 }
 
 const slotTarget = [itinerarySlots.tripId, itinerarySlots.day, itinerarySlots.slot, itinerarySlots.position];
 
-export const setSlots: SetSlots = async (tripId, slots, mode, scope) => {
-  await requireTripId(tripId, scope);
-  const { valid, rejected } = await checkSlots(tripId, slots);
-  const clear = db.delete(itinerarySlots).where(eq(itinerarySlots.tripId, tripId));
+/** In a slot means "added", otherwise "suggested". Removed places stay removed. */
+function syncPlaceStatuses(tripId: string | SQL, exceptSlotId?: string) {
+  const otherSlot = exceptSlotId ? sql` and s.id <> ${exceptSlotId}::uuid` : sql``;
+  const inItinerary = sql`exists (select 1 from itinerary_slots s where s.trip_place_id = ${tripPlaces.id}${otherSlot})`;
+  const wanted = sql`case when ${inItinerary} then 'added' else 'suggested' end`;
+  const trip = typeof tripId === "string" ? eq(tripPlaces.tripId, tripId) : sql`${tripPlaces.tripId} = ${tripId}`;
+  return db
+    .update(tripPlaces)
+    .set({ status: wanted, updatedAt: sql`now()` })
+    .where(and(trip, ne(tripPlaces.status, "removed"), sql`${tripPlaces.status} <> ${wanted}`));
+}
 
-  if (valid.length === 0) {
-    if (mode === "replace") await db.batch([clear, syncPlaceStatuses(tripId)]);
-    return { applied: [], rejected };
+/** Why each input slot with a trip place did not land, in input order. */
+export function slotRejections(
+  slots: SlotInput[],
+  known: Map<string, string>,
+  applied: { day: number; slot: string; position: number; tripPlaceId: string | null }[],
+): SlotRejection[] {
+  const landed = new Set(applied.map(slotKey));
+  const rejected: SlotRejection[] = [];
+  for (const s of slots) {
+    const id = s.tripPlaceId;
+    if (!id) continue;
+    const status = known.get(id);
+    if (!status) rejected.push({ tripPlaceId: id, reason: "This place is not on this trip." });
+    else if (status === "removed" || !landed.has(slotKey(s))) {
+      // Not landed although it looked fine: it was removed while we wrote.
+      rejected.push({ tripPlaceId: id, reason: "This place was removed from the trip." });
+    }
   }
+  return rejected;
+}
 
-  const insert = db.insert(itinerarySlots).values(slotValues(tripId, valid));
-  let applied: (typeof itinerarySlots.$inferSelect)[];
-  if (mode === "replace") {
-    [, applied] = await db.batch([clear, insert.returning(), syncPlaceStatuses(tripId)]);
+async function writeSlots(
+  tripId: string,
+  slots: SlotInput[],
+  mode: SlotMode,
+  noteGiven = true,
+): Promise<SetSlotsResult> {
+  assertSlotShapes(slots);
+  // Ids that are not uuids cannot be on the trip; they never reach the uuid cast.
+  const rows = slots
+    .map(toSlotRow)
+    .filter((row) => row.trip_place_id === null || isUuid(row.trip_place_id));
+  const ids = [...new Set(rows.map((row) => row.trip_place_id).filter((id): id is string => !!id))];
+
+  const check = db
+    .select({ id: tripPlaces.id, status: tripPlaces.status })
+    .from(tripPlaces)
+    .where(and(eq(tripPlaces.tripId, tripId), inArray(tripPlaces.id, ids)));
+  const clear = db.delete(itinerarySlots).where(eq(itinerarySlots.tripId, tripId));
+  const insert = db.insert(itinerarySlots).select(slotSource(tripId, rows));
+
+  let known: { id: string; status: string }[] = [];
+  let applied: (typeof itinerarySlots.$inferSelect)[] = [];
+  if (rows.length === 0) {
+    if (mode === "replace") await db.batch([clear, syncPlaceStatuses(tripId)]);
+  } else if (mode === "replace") {
+    [known, , applied] = await db.batch([check, clear, insert.returning(), syncPlaceStatuses(tripId)]);
   } else {
-    [applied] = await db.batch([
+    [known, applied] = await db.batch([
+      check,
       insert
         .onConflictDoUpdate({
           target: slotTarget,
           set: {
             tripPlaceId: sql`excluded.trip_place_id`,
             date: sql`coalesce(excluded.date, ${itinerarySlots.date})`,
-            note: sql`case when excluded.note = '' then ${itinerarySlots.note} else excluded.note end`,
+            ...noteSet(mode, noteGiven),
             updatedAt: sql`now()`,
           },
         })
@@ -455,42 +561,37 @@ export const setSlots: SetSlots = async (tripId, slots, mode, scope) => {
       syncPlaceStatuses(tripId),
     ]);
   }
-  return { applied: applied.map(toSlot), rejected };
+
+  const statuses = new Map(known.map((row) => [row.id, row.status]));
+  return { applied: applied.map(toSlot), rejected: slotRejections(slots, statuses, applied) };
+}
+
+export const setSlots: SetSlots = async (tripId, slots, mode, scope) => {
+  await requireTripId(tripId, scope);
+  return writeSlots(tripId, slots, mode);
 };
 
 export const upsertSlot: UpsertSlot = async (tripId, slot, scope) => {
   await requireTripId(tripId, scope);
-  const { valid, rejected } = await checkSlots(tripId, [slot]);
-  const value = valid[0];
+  const { applied, rejected } = await writeSlots(tripId, [slot], "single", slot.note !== undefined);
+  const value = applied[0];
   if (!value) throw new InvalidInputError(rejected[0]?.reason ?? "That slot cannot be saved.");
-
-  const [rows] = await db.batch([
-    db
-      .insert(itinerarySlots)
-      .values(slotValues(tripId, [value]))
-      .onConflictDoUpdate({
-        target: slotTarget,
-        set: {
-          tripPlaceId: sql`excluded.trip_place_id`,
-          date: sql`coalesce(excluded.date, ${itinerarySlots.date})`,
-          ...(slot.note !== undefined ? { note: sql`excluded.note` } : {}),
-          updatedAt: sql`now()`,
-        },
-      })
-      .returning(),
-    syncPlaceStatuses(tripId),
-  ]);
-  return toSlot(single(rows, "slot"));
+  return value;
 };
 
+/**
+ * Empties one slot. The status sync and the delete share a batch: the sync
+ * runs first and ignores the slot being deleted, so both see the same rows.
+ */
 export const clearSlot: ClearSlot = async (slotId, scope) => {
   if (!isUuid(slotId)) throw new NotFoundError("slot");
-  const [row] = await db
-    .delete(itinerarySlots)
-    .where(and(eq(itinerarySlots.id, slotId), inArray(itinerarySlots.tripId, ownedTripIds(scope))))
-    .returning({ tripId: itinerarySlots.tripId });
-  if (!row) throw new NotFoundError("slot");
-  await syncPlaceStatuses(row.tripId);
+  const owned = and(eq(itinerarySlots.id, slotId), inArray(itinerarySlots.tripId, ownedTripIds(scope)));
+  const tripOfSlot = db.select({ tripId: itinerarySlots.tripId }).from(itinerarySlots).where(owned);
+  const [, deleted] = await db.batch([
+    syncPlaceStatuses(sql`(${tripOfSlot})`, slotId),
+    db.delete(itinerarySlots).where(owned).returning({ id: itinerarySlots.id }),
+  ]);
+  if (deleted.length === 0) throw new NotFoundError("slot");
 };
 
 // Call log

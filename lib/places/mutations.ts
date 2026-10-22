@@ -49,28 +49,48 @@ export const upsertPlaces: UpsertPlaces = async (rows) => {
   });
   if (merged.length === 0) return {};
 
-  // Refresh only the columns this batch carries. A nullable column the new
-  // data leaves null keeps what we had (a search hit has fewer fields than an
-  // entities lookup).
-  const present = new Set<PlaceKey>();
-  for (const row of merged) for (const key of Object.keys(row) as PlaceKey[]) present.add(key);
+  // One upsert per set of supplied fields, all in one batch. Each statement
+  // refreshes only the columns its rows carry, so a row without `images`
+  // never resets another row's images. A nullable column the new data leaves
+  // null keeps what we had (a search hit has fewer fields than an entities
+  // lookup).
+  const statements = groupByFields(merged).map((group) =>
+    db
+      .insert(places)
+      .values(group.rows)
+      .onConflictDoUpdate({ target: places.entityId, set: refreshSet(group.keys) })
+      .returning({ id: places.id, entityId: places.entityId }),
+  );
+  const [first, ...rest] = statements;
+  if (!first) return {};
+  const results = await db.batch([first, ...rest]);
+  return Object.fromEntries(results.flat().map((row) => [row.entityId, row.id]));
+};
 
+/** Rows grouped by the exact set of fields they define, in first-seen order. */
+export function groupByFields(rows: PlaceUpsert[]): { keys: PlaceKey[]; rows: PlaceUpsert[] }[] {
+  const groups = new Map<string, { keys: PlaceKey[]; rows: PlaceUpsert[] }>();
+  for (const row of rows) {
+    const keys = (Object.keys(row) as PlaceKey[]).filter((key) => row[key] !== undefined).sort();
+    const id = keys.join(",");
+    const group = groups.get(id) ?? { keys, rows: [] };
+    group.rows.push(row);
+    groups.set(id, group);
+  }
+  return [...groups.values()];
+}
+
+function refreshSet(keys: PlaceKey[]): Record<string, SQL> {
   const set: Record<string, SQL> = { updatedAt: sql`now()` };
-  for (const key of present) {
+  for (const key of keys) {
     if (FIXED_KEYS.has(key)) continue;
     const column = placeColumns[key];
     const incoming = sql`excluded.${sql.identifier(column.name)}`;
     set[key] = column.notNull ? incoming : sql`coalesce(${incoming}, ${column})`;
   }
-  if (!present.has("fetchedAt")) set.fetchedAt = sql`now()`;
-
-  const returned = await db
-    .insert(places)
-    .values(merged)
-    .onConflictDoUpdate({ target: places.entityId, set })
-    .returning({ id: places.id, entityId: places.entityId });
-  return Object.fromEntries(returned.map((row) => [row.entityId, row.id]));
-};
+  if (!keys.includes("fetchedAt")) set.fetchedAt = sql`now()`;
+  return set;
+}
 
 /** advisor_places.search = place name + city + note. */
 export function refreshAdvisorPlaceSearch(where: SQL) {
