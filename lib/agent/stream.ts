@@ -1,7 +1,7 @@
 import { toUIMessageChunk, type ModelCallStreamPart } from "@ai-sdk/workflow";
-import type { ToolSet, UIMessageChunk } from "ai";
+import { getToolName, isToolUIPart, type ToolSet, type UIMessageChunk } from "ai";
 
-import type { ChatMessageMetadata } from "@/lib/contracts";
+import type { AppUIMessage, ChatMessageMetadata } from "@/lib/contracts";
 
 // The one durable stream a chat turn writes (one Workflow run = one turn =
 // one stream), and the transform that turns it into UI message chunks.
@@ -73,6 +73,63 @@ export function chatPartToUIChunk(part: ChatStreamPart): UIMessageChunk | undefi
         ...(part.transient ? { transient: true } : {}),
       } as UIMessageChunk;
   }
+}
+
+/**
+ * A saved assistant message as a UI chunk stream, for a prompt whose turnId
+ * already finished: the client gets the recorded answer through the same
+ * transport, and no run starts. Without a message (nothing was saved) it is
+ * a bare start and finish; `errorText` adds the turn's error before finish.
+ */
+export function messageToUIChunks(
+  message: AppUIMessage | undefined,
+  { messageId, metadata, errorText }: { messageId: string; metadata?: ChatMessageMetadata; errorText?: string },
+): UIMessageChunk[] {
+  const chunks: UIMessageChunk[] = [
+    { type: "start", messageId, ...(metadata ? { messageMetadata: { ...message?.metadata, ...metadata } } : {}) },
+    { type: "start-step" },
+  ];
+  let steps = 0;
+  let n = 0;
+  for (const part of message?.parts ?? []) {
+    const id = `saved-${n++}`;
+    if (part.type === "step-start") {
+      if (steps++ > 0) chunks.push({ type: "finish-step" }, { type: "start-step" });
+      continue;
+    }
+    if (part.type === "text") {
+      const meta = part.providerMetadata ? { providerMetadata: part.providerMetadata } : {};
+      chunks.push({ type: "text-start", id, ...meta }, { type: "text-delta", id, delta: part.text }, { type: "text-end", id, ...meta });
+      continue;
+    }
+    if (part.type === "reasoning") {
+      const meta = part.providerMetadata ? { providerMetadata: part.providerMetadata } : {};
+      chunks.push(
+        { type: "reasoning-start", id, ...meta },
+        { type: "reasoning-delta", id, delta: part.text },
+        { type: "reasoning-end", id, ...meta },
+      );
+      continue;
+    }
+    if (isToolUIPart(part)) {
+      const toolName = getToolName(part);
+      chunks.push({ type: "tool-input-available", toolCallId: part.toolCallId, toolName, input: part.input });
+      if (part.state === "output-available") {
+        chunks.push({ type: "tool-output-available", toolCallId: part.toolCallId, output: part.output });
+      } else if (part.state === "output-error") {
+        chunks.push({ type: "tool-output-error", toolCallId: part.toolCallId, errorText: part.errorText });
+      } else if (part.state === "output-denied") {
+        chunks.push({ type: "tool-output-denied", toolCallId: part.toolCallId });
+      }
+      continue;
+    }
+    if (part.type.startsWith("data-") && "data" in part) {
+      chunks.push({ type: part.type, ...("id" in part && part.id ? { id: part.id } : {}), data: part.data } as UIMessageChunk);
+    }
+  }
+  if (errorText) chunks.push({ type: "error", errorText });
+  chunks.push({ type: "finish-step" }, { type: "finish" });
+  return chunks;
 }
 
 /**

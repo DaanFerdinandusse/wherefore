@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -7,6 +9,7 @@ import { codexCredentials } from "@/lib/db/schema";
 
 import { parseCodexAuthJson, type ImportedCodexAuth } from "./auth-json";
 import { decryptToken, encryptToken, parseTokenKey } from "./crypto";
+import { refreshUnderLease, REFRESH_TIMEOUT_MS, type LeaseStore } from "./lease";
 import { refreshCodexTokens } from "./refresh";
 
 // The app's one ChatGPT subscription credential, in the codex_credentials row
@@ -20,9 +23,9 @@ const ROW_ID = "default";
 // refresh token is shared with Daan's local Codex CLI and every refresh rotates
 // it, so a needless refresh logs the CLI out.
 const REFRESH_WINDOW_MS = 5 * 60_000;
-const LEASE_SECONDS = 30;
 const LOSER_POLL_MS = 500;
-const LOSER_WAIT_MS = 10_000;
+// The winner may take up to its refresh deadline; wait a little longer than that.
+const LOSER_WAIT_MS = REFRESH_TIMEOUT_MS + 5_000;
 // Per-instance cache so a burst of model calls does not read the row each time.
 const CACHE_MS = 60_000;
 
@@ -84,6 +87,7 @@ export async function saveCodexCredential(
     expiresAt: auth.expiresAt,
     lastRefresh: auth.lastRefresh ?? null,
     refreshLeaseUntil: null,
+    refreshLeaseOwner: null,
     updatedAt: new Date(),
   };
   const insert = db.insert(codexCredentials).values(values);
@@ -103,49 +107,56 @@ async function readOrSeed(): Promise<Row> {
   return seeded;
 }
 
-/**
- * Takes the refresh lease with one compare-and-set. Exactly one caller across
- * all instances wins while the lease is live; a lease left by a crashed
- * winner expires after LEASE_SECONDS.
- */
-async function takeLease(): Promise<Row | undefined> {
-  const rows = await db
-    .update(codexCredentials)
-    .set({ refreshLeaseUntil: sql`now() + make_interval(secs => ${LEASE_SECONDS})` })
-    .where(
-      and(
-        eq(codexCredentials.id, ROW_ID),
-        or(isNull(codexCredentials.refreshLeaseUntil), lt(codexCredentials.refreshLeaseUntil, sql`now()`)),
-      ),
-    )
-    .returning();
-  return rows[0];
-}
+const owned = (owner: string) => and(eq(codexCredentials.id, ROW_ID), eq(codexCredentials.refreshLeaseOwner, owner));
 
-async function refreshAsWinner(row: Row): Promise<CodexCredential> {
-  try {
-    const next = await refreshCodexTokens(decryptToken(row.refreshTokenEnc, key()));
+/**
+ * The lease in SQL. take is one compare-and-set: exactly one caller across
+ * all instances wins while the lease is live; a lease left by a crashed
+ * winner expires after LEASE_MS. commit and release only apply while the
+ * caller's owner token is still on the row (lease.ts says why).
+ */
+const leaseStore: LeaseStore<Row> = {
+  async take(owner, leaseMs) {
+    const rows = await db
+      .update(codexCredentials)
+      .set({
+        refreshLeaseUntil: sql`now() + make_interval(secs => ${leaseMs / 1000})`,
+        refreshLeaseOwner: owner,
+      })
+      .where(
+        and(
+          eq(codexCredentials.id, ROW_ID),
+          or(isNull(codexCredentials.refreshLeaseUntil), lt(codexCredentials.refreshLeaseUntil, sql`now()`)),
+        ),
+      )
+      .returning();
+    return rows[0];
+  },
+  async commit(owner, next, refreshedAt) {
     const k = key();
-    const now = new Date();
-    await db
+    const rows = await db
       .update(codexCredentials)
       .set({
         accessTokenEnc: encryptToken(next.accessToken, k),
         refreshTokenEnc: encryptToken(next.refreshToken, k),
         accountId: next.accountId,
         expiresAt: next.expiresAt,
-        lastRefresh: now,
+        lastRefresh: refreshedAt,
         refreshLeaseUntil: null,
-        updatedAt: now,
+        refreshLeaseOwner: null,
+        updatedAt: refreshedAt,
       })
-      .where(eq(codexCredentials.id, ROW_ID));
-    return { accessToken: next.accessToken, accountId: next.accountId, expiresAt: next.expiresAt, lastRefresh: now };
-  } catch (error) {
-    // Release so the next caller can try; the old tokens are still in the row.
-    await db.update(codexCredentials).set({ refreshLeaseUntil: null }).where(eq(codexCredentials.id, ROW_ID));
-    throw error;
-  }
-}
+      .where(owned(owner))
+      .returning({ id: codexCredentials.id });
+    return rows.length > 0;
+  },
+  async release(owner) {
+    await db
+      .update(codexCredentials)
+      .set({ refreshLeaseUntil: null, refreshLeaseOwner: null })
+      .where(owned(owner));
+  },
+};
 
 /** Waits for the lease winner to write a new token, then returns it. */
 async function waitForWinner(previous: Row): Promise<CodexCredential> {
@@ -161,16 +172,28 @@ async function waitForWinner(previous: Row): Promise<CodexCredential> {
 }
 
 async function refreshNow(row: Row): Promise<CodexCredential> {
-  const leased = await takeLease();
-  if (leased) {
+  const result = await refreshUnderLease<Row>({
+    store: leaseStore,
+    owner: randomUUID(),
     // Someone refreshed between our read and the lease: their token is good.
-    if (leased.accessTokenEnc !== row.accessTokenEnc && !needsRefresh(leased.expiresAt)) {
-      await db.update(codexCredentials).set({ refreshLeaseUntil: null }).where(eq(codexCredentials.id, ROW_ID));
-      return toCredential(leased);
+    reuse: (leased) => leased.accessTokenEnc !== row.accessTokenEnc && !needsRefresh(leased.expiresAt),
+    refresh: (leased, signal) => refreshCodexTokens(decryptToken(leased.refreshTokenEnc, key()), { signal }),
+  });
+  switch (result.kind) {
+    case "lost":
+      return waitForWinner(row);
+    case "reused":
+      return toCredential(result.row);
+    case "refreshed": {
+      if (!result.committed) {
+        // The lease expired under us and another caller owns the row now; the
+        // rotated tokens are good for this call but must not overwrite theirs.
+        console.error("[codex] token refresh finished after the lease expired; not written");
+      }
+      const { tokens, refreshedAt } = result;
+      return { accessToken: tokens.accessToken, accountId: tokens.accountId, expiresAt: tokens.expiresAt, lastRefresh: refreshedAt };
     }
-    return refreshAsWinner(leased);
   }
-  return waitForWinner(row);
 }
 
 /**

@@ -9,8 +9,9 @@ the Workflow run, its stream and a conditional UPDATE.
 
 | File | Owns |
 | --- | --- |
-| `chat-store.ts` | Every write to a `chats` row: turn lock, run id, message upsert, release, stop flag. |
-| `chat-routes.ts` | Route schemas, ownership check, lazy healing, `loadChatSnapshot` for server components. |
+| `chat-store.ts` | Every write to a `chats` row and its `chat_turns` record: turn lock, run id, message upsert, pending save, release, stop flag. |
+| `chat-routes.ts` | Route schemas, ownership check, lazy healing (lock and pending save), `loadChatSnapshot` for server components. |
+| `turn-state.ts` | Pure decisions: what a run status read means, which stream a reconnect gets, what a repeated turnId gets. |
 | `route-handler.ts` | `chatRoute()`: requireUser, typed errors to JSON. |
 | `stream.ts` | `ChatStreamPart` (the run stream) and `createChatUIChunkTransform` (stream to UI chunks). Pure. |
 | `turn-stream.ts` | Reading a run's stream: the route response, and `readTurnMessage` for persistence. |
@@ -22,9 +23,39 @@ the Workflow run, its stream and a conditional UPDATE.
 
 ## Invariants
 
-- **The lock is `chats.active_turn_id`.** The prompt route takes it and appends
-  the user message in one conditional UPDATE. Same turnId again: stream that
-  run. Another turn: 409 `conflict:chat`.
+- **The lock is `chats.active_turn_id`.** The prompt route takes it, appends
+  the user message and inserts the `chat_turns` record in one statement. The
+  statement also checks that the turnId was never recorded and that a re-sent
+  message id is the last user message, so the check and the write see the
+  same transcript. Same turnId while it runs: stream that run. Same turnId
+  after it finished: the recorded outcome (the saved answer, header
+  `x-chat-turn: replay`), no new run. Another turn: 409 `conflict:chat`.
+- **The handoff cannot be cancelled.** Lock, `start()` and run registration
+  run as one promise registered with `after()`; the response only reads the
+  stream afterwards, and `supportsCancellation` is on for the listener route
+  only. A failed `start()` marks the turn record failed first, so a GET heals
+  the lock at once even if the release failed.
+- **Unknown is not failed.** Healing releases a lock only when the run is
+  confirmed terminal or missing (`WorkflowRunNotFoundError`). A status read
+  that throws anything else leaves the lock for the next read.
+- **A reply is never dropped before the lock goes.** If persistTurn cannot
+  read or save the reply it writes `chats.pending_run_id` (+ `pending_turn_id`,
+  `pending_since`) while it still holds the lock; GET rebuilds the message
+  from that run's stream within the 23 h retention and clears the record. If
+  even that write fails, the catch path keeps the lock and the heal path
+  reconciles from the stream.
+- **Stop is confirmed.** The 15 s fallback cancels, polls the run for up to
+  20 s, and only releases on a confirmed terminal status; otherwise the lock
+  stays with `stop_requested_at` and GET cancels again after 45 s and
+  finishes it once the run is over.
+- **A reconnect is bound to its run.** The client sends `x-chat-run-id` (or
+  `?runId=` / `?turnId=`); if the chat moved on to another run the listener
+  answers 205 `x-chat-stream: reset`, and the client re-reads the transcript
+  and attaches to the new run from chunk 0.
+- **An interrupted tool is an error.** A tool part that only has preliminary
+  outputs when the turn ends becomes `output-error` "Interrupted"; its last
+  preliminary output stays in `interruptedOutput` for the card, never in the
+  model history.
 - **Every turn write is conditional on `active_turn_id = turnId`** (persist,
   idle, failed, tool writes). A cancelled or superseded run cannot touch a newer
   turn. Message writes are upserts by id, so a step replay never duplicates.
@@ -85,7 +116,8 @@ the Workflow run, its stream and a conditional UPDATE.
 ```bash
 npm run codex:import          # once per branch: ~/.codex/auth.json into codex_credentials
 npm run dev                   # Local World: runs in .workflow-data/, no Vercel link needed
-curl localhost:3000/api/health/model
+curl localhost:3000/api/health/model           # passive: config, credential row, token expiry
+curl -H "authorization: Bearer $HEALTH_SECRET" 'localhost:3000/api/health/model?probe=1'  # one real call, 1/min
 open localhost:3000/chat-lab  # the dock on a dev trip; ?chat=<id> for a given chat
 npx workflow web              # inspect runs and steps
 PORT=3000 PLAYWRIGHT_CHANNEL=chrome npx playwright test e2e/chat

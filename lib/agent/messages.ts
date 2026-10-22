@@ -27,6 +27,23 @@ import type { AppUIMessage, ChatMessageMetadata } from "@/lib/contracts";
 type Part = AppUIMessage["parts"][number];
 
 export const STOPPED_TOOL_ERROR = "Stopped before this step finished.";
+/** A tool that streamed progress but never returned its final output. */
+export const INTERRUPTED_TOOL_ERROR = "Interrupted";
+
+/**
+ * An interrupted tool part keeps its last preliminary output here, for the
+ * card to show what it had found. The model history never reads it: the part
+ * is an output-error, so the model sees "Interrupted", never a partial result
+ * passed off as a complete one.
+ */
+export type InterruptedToolFields = { interruptedOutput?: unknown };
+
+/** The preliminary output an interrupted tool part kept, if any. */
+export function interruptedOutputOf(part: Part): unknown {
+  return isToolUIPart(part) && part.state === "output-error"
+    ? (part as Part & InterruptedToolFields).interruptedOutput
+    : undefined;
+}
 
 function cleanMetadata(metadata: ProviderMetadata | undefined): ProviderMetadata | undefined {
   return metadata && Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -34,8 +51,10 @@ function cleanMetadata(metadata: ProviderMetadata | undefined): ProviderMetadata
 
 /**
  * Settles every part so the stored message is final and replayable:
- * unfinished tool calls become output-error (a stop or crash mid-tool),
- * preliminary flags go, streaming states become done, empty texts go.
+ * unfinished tool calls become output-error (a stop or crash mid-tool); a
+ * tool that only streamed preliminary outputs becomes output-error
+ * "Interrupted" with its last preliminary output kept in
+ * `interruptedOutput`; streaming states become done, empty texts go.
  */
 export function finalizeTurnMessage(
   message: AppUIMessage,
@@ -53,7 +72,18 @@ export function finalizeTurnMessage(
       continue;
     }
     if (isToolUIPart(part)) {
-      if (part.state === "output-available") {
+      if (part.state === "output-available" && part.preliminary === true) {
+        // The run stopped or failed before the tool's final output.
+        const { output, preliminary, ...rest } = part;
+        void preliminary;
+        const interrupted = {
+          ...rest,
+          state: "output-error",
+          errorText: INTERRUPTED_TOOL_ERROR,
+          interruptedOutput: output,
+        } as const;
+        parts.push(interrupted as unknown as Part);
+      } else if (part.state === "output-available") {
         const settled = { ...part };
         delete settled.preliminary;
         parts.push(settled);

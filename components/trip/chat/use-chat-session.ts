@@ -19,6 +19,13 @@ import type { AppUIMessage, ChatSnapshot } from "@/lib/contracts";
 //     was persisted.
 // Resuming always replays the turn from UI chunk 0 into a transcript that
 // does not contain the in-flight assistant message, so text never doubles.
+//
+// Reconnect binding: every reconnect names the run this tab is reading
+// (header x-chat-run-id), so its chunk cursor is never applied to another
+// run. When the chat has moved on (another tab started a new turn) the
+// listener answers 205 reset; that ends the stream like an idle 204, and the
+// end-of-stream refresh re-syncs the transcript and attaches to the new run
+// from chunk 0.
 
 const IDLE_POLL_MS = 4_000;
 const STOP_GIVE_UP_MS = 20_000;
@@ -39,37 +46,77 @@ const snapshotSchema = z.object({
 
 type ServerChat = ChatSnapshot["chat"];
 
-/** A 204 from the listener means "idle": answer with a bare finish so the transport ends cleanly. */
-const idleAwareFetch: typeof fetch = async (input, init) => {
-  const response = await fetch(input, init);
-  if (response.status !== 204) return response;
-  return new Response('data: {"type":"finish"}\n\n', {
-    status: 200,
-    headers: { "content-type": "text/event-stream", "x-workflow-run-id": "idle" },
+const RUN_HEADER = "x-chat-run-id";
+
+/**
+ * The run id in the transport's default reconnect URL
+ * (`<api>/<runId>/stream`, set when a prompt stream dropped mid-turn), or
+ * undefined when it names the chat instead (a resume on mount or refresh).
+ */
+export function runIdFromReconnectApi(api: string, chatId: string): string | undefined {
+  const match = /\/messages\/([^/?]+)\/stream/.exec(api);
+  const id = match?.[1] ? decodeURIComponent(match[1]) : undefined;
+  return id && id !== chatId && id !== "none" && id !== "idle" ? id : undefined;
+}
+
+/**
+ * Wraps fetch for the transport:
+ *   - remembers the run a prompt response streams (x-workflow-run-id);
+ *   - a 204 (idle) or 205 (reset: the chat moved to another run) from the
+ *     listener becomes a bare finish, so the transport ends cleanly and the
+ *     end-of-stream refresh re-reads the transcript.
+ */
+function sessionFetch(onRun: (runId: string | undefined) => void): typeof fetch {
+  return async (input, init) => {
+    const response = await fetch(input, init);
+    if ((init?.method ?? "GET") === "POST" && response.ok) {
+      const runId = response.headers.get("x-workflow-run-id") ?? undefined;
+      onRun(runId && runId !== "none" ? runId : undefined);
+    }
+    if (response.status !== 204 && response.status !== 205) return response;
+    if (response.status === 205) onRun(undefined);
+    return new Response('data: {"type":"finish"}\n\n', {
+      status: 200,
+      headers: { "content-type": "text/event-stream", "x-workflow-run-id": "idle" },
+    });
+  };
+}
+
+/**
+ * The chat's transport, plus `bindRun` to say which run this tab reads. The
+ * binding lives in the closure: set by a prompt response, by a refresh that
+ * resumes, cleared by a reset; read by every reconnect.
+ */
+function createChatTransport(chatId: string, initialRunId: string | undefined) {
+  let readingRunId = initialRunId;
+  const bindRun = (runId: string | undefined) => {
+    readingRunId = runId;
+  };
+  const transport = new WorkflowChatTransport<AppUIMessage>({
+    api: `/api/chats/${chatId}/messages`,
+    fetch: sessionFetch(bindRun),
+    maxConsecutiveErrors: 5,
+    // Only the new message goes up; the server holds the history. The
+    // turn id is minted per send and is the server's idempotency key.
+    prepareSendMessagesRequest: ({ messages, api }) => ({
+      api,
+      body: { message: messages.at(-1), turnId: crypto.randomUUID() },
+    }),
+    // The transport appends ?startIndex=<chunks received> itself, so the
+    // run binding travels as a header.
+    prepareReconnectToStreamRequest: ({ api }) => {
+      const runId = runIdFromReconnectApi(api, chatId) ?? readingRunId;
+      return { api: `/api/chats/${chatId}/stream`, ...(runId ? { headers: { [RUN_HEADER]: runId } } : {}) };
+    },
   });
-};
+  return { transport, bindRun };
+}
 
 export function useChatSession({ chatId, initial }: { chatId: string; initial: ChatSnapshot }) {
   const [server, setServer] = useState<ServerChat>(initial.chat);
   const [stopping, setStopping] = useState(false);
-
-  const transport = useMemo(
-    () =>
-      new WorkflowChatTransport<AppUIMessage>({
-        api: `/api/chats/${chatId}/messages`,
-        fetch: idleAwareFetch,
-        maxConsecutiveErrors: 5,
-        // Only the new message goes up; the server holds the history. The
-        // turn id is minted per send and is the server's idempotency key.
-        prepareSendMessagesRequest: ({ messages, api }) => ({
-          api,
-          body: { message: messages.at(-1), turnId: crypto.randomUUID() },
-        }),
-        // The transport appends ?startIndex=<chunks received> itself.
-        prepareReconnectToStreamRequest: () => ({ api: `/api/chats/${chatId}/stream` }),
-      }),
-    [chatId],
-  );
+  const [initialRunId] = useState(initial.chat.activeRunId);
+  const { transport, bindRun } = useMemo(() => createChatTransport(chatId, initialRunId), [chatId, initialRunId]);
 
   const chat = useChat<AppUIMessage>({
     id: chatId,
@@ -94,10 +141,12 @@ export function useChatSession({ chatId, initial }: { chatId: string; initial: C
     setServer(next);
     if (next.status !== "running") setStopping(false);
     if (busyRef.current) return;
-    // Re-sync to the persisted transcript; if a turn is live, attach to it.
+    // Re-sync to the persisted transcript; if a turn is live, attach to it
+    // from chunk 0, bound to that run.
     setMessages(next.messages);
+    bindRun(next.activeRunId);
     if (next.status === "running" && next.activeRunId) void resumeStream();
-  }, [chatId, setMessages, resumeStream]);
+  }, [chatId, setMessages, resumeStream, bindRun]);
 
   // A stream just ended (finish, stop, or a dropped connection).
   useEffect(() => {
