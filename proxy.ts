@@ -119,6 +119,6 @@ export const config = {
     "/trips/:path*",
     "/clients/:path*",
     "/places/:path*",
-    "/api/(chats|trips|places|search|import)/:path*",
+    "/api/(chats|trips|places|search|import|advisor-places|entities|localities|trip-places|clients)/:path*",
   ],
 };
