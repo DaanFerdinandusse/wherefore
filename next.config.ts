@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   // The Next agent-rules block contains an em dash, which this repo bans.
@@ -29,4 +30,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// withWorkflow compiles "use workflow" / "use step" and serves the flow route
+// at /.well-known/workflow/v1/flow (Local World in dev, Vercel Workflows in prod).
+export default withWorkflow(nextConfig);

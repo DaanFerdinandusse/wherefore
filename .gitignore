@@ -38,3 +38,7 @@ next-env.d.ts
 
 # agent worktrees
 /.claude/worktrees/
+/.swc
+
+# workflow devkit local world
+/.workflow-data/
