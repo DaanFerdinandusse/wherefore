@@ -4,6 +4,7 @@ import "server-only";
 // signature declared in contracts.ts. Import from "@/lib/clients".
 
 export * from "./contracts";
+export { countClientTrips, listClientTripCards } from "./trip-cards";
 export {
   getClient,
   getClientProfile,

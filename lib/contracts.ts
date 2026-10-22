@@ -18,6 +18,8 @@ export type MediaFavorite = {
   kind: "artist" | "movie" | "book";
   entityId?: string;
   name?: string;
+  /** The provider image, for the "Also into" chip. */
+  imageUrl?: string;
 };
 export type FavoriteCandidate = {
   entityId: string;

@@ -110,3 +110,21 @@ export type ReorderFavorites = (clientId: string, favoriteIds: string[], scope: 
 export type SetTasteTags = (clientId: string, tags: TasteTag[], scope: ScopeInput) => Promise<Client>;
 export type SetGroundRules = (clientId: string, rules: string[], scope: ScopeInput) => Promise<Client>;
 export type SetMediaFavorites = (clientId: string, media: MediaFavorite[], scope: ScopeInput) => Promise<Client>;
+
+// Trip details for the Clients page and the client profile's Trips panel.
+
+/** A trip as a card: the photo, the stage inputs and how full it is. */
+export type ClientTripCard = ClientTripRow & {
+  clientId: string;
+  shareToken: string | null;
+  stageOverride: string | null;
+  /** First image of the trip's best place (added first, then by score). */
+  imageUrl: string | null;
+  /** Trip places the advisor added to the itinerary. */
+  placeCount: number;
+};
+
+/** Cards for these trips, in the order of `tripIds`; ids out of scope are skipped. */
+export type ListClientTripCards = (tripIds: string[], scope: ScopeInput) => Promise<ClientTripCard[]>;
+/** Number of trips per client id; clients without trips are absent. */
+export type CountClientTrips = (clientIds: string[], scope: ScopeInput) => Promise<Record<string, number>>;
