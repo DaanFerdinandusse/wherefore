@@ -1,0 +1,11 @@
+.claude
+.next
+.workflow-data
+node_modules
+.env.agents
+e2e/.auth
+test-results
+playwright-report
+design
+docs
+*.md
