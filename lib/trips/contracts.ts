@@ -70,6 +70,8 @@ export type TripCard = {
   adults: number;
   children: number;
   stage: TripStage;
+  /** The stage set by hand (a drag or "Move to"), null while the stage is computed. */
+  stageOverride: TripStage | null;
   shareToken: string | null;
   seedStatus: string;
   /** First image of the trip's best scored place, for the city photo. */
@@ -103,6 +105,11 @@ export type ListTripsOptions = {
   perStage?: number;
   /** Skip this many cards in each stage, for "Show more". Default 0. */
   offset?: number;
+  /**
+   * Trips made by the dev fixtures ("Dev: " title prefix, lib/trips/dev.ts):
+   * left out by default, or the only ones listed with "only".
+   */
+  dev?: "exclude" | "only";
 };
 
 export type TripPatch = Partial<

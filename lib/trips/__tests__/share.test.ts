@@ -134,3 +134,32 @@ describe("the other favorites bucket", () => {
     ]);
   });
 });
+
+describe("agent notes", () => {
+  it("never reach the traveler, even with the traveler flag set", () => {
+    const view = toSharedTripView(trip, [
+      slot({ place: uva, note: "Book the 8 pm sitting", noteForTraveler: true, noteSource: "agent" }),
+      slot({ slot: "lunch", place: uva, note: "Ask for the terrace", noteForTraveler: true, noteSource: "advisor" }),
+    ]);
+    const notes = view.days.flatMap((d) => d.slots.map((s) => s.advisorNote));
+    expect(notes).toEqual(["Ask for the terrace", undefined]);
+  });
+});
+
+describe("plain drivers", () => {
+  it("leaves Your places and Other favorites out of the because names", () => {
+    const view = toSharedTripView(trip, [
+      slot({
+        place: {
+          ...uva,
+          explainability: [
+            { entityId: "e-via-carota", name: "Via Carota", share: 50 },
+            { entityId: "advisor", name: "Your places", share: 30 },
+            { entityId: "other", name: "Other favorites", share: 20 },
+          ],
+        },
+      }),
+    ]);
+    expect(view.days[0]?.slots[0]?.place?.because).toEqual([{ name: "Via Carota", share: 50 }]);
+  });
+});

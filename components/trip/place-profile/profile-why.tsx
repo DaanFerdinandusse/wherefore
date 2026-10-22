@@ -2,14 +2,16 @@ import { FilmImage } from "@/components/ui/film-image";
 import { Pill } from "@/components/ui/pill";
 import type { Explainability, TasteTag } from "@/lib/contracts";
 import type { TripPlaceProfileDriver } from "@/lib/trips/profile-types";
+import { ADVISOR_DRIVER_ID, ADVISOR_DRIVER_NAME, isPlainDriver, OTHER_FAVORITES_NAME } from "@/lib/qloo/normalize";
 import { cn } from "@/lib/ui/cn";
 
-import { OTHER_DRIVER_ID, whySentence } from "./profile-format";
+import { whySentence } from "./profile-format";
 
 // "Why it is recommended for Ana": the score, one sentence from the named
 // drivers, a bar per driver (width = its share) and the shared taste tags.
-// Everything comes from the explainability data; "Other favorites" is shown
-// as the rest of the share, never as a favorite with a photo or in the sentence.
+// Everything comes from the explainability data; "Your places" and "Other
+// favorites" are plain bars for their part of the share, never a favorite
+// with a photo or a name in the sentence.
 
 export function WhyBlock({
   clientFirstName,
@@ -46,15 +48,16 @@ export function WhyBlock({
       {because.length > 0 ? (
         <ul className="flex flex-col gap-3">
           {because.map((driver) => {
-            const other = driver.entityId === OTHER_DRIVER_ID;
+            const other = isPlainDriver(driver.entityId);
             const photo = other ? null : byEntity.get(driver.entityId)?.imageUrl;
+            const plainName = driver.entityId === ADVISOR_DRIVER_ID ? ADVISOR_DRIVER_NAME : OTHER_FAVORITES_NAME;
             return (
               <li key={driver.entityId} className="flex items-center gap-3">
                 <span className={cn("relative size-[34px] shrink-0 overflow-hidden rounded-pill", other ? "border border-dashed border-pill-outline" : "bg-surface")}>
                   {photo ? <FilmImage src={photo} alt="" sizes="34px" unoptimized /> : null}
                 </span>
                 <span title={other ? undefined : driver.name} className={cn("w-[120px] shrink-0 truncate text-body leading-5", other ? "font-medium text-text-2" : "font-semibold text-ink")}>
-                  {other ? "Other favorites" : driver.name}
+                  {other ? plainName : driver.name}
                 </span>
                 <span className="flex h-2 grow rounded-pill bg-ink/12" aria-hidden>
                   <span className={cn("h-2 rounded-pill", other ? "bg-text-2" : "bg-ink")} style={{ width: `${Math.max(0, Math.min(100, driver.share))}%` }} />

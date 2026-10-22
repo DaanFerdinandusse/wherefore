@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
+import { ADVISOR_DRIVER_ID, OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
 
 import { becauseLine, namedDrivers } from "./format";
 
@@ -19,5 +19,11 @@ describe("because line", () => {
   it("is empty when only the bucket is left", () => {
     expect(becauseLine([because[0]], "Ana Ruiz")).toBe("");
     expect(becauseLine([], "Ana Ruiz")).toBe("");
+  });
+
+  it("never names Your places", () => {
+    const withAdvisor = [{ entityId: ADVISOR_DRIVER_ID, name: "Your places", share: 70 }, ...because.slice(1)];
+    expect(becauseLine(withAdvisor, "Ana Ruiz")).toBe("Because Ana loves Via Carota and Lilia");
+    expect(becauseLine([withAdvisor[0]], "Ana Ruiz")).toBe("");
   });
 });

@@ -28,6 +28,16 @@ describe("moveCard", () => {
     expect(moveCard(grouped, "missing", "done")).toBe(grouped);
   });
 
+  it("sets the override on a move by hand and clears it on a reset", () => {
+    const moved = moveCard(grouped, "a", "shared");
+    expect(findCard(moved, "a")?.stageOverride).toBe("shared");
+    const reset = moveCard(moved, "a", "planning", null);
+    expect(findCard(reset, "a")).toMatchObject({ stage: "planning", stageOverride: null });
+    // A reset that lands in the same column still clears the override.
+    const pinned = board([tripCard({ id: "p", stageOverride: "planning" })]);
+    expect(findCard(moveCard(pinned, "p", "planning", null), "p")?.stageOverride).toBeNull();
+  });
+
   it("restores a card after a failed move", () => {
     const moved = moveCard(grouped, "a", "shared");
     const restored = restoreCard(moved, a);

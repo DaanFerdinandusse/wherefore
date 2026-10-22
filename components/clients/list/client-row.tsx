@@ -12,7 +12,8 @@ import { COLUMNS } from "./columns";
 
 // One client on the Clients page: who, the places they love, the next trip
 // and its stage, the number of trips, the last activity. The whole row opens
-// the profile (a stretched link); "Start a trip" sits above it.
+// the profile (a stretched link over every cell, so a click anywhere and
+// Enter on the focused row open it); "Start a trip" sits above it.
 
 const THUMBS = 4;
 const MIN_FAVORITES_FOR_TRIP = 3;
@@ -41,7 +42,7 @@ export function ClientRow({
       <Link
         href={`/clients/${client.id}`}
         aria-label={`Open ${client.name}`}
-        className="absolute inset-0 rounded-[22px] focus-visible:outline-offset-0"
+        className="absolute inset-0 z-[1] rounded-[22px] focus-visible:outline-offset-0"
       />
 
       <div className={cn("flex shrink-0 items-center gap-3.5", COLUMNS.client)}>
@@ -61,7 +62,7 @@ export function ClientRow({
 
       <div className={cn("flex shrink-0 items-center gap-1.5", COLUMNS.loves)} aria-label={`${client.favoritesCount} favorite places`}>
         {client.favoriteImages.slice(0, THUMBS).map((url, i) => (
-          <span key={`${i}-${url}`}className="relative size-10 shrink-0 overflow-hidden rounded-xl bg-avatar">
+          <span key={`${i}-${url}`} className="relative size-10 shrink-0 overflow-hidden rounded-xl bg-avatar">
             <FilmImage src={url} alt="" sizes="40px" />
           </span>
         ))}

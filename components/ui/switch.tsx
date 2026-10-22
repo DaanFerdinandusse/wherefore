@@ -15,6 +15,7 @@ export function Switch({
   variant = "track",
   icon,
   disabled,
+  describedBy,
   className,
 }: {
   checked: boolean;
@@ -25,6 +26,8 @@ export function Switch({
   /** Leading glyph for `pill`; defaults to the bookmark. */
   icon?: ReactNode;
   disabled?: boolean;
+  /** Id of a hint that explains the switch (for example why it is disabled). */
+  describedBy?: string;
   className?: string;
 }) {
   if (variant === "pill") {
@@ -55,6 +58,7 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      aria-describedby={describedBy}
       disabled={disabled}
       onClick={() => onCheckedChange?.(!checked)}
       className={cn(

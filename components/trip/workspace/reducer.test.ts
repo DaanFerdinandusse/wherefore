@@ -13,6 +13,7 @@ import {
   swapWrites,
   tabCounts,
   visiblePlaces,
+  writtenNoteSource,
   type WorkspaceState,
 } from "./reducer";
 import { historyMode, readUrlState, writeUrlState } from "./url-state";
@@ -237,8 +238,8 @@ describe("slots and days", () => {
     const slots = [{ ...slot(1, "morning", "a", "Early"), noteForTraveler: true }, slot(1, "afternoon", "b")];
     const writes = swapWrites(slots, { day: 1, slot: "morning" }, { day: 1, slot: "afternoon" });
     expect(writes).toEqual([
-      { day: 1, slot: "afternoon", position: 0, tripPlaceId: "a", note: "Early", noteForTraveler: true },
-      { day: 1, slot: "morning", position: 0, tripPlaceId: "b", note: "", noteForTraveler: false },
+      { day: 1, slot: "afternoon", position: 0, tripPlaceId: "a", note: "Early", noteForTraveler: true, noteSource: "advisor" },
+      { day: 1, slot: "morning", position: 0, tripPlaceId: "b", note: "", noteForTraveler: false, noteSource: "advisor" },
     ]);
     // The noted place moved over an unnoted one: the note is on one slot only.
     let state = initialState(snapshot({ places: [card("a"), card("b")], slots }));
@@ -259,7 +260,7 @@ describe("slots and days", () => {
     const writes = swapWrites(slots, { day: 1, slot: "morning" }, { day: 1, slot: "night" });
     expect(writes[1]).toEqual({ day: 1, slot: "morning", position: 0, tripPlaceId: null });
     const rows = applySlotWrites(slots, writes);
-    expect(rows).toEqual([{ day: 1, slot: "night", position: 0, date: null, tripPlaceId: "a", note: "Early", noteForTraveler: false }]);
+    expect(rows).toEqual([{ day: 1, slot: "night", position: 0, date: null, tripPlaceId: "a", note: "Early", noteForTraveler: false, noteSource: "advisor" }]);
     expect(swapWrites(slots, { day: 1, slot: "lunch" }, { day: 1, slot: "night" })).toEqual([]);
   });
 
@@ -312,5 +313,38 @@ describe("saved slots", () => {
     state = reduce(state, { type: "slot", write: { day: 1, slot: "lunch", tripPlaceId: "a" } });
     state = reduce(state, { type: "slotsSaved", slots: [{ ...slot(1, "lunch", "a"), id: "real" }] });
     expect(state.slots.map((s) => s.id)).toEqual(["real"]);
+  });
+});
+
+describe("agent notes", () => {
+  const agentSlot: ItinerarySlot = {
+    id: "s1",
+    day: 1,
+    slot: "dinner",
+    position: 0,
+    tripPlaceId: "tp1",
+    note: "Book the 8 pm sitting",
+    noteForTraveler: false,
+    noteSource: "agent",
+  };
+
+  it("stay the agent's while the text is unchanged", () => {
+    expect(writtenNoteSource({ note: "Book the 8 pm sitting" }, agentSlot)).toBe("agent");
+    expect(writtenNoteSource({}, agentSlot)).toBe("agent");
+  });
+
+  it("become the advisor's once rewritten", () => {
+    expect(writtenNoteSource({ note: "Book the 7 pm sitting" }, agentSlot)).toBe("advisor");
+  });
+
+  it("are never marked for the traveler on a write that keeps the text", () => {
+    const [row] = applySlotWrites([agentSlot], [{ day: 1, slot: "dinner", tripPlaceId: "tp1", note: agentSlot.note, noteForTraveler: true }]);
+    expect(row).toMatchObject({ noteSource: "agent", noteForTraveler: false });
+  });
+
+  it("move with the place on a swap", () => {
+    const writes = swapWrites([agentSlot], { day: 1, slot: "dinner" }, { day: 1, slot: "lunch" });
+    const rows = applySlotWrites([agentSlot], writes);
+    expect(rows).toEqual([expect.objectContaining({ slot: "lunch", note: agentSlot.note, noteSource: "agent" })]);
   });
 });

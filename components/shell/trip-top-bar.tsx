@@ -1,11 +1,12 @@
 "use client";
 
-import Image, { type ImageProps } from "next/image";
+import type { ImageProps } from "next/image";
 import { useState, type ReactNode } from "react";
 import { ChevronDown, Route, Share } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Menu, MenuItem, MenuLabel } from "@/components/ui/menu";
+import { FilmImage } from "@/components/ui/film-image";
+import { Menu, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/menu";
 import { Tabs } from "@/components/ui/tabs";
 
 import { UserMenu } from "./user-menu";
@@ -24,6 +25,8 @@ export type TripSwitcherItem = {
   subtitle: string;
   href: string;
   imageSrc?: ImageProps["src"];
+  /** A trip made by the dev fixtures: listed last, under "Dev" (development only). */
+  dev?: boolean;
 };
 
 const VIEWS: { value: TripView; label: string }[] = [
@@ -35,7 +38,7 @@ const VIEWS: { value: TripView; label: string }[] = [
 function Thumb({ src, size }: { src?: ImageProps["src"]; size: number }) {
   return (
     <span style={{ width: size, height: size }} className="relative shrink-0 overflow-hidden rounded-pill bg-avatar">
-      {src ? <Image src={src} alt="" fill sizes={`${size}px`} className="film object-cover" /> : null}
+      {src ? <FilmImage src={src} alt="" sizes={`${size}px`} /> : null}
     </span>
   );
 }
@@ -67,6 +70,8 @@ export function TripTopBar({
   onSignOut: () => void;
 }) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const realTrips = otherTrips.filter((item) => !item.dev);
+  const devTrips = otherTrips.filter((item) => item.dev);
 
   return (
     <header className="flex h-[76px] shrink-0 items-center gap-4 px-7">
@@ -95,10 +100,10 @@ export function TripTopBar({
           )}
         >
           <MenuLabel>Other trips</MenuLabel>
-          {otherTrips.length === 0 ? (
+          {realTrips.length === 0 ? (
             <p className="px-3 pb-2 text-ui text-text-2">No other trips yet.</p>
           ) : (
-            otherTrips.map((item) => (
+            realTrips.map((item) => (
               <MenuItem
                 key={item.id}
                 href={item.href}
@@ -110,6 +115,21 @@ export function TripTopBar({
               />
             ))
           )}
+          {devTrips.length > 0 ? (
+            <>
+              <MenuSeparator />
+              <MenuLabel>Dev</MenuLabel>
+              {devTrips.map((item) => (
+                <MenuItem
+                  key={item.id}
+                  href={item.href}
+                  title={item.title}
+                  description={item.subtitle}
+                  onSelect={() => setSwitcherOpen(false)}
+                />
+              ))}
+            </>
+          ) : null}
         </Menu>
       </div>
 

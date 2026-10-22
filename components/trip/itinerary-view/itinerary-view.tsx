@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import type { ItinerarySlot, SlotName, TripPlaceCard } from "@/lib/contracts";
 import { cn } from "@/lib/ui/cn";
 
+import { AGENT_NOTE_HINT, AgentNoteLabel, isAgentNote } from "../agent-note";
 import { useTripStore } from "../store";
 import { carriesPlace, carriesSlot, draggedPlace, draggedSlot, startSlotDrag } from "../workspace/dnd";
 import { becauseLine, firstName, shortDate, SLOT_LABELS } from "../workspace/format";
@@ -63,12 +64,16 @@ function NoteField({ slot, actions }: { slot: ItinerarySlot; actions: WorkspaceA
     setPrev(slot.note);
     setValue(slot.note);
   }
-  const forTraveler = slot.noteForTraveler ?? false;
+  // An agent note is never for the traveler; once its text is rewritten it is the advisor's.
+  const agentNote = isAgentNote(slot) && value.trim() === slot.note.trim();
+  const forTraveler = agentNote ? false : (slot.noteForTraveler ?? false);
   const ref = { day: slot.day, slot: slot.slot, position: slot.position };
   const save = (note: string, traveler: boolean) => void actions.saveNote(ref, note, traveler);
   const where = `day ${slot.day} ${SLOT_LABELS[slot.slot].toLowerCase()}`;
+  const hintId = `agent-note-${slot.day}-${slot.slot}-${slot.position}`;
   return (
     <div className="flex flex-col gap-1.5 px-1">
+      {agentNote ? <AgentNoteLabel className="self-start" /> : null}
       <label className="block">
         <span className="sr-only">Note for {where}</span>
         <textarea
@@ -81,14 +86,25 @@ function NoteField({ slot, actions }: { slot: ItinerarySlot; actions: WorkspaceA
         />
       </label>
       {value.trim() || forTraveler ? (
-        <label className="flex items-center gap-2.5 text-ui-sm text-text-2">
-          <Switch
-            checked={forTraveler}
-            label={`${TRAVELER_SWITCH}, ${where}`}
-            onCheckedChange={(next) => save(value.trim(), next)}
-          />
-          <span aria-hidden>{TRAVELER_SWITCH}</span>
-        </label>
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2.5 text-ui-sm text-text-2">
+            <Switch
+              checked={forTraveler}
+              label={`${TRAVELER_SWITCH}, ${where}`}
+              disabled={agentNote}
+              describedBy={agentNote ? hintId : undefined}
+              onCheckedChange={(next) => save(value.trim(), next)}
+            />
+            <span aria-hidden className={cn(agentNote && "text-text-muted")}>
+              {TRAVELER_SWITCH}
+            </span>
+          </label>
+          {agentNote ? (
+            <p id={hintId} className="text-meta text-text-muted">
+              {AGENT_NOTE_HINT}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

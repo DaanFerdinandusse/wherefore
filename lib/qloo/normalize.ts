@@ -300,6 +300,23 @@ export function displayScore(affinity: number, setAffinities: readonly number[])
 /** Entity id of the one entry that holds every driver without a name. */
 export const OTHER_FAVORITES_ID = "other";
 export const OTHER_FAVORITES_NAME = "Other favorites";
+/** The one driver entry that holds every blended advisor place: a plain bar, never a favorite. */
+export const ADVISOR_DRIVER_ID = "advisor";
+export const ADVISOR_DRIVER_NAME = "Your places";
+
+/** True for a driver entry that is not one of the client's favorites ("Your places", "Other favorites"). */
+export function isPlainDriver(entityId: string): boolean {
+  return entityId === ADVISOR_DRIVER_ID || entityId === OTHER_FAVORITES_ID;
+}
+
+/**
+ * The favorites a place is credited to by name, for every "Because Ana
+ * loves ..." sentence: never "Your places" or "Other favorites", never a
+ * driver without a name.
+ */
+export function favoriteDrivers<T extends { entityId: string; name: string }>(because: readonly T[]): T[] {
+  return because.filter((d) => !isPlainDriver(d.entityId) && d.name.trim().length > 0);
+}
 
 /**
  * "Because they loved": each favorite's share of one result, as integer

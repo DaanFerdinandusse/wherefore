@@ -20,6 +20,7 @@ export function tripCard(
     adults: 1,
     children: 0,
     stage: "planning",
+    stageOverride: null,
     shareToken: null,
     seedStatus: "done",
     imageUrl: null,

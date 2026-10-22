@@ -4,6 +4,7 @@
 // first name because the data has no pronouns.
 
 import type { Category, TripPlaceCard } from "@/lib/contracts";
+import { favoriteDrivers } from "@/lib/qloo/normalize";
 
 export function firstName(clientName: string): string {
   return clientName.trim().split(/\s+/)[0] ?? "";
@@ -15,10 +16,9 @@ export function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/** The favorites that drove the match, strongest first. */
+/** The favorites that drove the match, strongest first. Never "Your places" or "Other favorites". */
 export function topFavorites(card: Pick<TripPlaceCard, "because">, max: number): string[] {
-  return [...card.because]
-    .filter((b) => b.name.trim() !== "")
+  return favoriteDrivers(card.because)
     .sort((a, b) => b.share - a.share)
     .slice(0, max)
     .map((b) => b.name);

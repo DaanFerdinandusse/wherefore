@@ -1,25 +1,33 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { clients, trips, tripTravelers } from "@/lib/db/schema";
 
+import { devTripTitle } from "@/lib/trips/dev";
+
 import { createChatForTrip, getChat, type ChatRow } from "./chat-store";
 
 // Development fixtures for the chat lab and the e2e tests: one client, one
-// trip ("Lisbon for Ana (chat lab)") and its chat, owned by the given user.
-// Idempotent: finds the rows by title before inserting. Never used in
-// production code paths.
+// trip ("Dev: Lisbon for Ana (chat lab)") and its chat, owned by the given
+// user. Idempotent: finds the rows by title before inserting. The "Dev: "
+// prefix keeps the trip off the Trips overview and the trip switcher
+// (lib/trips/dev.ts). Never used in production code paths.
 
-export const DEV_TRIP_TITLE = "Lisbon for Ana (chat lab)";
+/** Before the prefix: rows made under this title are renamed on the next run. */
+const LEGACY_DEV_TRIP_TITLE = "Lisbon for Ana (chat lab)";
+export const DEV_TRIP_TITLE = devTripTitle(LEGACY_DEV_TRIP_TITLE);
 
 export async function ensureDevTrip(ownerId: string): Promise<{ tripId: string; chatId: string }> {
   const [existing] = await db
-    .select({ id: trips.id, chatId: trips.chatId })
+    .select({ id: trips.id, chatId: trips.chatId, title: trips.title })
     .from(trips)
-    .where(and(eq(trips.ownerId, ownerId), eq(trips.title, DEV_TRIP_TITLE)))
+    .where(and(eq(trips.ownerId, ownerId), inArray(trips.title, [DEV_TRIP_TITLE, LEGACY_DEV_TRIP_TITLE])))
     .limit(1);
+  if (existing && existing.title !== DEV_TRIP_TITLE) {
+    await db.update(trips).set({ title: DEV_TRIP_TITLE }).where(eq(trips.id, existing.id));
+  }
   if (existing?.chatId && (await getChat(existing.chatId))) return { tripId: existing.id, chatId: existing.chatId };
 
   let tripId = existing?.id;

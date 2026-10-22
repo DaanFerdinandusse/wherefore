@@ -10,6 +10,7 @@ import { nameMatches, pickLocality } from "@/lib/demo/rules";
 import { saveAdvisorPlace, upsertPlaces } from "@/lib/places";
 import { haversineM, resolveLocality, searchEntities, tastePortrait } from "@/lib/qloo";
 import { createTrip } from "@/lib/trips";
+import { devTripTitle } from "@/lib/trips/dev";
 
 // Development fixtures for e2e/chat/tools.spec.ts: a client with the demo
 // favorites (Ana: Via Carota, Lilia, Attaboy, Devoción, resolved live near
@@ -73,6 +74,7 @@ export async function createDevSeedTrip(ownerId: string): Promise<{ tripId: stri
   }
 
   const created = await createTrip(ownerId, {
+    title: devTripTitle(`${lisbon.name} for ${client.name.split(" ")[0] ?? client.name}`),
     clientId: client.id,
     destination: {
       name: lisbon.name,

@@ -8,7 +8,7 @@ import type {
   TasteTag,
 } from "@/lib/contracts";
 
-import { OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
+import { favoriteDrivers } from "@/lib/qloo/normalize";
 
 import { asCategory, asSlotName, SLOT_ORDER } from "./map";
 
@@ -33,6 +33,8 @@ export type SharedSlotRow = {
   position: number;
   note: string;
   noteForTraveler: boolean;
+  /** "agent" notes are the advisor's working notes: never on the traveler view. */
+  noteSource?: string;
   /** Null when the slot holds no place (or a removed one). */
   place: {
     name: string;
@@ -65,10 +67,8 @@ function toSharedPlace(place: NonNullable<SharedSlotRow["place"]>): SharedTripPl
     category,
     imageUrl: place.imageUrl ?? undefined,
     neighborhood: place.neighborhood ?? undefined,
-    // Named favorites only: the "Other favorites" bucket is no favorite of the traveler's.
-    because: place.explainability
-      .filter((d) => d.entityId !== OTHER_FAVORITES_ID && d.name.trim() !== "")
-      .map(({ name, share }) => ({ name, share })),
+    // Named favorites only: "Your places" and "Other favorites" are no favorites of the traveler's.
+    because: favoriteDrivers(place.explainability).map(({ name, share }) => ({ name, share })),
     sharedTags: place.sharedTags.map((tag) => tag.name),
     reason: place.reason?.trim() || undefined,
   };
@@ -76,7 +76,7 @@ function toSharedPlace(place: NonNullable<SharedSlotRow["place"]>): SharedTripPl
 
 function toSharedSlot(row: SharedSlotRow): SharedTripSlot | null {
   const note = row.note.trim();
-  const advisorNote = row.noteForTraveler && note ? note : undefined;
+  const advisorNote = row.noteForTraveler && row.noteSource !== "agent" && note ? note : undefined;
   if (!row.place && !advisorNote) return null;
   return {
     slot: asSlotName(row.slot),

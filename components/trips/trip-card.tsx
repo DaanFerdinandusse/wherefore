@@ -15,9 +15,12 @@ import { STAGE_COLUMNS } from "./columns";
 import { cardDatesLabel, cardStatus } from "./format";
 
 // One trip on the board: the destination photo (the trip's best scored place,
-// or a plain surface before there is one), the client, the city, the dates
-// and one status line. The whole card opens the trip; it drags to another
-// column, and the menu offers the same move from the keyboard.
+// or the city's name on a warm surface before there is one), the client, the
+// city, the dates and one status line. The whole card opens the trip; it
+// drags to another column, and the menu offers the same move from the
+// keyboard, plus "Reset to computed stage" once the stage was set by hand.
+// The photo goes through FilmImage and its image policy; cards on screen
+// load it eagerly so the board does not sit on empty frames.
 export function TripCard({
   card,
   today,
@@ -25,6 +28,8 @@ export function TripCard({
   onDragStart,
   onDragEnd,
   onMove,
+  onResetStage,
+  eager = false,
 }: {
   card: TripCardData;
   today: string;
@@ -32,6 +37,9 @@ export function TripCard({
   onDragStart: (tripId: string) => void;
   onDragEnd: () => void;
   onMove: (tripId: string, stage: TripStage) => void;
+  onResetStage: (tripId: string) => void;
+  /** Load the photo right away (cards in the first screen). */
+  eager?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const status = cardStatus(card, today);
@@ -54,9 +62,18 @@ export function TripCard({
         dragging && "opacity-50",
       )}
     >
-      <div className="relative h-[132px] shrink-0 overflow-hidden rounded-t-[22px] bg-avatar">
-        {card.imageUrl ? <FilmImage src={card.imageUrl} alt="" sizes="334px" unoptimized draggable={false} /> : null}
-      </div>
+      {card.imageUrl ? (
+        <div className="relative h-[132px] shrink-0 overflow-hidden rounded-t-[22px] bg-avatar">
+          <FilmImage src={card.imageUrl} alt="" sizes="334px" loading={eager ? "eager" : undefined} draggable={false} />
+        </div>
+      ) : (
+        <div
+          aria-hidden
+          className="flex h-[132px] shrink-0 items-end overflow-hidden rounded-t-[22px] bg-surface-raised px-4 pb-3 shadow-[inset_0_-1px_0_var(--color-rule)]"
+        >
+          <span className="truncate font-display text-section text-text-2">{card.destination.name}</span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2.5 px-4 pt-3.5 pb-4">
         <div className="flex items-center gap-2">
@@ -122,6 +139,15 @@ export function TripCard({
           )}
         >
           <MenuItem title="Open trip" href={href} onSelect={() => setMenuOpen(false)} />
+          {card.stageOverride ? (
+            <MenuItem
+              title="Reset to computed stage"
+              onSelect={() => {
+                setMenuOpen(false);
+                onResetStage(card.id);
+              }}
+            />
+          ) : null}
           <MenuSeparator />
           <MenuLabel>Move to</MenuLabel>
           {STAGE_COLUMNS.filter((c) => c.stage !== card.stage).map((column) => (

@@ -35,6 +35,7 @@ import type {
 } from "./contracts";
 import { asCategory, asPlaceStatus, asSource, compareSlots, toAsk, toSlot } from "./map";
 import { type SharedSlotRow, toSharedTripView } from "./share";
+import { DEV_TRIP_PREFIX } from "./dev";
 import { computeStage, isTripStage, todayIso, tripDayCount } from "./stage";
 
 // Drizzle prints a single-table select's columns unqualified, which a
@@ -238,6 +239,7 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
         position: itinerarySlots.position,
         note: itinerarySlots.note,
         noteForTraveler: itinerarySlots.noteForTraveler,
+        noteSource: itinerarySlots.noteSource,
         placeName: places.name,
         category: tripPlaces.category,
         imageUrl: sql<string | null>`${places.images} -> 0 ->> 'url'`,
@@ -264,6 +266,7 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
     position: row.position,
     note: row.note,
     noteForTraveler: row.noteForTraveler,
+    noteSource: row.noteSource,
     place:
       row.placeName === null
         ? null
@@ -329,6 +332,8 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const today = todayIso();
   const stage = stageSql(today);
+  const devTitle = sql`starts_with(${trips.title}, ${DEV_TRIP_PREFIX})`;
+  const devFilter = options.dev === "only" ? devTitle : sql`not ${devTitle}`;
 
   const ranked = db.$with("ranked").as(
     db
@@ -339,7 +344,7 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
         total: sql<number>`count(*) over (partition by ${stage})`.as("total"),
       })
       .from(trips)
-      .where(inScope(trips, ownerId)),
+      .where(and(inScope(trips, ownerId), devFilter)),
   );
   const page = db.$with("page").as(
     db
@@ -439,6 +444,7 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
       adults: t.adults,
       children: t.children,
       stage: cardStage,
+      stageOverride: isTripStage(t.stageOverride) ? t.stageOverride : null,
       shareToken: t.shareToken,
       seedStatus: t.seedStatus,
       imageUrl: row.imageUrl ?? null,

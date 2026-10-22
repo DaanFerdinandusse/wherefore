@@ -114,8 +114,9 @@ const edgeCard: TripPlaceCard = {
   imageUrl: limantour.src,
   score: 71,
   because: [
-    { entityId: "fixture-attaboy", name: "Attaboy", share: 61 },
-    { entityId: "other", name: "Other favorites", share: 39 },
+    { entityId: "fixture-attaboy", name: "Attaboy", share: 46 },
+    { entityId: "advisor", name: "Your places", share: 30 },
+    { entityId: "other", name: "Other favorites", share: 24 },
   ],
   sharedTags: [],
   status: "suggested",

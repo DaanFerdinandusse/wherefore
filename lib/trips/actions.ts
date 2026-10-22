@@ -12,7 +12,7 @@ import { advisorCities } from "@/lib/places";
 
 import { clientPastDestinations, listRecentClientsForTripBar, setStageOverride } from "./index";
 import type { PastDestination } from "./contracts";
-import { isTripStage } from "./stage";
+import { computeStage, isTripStage } from "./stage";
 
 // Server actions for the Trips board and the New trip panel. Every action
 // starts with requireUser() and validates its input; reads are scoped to the
@@ -100,6 +100,18 @@ export async function createGuestClient(name: string): Promise<{ id: string; nam
 }
 
 export type MoveTripResult = { ok: true; stage: TripStage } | { ok: false; error: string };
+
+/** "Reset to computed stage" in the card menu: drops the override, returns the stage the trip lands in. */
+export async function resetTripStage(tripId: string): Promise<MoveTripResult> {
+  const user = await requireUser();
+  if (!uuid.safeParse(tripId).success) return { ok: false, error: "That trip does not exist." };
+  try {
+    const trip = await setStageOverride(tripId, null, user);
+    return { ok: true, stage: computeStage(trip) };
+  } catch {
+    return { ok: false, error: "Could not reset the stage. Try again." };
+  }
+}
 
 /** A drag on the Trips board, or "Move to ..." in the card menu. */
 export async function moveTripToStage(tripId: string, stage: TripStage): Promise<MoveTripResult> {

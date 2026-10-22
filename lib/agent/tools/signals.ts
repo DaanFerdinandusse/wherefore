@@ -1,6 +1,6 @@
 import type { BuiltFrom, Explainability } from "@/lib/contracts";
 import type { SignalScore } from "@/lib/qloo/contracts";
-import { explainabilityFor, OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
+import { ADVISOR_DRIVER_ID, ADVISOR_DRIVER_NAME, explainabilityFor, OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
 
 // Which entities drive a search for this trip (PLAN 8 step 1). Pure.
 //
@@ -91,9 +91,7 @@ export function buildSignals(input: {
   return { signals, favorites, favoritesUsed, companionsWithoutFavorites, advisorSignals };
 }
 
-/** The one driver entry that holds every blended advisor place: a plain bar, never a favorite. */
-export const ADVISOR_DRIVER_ID = "advisor";
-export const ADVISOR_DRIVER_NAME = "Your places";
+export { ADVISOR_DRIVER_ID, ADVISOR_DRIVER_NAME, isPlainDriver } from "@/lib/qloo/normalize";
 
 /**
  * A result's drivers ("because they loved"), with blended advisor signals
@@ -121,9 +119,4 @@ export function driversFor(
     ...rows.filter((r) => r.entityId === ADVISOR_DRIVER_ID),
     ...rows.filter((r) => r.entityId === OTHER_FAVORITES_ID),
   ];
-}
-
-/** True for a driver entry that is not one of the client's favorites ("Your places", "Other favorites"). */
-export function isPlainDriver(entityId: string): boolean {
-  return entityId === ADVISOR_DRIVER_ID || entityId === OTHER_FAVORITES_ID;
 }

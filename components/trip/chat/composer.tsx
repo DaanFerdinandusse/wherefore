@@ -48,7 +48,7 @@ export function Composer({ busy, stopping, onSend, onStop }: Props) {
       }}
     >
       <label htmlFor="chat-composer" className="sr-only">
-        Message the planning assistant
+        Message the agent
       </label>
       <textarea
         id="chat-composer"
