@@ -15,14 +15,14 @@ the Workflow run, its stream and a conditional UPDATE.
 | `route-handler.ts` | `chatRoute()`: requireUser, typed errors to JSON. |
 | `stream.ts` | `ChatStreamPart` (the run stream) and `createChatUIChunkTransform` (stream to UI chunks). Pure. |
 | `turn-stream.ts` | Reading a run's stream: the route response, and `readTurnMessage` for persistence. |
-| `messages.ts` | `finalizeTurnMessage`, `projectTurnMessage`, `toModelHistory`. Pure. |
-| `history.ts` | `trimHistory` for `prepareStep`. Pure. |
+| `messages.ts` | `finalizeTurnMessage`, `projectTurnMessage`, `toModelHistory` (saved tool outputs through each tool's `toModelOutput`, then `budgetHistory`). Pure. |
+| `history.ts` | `trimHistory` for `prepareStep`; `budgetHistory`, the total token budget of the history a turn starts from. Pure. |
 | `prompt.ts`, `trip-context.ts` | System prompt with the trip header (as a `<trip_data>` block) and the seed-turn brief; `TripContextOutput`, capped under about 3k tokens. |
-| `writes.ts` | Every tool write: conditional on `chats.active_turn_id = turnId`, keyed upserts. |
-| `explain.ts` | explainStep: one model call per ask, each reason validated against the facts it got. |
+| `writes.ts` | Every tool write: the turn guard inside the write statement (`lib/trips/turn-guard.ts`), keyed upserts. |
+| `explain.ts` | explainStep: one model call per ask that only picks favorites, shared tags and one snippet index from the input; the sentence is a template rendered in code. |
 | `tools/index.ts` | The tool set for a turn (`toModelOutput` per tool), `activeToolsFor` (seed turn). |
 | `tools/steps.ts` | Every `"use step"` function, and nothing else (keeps server code out of the workflow bundle). |
-| `tools/*.ts` | The tool bodies: `seed-trip`, `find-places`, `score-places`, `place-tools` (lookup, itinerary, remove), shared `search-core`, `trip-data`, pure `signals`, `category-loop`, `labels`, `model-output`. |
+| `tools/*.ts` | The tool bodies: `seed-trip`, `find-places`, `score-places`, `place-tools` (lookup, itinerary, remove), shared `search-core`, `trip-data`, pure `signals`, `category-loop`, `labels`, `model-output`, `notes` (agent slot notes). |
 | `dev-setup.ts`, `tools/dev-fixtures.ts` | Dev trip and chats for the chat lab; the seeded Lisbon trip for `e2e/chat/tools.spec.ts`. |
 
 ## Tools
@@ -34,7 +34,7 @@ the Workflow run, its stream and a conditional UPDATE.
 | `find_places` | `{ intent, category?, tags?, price_max?, area?, day_hint?, take? }` | `FindPlacesOutput` (phases searching, scoring, explaining, done) |
 | `score_places` | `{ place_ids?, names?, scope?: "advisor_places" }` | `ScorePlacesOutput` |
 | `lookup_place` | `{ place_id }` | `LookupPlaceOutput` |
-| `set_itinerary` | `{ days: [{ day, slots: [{ slot, place_id, note? }] }], mode }` | `SetItineraryOutput` |
+| `set_itinerary` | `{ days: [{ day, slots: [{ slot, place_id, note? }] }], mode }` | `SetItineraryOutput` (notes stored as agent notes) |
 | `remove_place` | `{ place_id, replace }` | `RemovePlaceOutput` |
 
 The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives it a compact copy wrapped in `<trip_data>`, because client names, ground rules and advisor notes are typed by people. Ids the model passes back (`place_id`) are trip place ids; place ids are accepted too. Provider calls are logged with `logTripCall` (source `seed`, `ask:<id>`, or `manual` for score_places and a replacement outside an ask). The spike tools (`echo_places`, `slow_count`) exist only with `AGENT_DEV_TOOLS=1` outside production (playwright.config.ts sets it); their places never reach the board (`extractChatPlaces` reads only find_places, seed_trip and remove_place).
@@ -77,6 +77,27 @@ The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives i
 - **Every turn write is conditional on `active_turn_id = turnId`** (persist,
   idle, failed, tool writes). A cancelled or superseded run cannot touch a newer
   turn. Message writes are upserts by id, so a step replay never duplicates.
+- **A tool write is guarded in its own statement**, never checked first: the
+  insert or update carries `exists (chat locked by this turn, stop_requested_at
+  is null ... for share)` (`lib/trips/turn-guard.ts`), so nothing lands after
+  Stop or a lock change. Only the places cache and taste tags (caches, not trip
+  state) keep a check right before the write (`cacheWrite`).
+- **Finishing a turn finishes its board state.** Asks carry `turn_id`; the
+  release (`releaseTurn`, and `finalizeTurnRecords` on the kept-lock failure
+  path) turns every still running ask of the turn into done (with the places
+  it found) or failed, and a `seed_status = 'running'` into failed. seed_trip's
+  `finally` does the same for a seed stopped at a yield.
+- **Retries resume, they do not repeat.** find_places checkpoints search,
+  scoring and explaining on its ask (`trip_asks.checkpoint`), the ask's
+  result set is authoritative (`addAskPlaces(..., { replace: true })`), call
+  logs are upserted on (tool call, step, index), and a replacement is saved
+  with its link on the removed place (`replaced_by`, `replacement_key`).
+- **Reasons are templates.** The model picks favorites, shared tags and one
+  description snippet by index; anything not in the input is dropped and a
+  place with no valid favorite gets no reason (`explain.ts`).
+- **Agent slot notes are for the advisor only** (`note_source = 'agent'`,
+  `note_for_traveler` false), with hours, prices and reservation claims
+  stripped unless they quote a stored fact (`tools/notes.ts`).
 - **persistTurn is the only writer of the assistant message**, and it saves what
   the client saw: it writes a `turn-marker` to the run stream and folds the
   stream up to that marker with `readUIMessageStream`. Stop and failure paths

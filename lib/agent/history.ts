@@ -1,4 +1,5 @@
 import type { LanguageModelV4Prompt } from "@ai-sdk/provider";
+import type { ModelMessage } from "ai";
 
 // prepareStep's history trim (PLAN 6.2). Two rules keep a stateless Codex
 // call valid:
@@ -73,4 +74,69 @@ export function trimHistory(
   });
 
   return [...system, ...stubbed];
+}
+
+// The history a turn starts from (toModelHistory) has a total budget, so a
+// long chat never sends every old tool result again. Over budget, the oldest
+// tool outputs go first (each becomes a short stub; the call and its result
+// stay paired), then the oldest whole exchanges (the cut lands right before a
+// user message). The last user message always stays. Rough size: 4 chars a
+// token, which is close enough for a budget.
+
+export const HISTORY_TOKEN_BUDGET = 24_000;
+export const OMITTED_OUTPUT_NOTE = "Older result omitted to keep the chat short. Call the tool again if you need it.";
+
+type ToolMessage = Extract<ModelMessage, { role: "tool" }>;
+
+export function estimateTokens(value: unknown): number {
+  try {
+    return Math.ceil((JSON.stringify(value)?.length ?? 0) / 4);
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function stubbedTool(message: ToolMessage): ToolMessage {
+  return {
+    ...message,
+    content: message.content.map((part) =>
+      part.type === "tool-result" ? { ...part, output: { type: "text" as const, value: OMITTED_OUTPUT_NOTE } } : part,
+    ),
+  };
+}
+
+function isStubbed(message: ToolMessage): boolean {
+  return message.content.every(
+    (part) => part.type !== "tool-result" || (part.output.type === "text" && part.output.value === OMITTED_OUTPUT_NOTE),
+  );
+}
+
+/** The history cut to `maxTokens`: oldest tool outputs first, then oldest exchanges. Pure. */
+export function budgetHistory(messages: ModelMessage[], maxTokens = HISTORY_TOKEN_BUDGET): ModelMessage[] {
+  const sizes = messages.map(estimateTokens);
+  let total = sizes.reduce((sum, n) => sum + n, 0);
+  if (total <= maxTokens) return messages;
+
+  const out = [...messages];
+  for (let i = 0; i < out.length && total > maxTokens; i++) {
+    const message = out[i];
+    if (!message || message.role !== "tool" || isStubbed(message)) continue;
+    const stub = stubbedTool(message);
+    const size = estimateTokens(stub);
+    total -= (sizes[i] ?? 0) - size;
+    sizes[i] = size;
+    out[i] = stub;
+  }
+  if (total <= maxTokens) return out;
+
+  // Still over: drop whole exchanges from the front, cutting before a user
+  // message, never past the last one.
+  const lastUser = out.findLastIndex((m) => m.role === "user");
+  let cut = 0;
+  for (let i = 1; i <= lastUser && total > maxTokens; i++) {
+    if (out[i]?.role !== "user") continue;
+    for (let j = cut; j < i; j++) total -= sizes[j] ?? 0;
+    cut = i;
+  }
+  return out.slice(cut);
 }

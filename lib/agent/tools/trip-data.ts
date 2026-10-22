@@ -125,24 +125,39 @@ export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
 }
 
+/** Where a batch of calls was made: the tool call and a step name inside it. */
+export type CallKey = { toolCallId: string; step: string };
+
 /**
  * Logs provider calls for "How we got this", one row each, guarded by the
- * turn lock. `source` is "seed" or "ask:<id>".
+ * turn in the insert itself. `source` is "seed", "ask:<id>" or "manual".
+ * Keyed by (tool call, step, index), so a retried step rewrites its rows
+ * instead of logging the same calls twice.
  */
 export async function logCalls(
   turn: TurnRef,
   ctx: Pick<ToolTrip, "scope">,
   calls: QlooCall[],
   source: string,
+  key: CallKey,
   loosened: string[] = [],
 ): Promise<void> {
   if (calls.length === 0) return;
-  await guarded(turn, async () => {
-    for (const call of calls) {
+  await guarded(turn, async (guard) => {
+    for (const [index, call] of calls.entries()) {
       await logTripCall(
         turn.tripId,
-        { endpoint: call.endpoint, params: call.params, count: call.count, ms: call.ms, loosened, source },
+        {
+          endpoint: call.endpoint,
+          params: call.params,
+          count: call.count,
+          ms: call.ms,
+          loosened,
+          source,
+          key: { toolCallId: key.toolCallId, step: key.step, index },
+        },
         ctx.scope,
+        { turn: guard },
       );
     }
   });

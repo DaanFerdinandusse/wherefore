@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { FatalError } from "workflow";
 
 import type {
@@ -18,27 +18,27 @@ import {
   QlooLocalityMismatchError,
   type PlaceResult,
 } from "@/lib/qloo";
-import { setSlots, setTripPlaceStatus, type SlotInput } from "@/lib/trips";
+import { upsertPlaces } from "@/lib/places";
+import { saveReplacement, setSlots, setTripPlaceStatus, type SlotInput } from "@/lib/trips";
 
-import { guarded, type TurnRef } from "../writes";
+import { cacheWrite, guarded, type TurnRef } from "../writes";
 
-import { cardsInOrder, persistAskPlaces, persistBoardItems, resolveTripPlaceIds, type BoardItem } from "./search-core";
+import { cleanAgentNote } from "./notes";
+import {
+  cardsInOrder,
+  DESCRIPTION_KEYS,
+  descriptionTexts,
+  driversOf,
+  resolveTripPlaceIds,
+  tripPlaceRowOf,
+  type BoardItem,
+} from "./search-core";
 import { loadToolTrip, logCalls } from "./trip-data";
 
 // lookup_place, set_itinerary and remove_place: the small tools.
 
 // ------------------------------------------------------------ lookup_place
 
-const DESCRIPTION_KEYS = [
-  "short_description",
-  "description",
-  "overall_description",
-  "ambience_description",
-  "cuisine_description",
-  "unique_selling_points",
-  "neighborhood_description",
-  "physical_setting_description",
-] as const;
 const MAX_DESCRIPTION = 400;
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
@@ -118,13 +118,34 @@ export type SetItineraryInput = {
   mode: "replace" | "merge";
 };
 
-export async function setItineraryTool(input: SetItineraryInput, turn: TurnRef): Promise<SetItineraryOutput> {
+/**
+ * What a model note about a place may quote: the place's descriptions and
+ * its opening hours, verbatim (notes.ts).
+ */
+async function noteFacts(placeIds: string[]): Promise<Map<string, string[]>> {
+  if (placeIds.length === 0) return new Map();
+  const rows = await db.select().from(places).where(inArray(places.id, [...new Set(placeIds)]));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      [...descriptionTexts(row), ...Object.values(hoursOf(row.properties.hours) ?? {})],
+    ]),
+  );
+}
+
+export async function setItineraryTool(
+  input: SetItineraryInput,
+  turn: TurnRef,
+  toolCallId: string,
+): Promise<SetItineraryOutput> {
+  void toolCallId; // Slots are keyed by (trip, day, slot, position): a retry writes the same rows.
   const ctx = await loadToolTrip(turn.tripId);
   const asked = input.days.flatMap((d) => d.slots.map((s) => ({ day: d.day, ...s })));
   const known = await resolveTripPlaceIds(
     turn.tripId,
     asked.map((s) => s.place_id),
   );
+  const facts = await noteFacts([...known.values()].map((row) => row.placeId));
   const rejected: SetItineraryOutput["rejected"] = [];
   const slots: SlotInput[] = [];
   const positions = new Map<string, number>();
@@ -141,10 +162,14 @@ export async function setItineraryTool(input: SetItineraryInput, turn: TurnRef):
     const key = `${s.day}|${s.slot}`;
     const position = positions.get(key) ?? 0;
     positions.set(key, position + 1);
-    slots.push({ day: s.day, slot: s.slot, tripPlaceId: row.id, note: s.note ?? "", position });
+    // The model's note is an agent note: for the advisor only, never shown
+    // to the traveler, and stripped of hours, prices and reservations it
+    // can not quote from the place's facts.
+    const note = cleanAgentNote(s.note, facts.get(row.placeId) ?? []);
+    slots.push({ day: s.day, slot: s.slot, tripPlaceId: row.id, note, noteSource: "agent", noteForTraveler: false, position });
   }
   if (slots.length === 0 && input.mode !== "replace") return { applied: [], rejected };
-  const result = await guarded(turn, () => setSlots(turn.tripId, slots, input.mode, ctx.scope));
+  const result = await guarded(turn, (guard) => setSlots(turn.tripId, slots, input.mode, ctx.scope, { turn: guard }));
   return {
     applied: result.applied,
     rejected: [...rejected, ...result.rejected.map((r) => ({ placeId: r.tripPlaceId, reason: r.reason }))],
@@ -156,23 +181,38 @@ export async function setItineraryTool(input: SetItineraryInput, turn: TurnRef):
 /**
  * The next best place for the one removed: the originating ask (its stored
  * query) or the place's category, rerun with every place on the trip
- * excluded. Implemented here because lib/trips/replace.ts has not merged.
+ * excluded. Idempotent by toolCallId: the replacement is saved together with
+ * a link on the removed place (replaced_by, replacement_key), so a retried
+ * step finds it and returns the same replacement instead of adding another.
  */
 export async function removePlaceTool(
   input: { place_id: string; replace: boolean },
   turn: TurnRef,
+  toolCallId: string,
 ): Promise<RemovePlaceOutput> {
   const ctx = await loadToolTrip(turn.tripId);
   const found = (await resolveTripPlaceIds(turn.tripId, [input.place_id])).get(input.place_id);
   if (!found) return { error: "That place is not on this trip." };
   const [placeRow] = await db.select().from(places).where(eq(places.id, found.placeId)).limit(1);
-  await guarded(turn, () => setTripPlaceStatus(found.id, "removed", ctx.scope));
   const removed = {
     tripPlaceId: found.id,
     placeId: found.placeId,
     name: placeRow?.name ?? "",
     category: found.category as Category,
   };
+
+  // Already replaced: by this call (a retry) or an earlier one.
+  if (found.status === "removed" && found.replacedBy) {
+    const [replacement] = await cardsInOrder(ctx, [found.replacedBy]);
+    return {
+      removed,
+      ...(replacement ? { replacement } : {}),
+      ...(found.replacementKey === toolCallId ? {} : { note: "This place was already removed and replaced earlier." }),
+    };
+  }
+  if (found.status !== "removed") {
+    await guarded(turn, (guard) => setTripPlaceStatus(found.id, "removed", ctx.scope, { turn: guard }));
+  }
   if (!input.replace) return { removed };
 
   // Where the place came from: its best ranked ask, else its category.
@@ -212,7 +252,7 @@ export async function removePlaceTool(
       },
       { tripId: ctx.trip.id },
     );
-    await logCalls(turn, ctx, result.calls, origin ? `ask:${origin.askId}` : "manual", result.loosened);
+    await logCalls(turn, ctx, result.calls, origin ? `ask:${origin.askId}` : "manual", { toolCallId, step: "replace" }, result.loosened);
     results = result.results;
   } catch (error) {
     if (error instanceof QlooLocalityMismatchError) return { removed, note: "No replacement: the search came back from another city." };
@@ -230,17 +270,43 @@ export async function removePlaceTool(
     signalScores: pick.signalScores,
     source: origin ? "ask" : "seed",
   };
-  const ids = await persistBoardItems(turn, ctx, [item]);
-  const tripPlaceId = ids.get(pick.place.entityId);
+  const placeIds = await cacheWrite(turn, () => upsertPlaces([pick.place]));
+  const placeId = placeIds[pick.place.entityId];
+  if (!placeId) return { removed, note: "The replacement could not be saved." };
+  // Joins the same ask tab, after the existing results.
+  const lastRank = origin
+    ? ((
+        await db
+          .select({ rank: sql<number>`max(${askPlaces.rank})::int` })
+          .from(askPlaces)
+          .where(eq(askPlaces.askId, origin.askId))
+      )[0]?.rank ?? 0)
+    : 0;
+  const row = tripPlaceRowOf(ctx, item, placeId);
+  const tripPlaceId = await guarded(turn, (guard) =>
+    saveReplacement(
+      turn.tripId,
+      {
+        removedTripPlaceId: found.id,
+        key: toolCallId,
+        place: row,
+        ...(origin
+          ? {
+              ask: {
+                askId: origin.askId,
+                rank: lastRank + 1,
+                affinity: row.bestAffinity,
+                score: row.bestScore,
+                explainability: driversOf(ctx, item.signalScores),
+              },
+            }
+          : {}),
+      },
+      ctx.scope,
+      { turn: guard },
+    ),
+  );
   if (!tripPlaceId) return { removed, note: "The replacement could not be saved." };
-  if (origin) {
-    // Joins the same ask tab, after the existing results.
-    const [last] = await db
-      .select({ rank: sql<number>`max(${askPlaces.rank})::int` })
-      .from(askPlaces)
-      .where(eq(askPlaces.askId, origin.askId));
-    await persistAskPlaces(turn, ctx, origin.askId, [{ tripPlaceId, item }], (last?.rank ?? 0) + 1);
-  }
   const [replacement] = await cardsInOrder(ctx, [tripPlaceId]);
   return { removed, ...(replacement ? { replacement } : {}) };
 }

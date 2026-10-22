@@ -1,6 +1,7 @@
 import type { Category, TripPlaceSource } from "@/lib/contracts";
 
 import type { TripPlaceUpsert } from "./contracts";
+import { beatsEvidence } from "./evidence";
 
 // Pure merge rules for trip places. The same rules run twice: here, to fold
 // duplicates inside one upsert call, and in SQL (mutations.ts) against the
@@ -17,17 +18,17 @@ export function strongerSource(a: TripPlaceSource, b: TripPlaceSource): TripPlac
   return sourceRank(b) > sourceRank(a) ? b : a;
 }
 
-function beats(next: number | null | undefined, current: number | null | undefined): boolean {
-  return next != null && (current == null || next > current);
-}
-
 /**
  * Fold `next` into `current` for the same place: strongest source, best
- * score (with the explainability and tags of that best set), first known
+ * evidence (evidence.ts: affinity within one signal set, never the rank of
+ * another result set) with its score, explainability and tags, first known
  * advisor place and reason, and a category that only moves off "other".
  */
 export function mergeTripPlace(current: TripPlaceUpsert, next: TripPlaceUpsert): TripPlaceUpsert {
-  const better = beats(next.bestScore, current.bestScore);
+  const better = beatsEvidence(
+    { affinity: next.bestAffinity, score: next.bestScore, signalHash: next.signalHash },
+    { affinity: current.bestAffinity, score: current.bestScore, signalHash: current.signalHash },
+  );
   const category: Category = current.category === "other" ? next.category : current.category;
   return {
     placeId: current.placeId,
@@ -35,6 +36,7 @@ export function mergeTripPlace(current: TripPlaceUpsert, next: TripPlaceUpsert):
     category,
     bestScore: better ? next.bestScore : current.bestScore,
     bestAffinity: better ? next.bestAffinity : current.bestAffinity,
+    signalHash: better ? next.signalHash : current.signalHash,
     explainability: better ? next.explainability : current.explainability,
     sharedTags: better ? next.sharedTags : current.sharedTags,
     advisorPlaceId: next.advisorPlaceId ?? current.advisorPlaceId,

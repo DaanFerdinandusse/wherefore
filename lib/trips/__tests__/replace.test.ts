@@ -10,7 +10,7 @@ import insightsFixture from "@/lib/qloo/__fixtures__/insights-place.json";
 import { memoryCacheStore } from "@/lib/qloo/cache";
 import { createQlooClient } from "@/lib/qloo/client";
 import type { PlaceResult } from "@/lib/qloo/contracts";
-import { addAskPlaces, createAsk, createTrip, upsertTripPlaces } from "@/lib/trips";
+import { addAskPlaces, createAsk, createTrip, listTripPlaceCards, upsertTripPlaces } from "@/lib/trips";
 import { pickReplacement, replaceTripPlace, replacementQuery } from "@/lib/trips/replace";
 
 const template = insightsFixture.results.entities[0]!;
@@ -202,5 +202,33 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
   it("refuses a trip place of another owner", async () => {
     const { client } = fakeClient([]);
     await expect(replaceTripPlace(tripId, removedId, run.otherOwner, { client })).rejects.toThrow("No trip with that id.");
+  });
+
+  it("returns the same replacement for a repeat with the same key, and never adds a second one", async () => {
+    const placeIds = await upsertPlaces([
+      { entityId: entity("again"), name: "Again place", primaryType: "urn:tag:genre:place:restaurant" },
+    ]);
+    const againPlaceId = placeIds[entity("again")]!;
+    const written = await upsertTripPlaces(
+      tripId,
+      [{ placeId: againPlaceId, source: "seed", category: "eat", bestAffinity: 0.7, bestScore: 50 }],
+      run.owner,
+    );
+    const againId = written[againPlaceId]!;
+
+    const first = fakeClient([rawPlace(entity("first-pick"), "First pick", 0.8, favs)]);
+    const card = await replaceTripPlace(tripId, againId, run.owner, { client: first.client, key: "call-again" });
+    expect(card?.name).toBe("First pick");
+
+    // The retry would find another place; it must not even search.
+    const second = fakeClient([rawPlace(entity("second-pick"), "Second pick", 0.9, favs)]);
+    const repeat = await replaceTripPlace(tripId, againId, run.owner, { client: second.client, key: "call-again" });
+    expect(repeat?.tripPlaceId).toBe(card?.tripPlaceId);
+    expect(second.urls).toHaveLength(0);
+
+    const [removed] = await db.select().from(tripPlaces).where(eq(tripPlaces.id, againId));
+    expect(removed).toMatchObject({ status: "removed", replacedBy: card?.tripPlaceId, replacementKey: "call-again" });
+    const names = (await listTripPlaceCards(tripId, run.owner)).map((c) => c.name);
+    expect(names).not.toContain("Second pick");
   });
 });

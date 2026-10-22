@@ -6,6 +6,7 @@ import { and, eq, getTableColumns, inArray, ne, sql, type SQL } from "drizzle-or
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { InvalidInputError, NotFoundError } from "@/lib/auth/errors";
+import type { Explainability } from "@/lib/contracts";
 import { inScope, isUuid, toScope, type ScopeInput } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
 import {
@@ -41,9 +42,13 @@ import type {
   UpdateTrip,
   UpsertSlot,
   UpsertTripPlaces,
+  TripPlace,
+  TripPlaceUpsert,
+  WriteOptions,
 } from "./contracts";
 import { defaultTripTitle, isSlotName, toAsk, toSlot } from "./map";
 import { foldTripPlaces, SOURCE_PRIORITY } from "./merge";
+import { guardOrTrue, insertSelect, TurnLostError, turnGuardSql, type TurnGuard } from "./turn-guard";
 
 // Writes for trips and everything hanging off a trip. Two invariants live here:
 // trips.search is rebuilt by refreshTripSearch in the same batch as any write
@@ -80,6 +85,18 @@ function single<T>(rows: T[], entity: string): T {
   const row = rows[0];
   if (!row) throw new NotFoundError(entity);
   return row;
+}
+
+/**
+ * A guarded write matched nothing: TurnLostError when the guard is what
+ * failed (it never turns true again for that turn), otherwise nothing.
+ */
+async function assertGuardHeld(turn: TurnGuard | undefined): Promise<void> {
+  if (!turn) return;
+  const result = (await db.execute(sql`select ${turnGuardSql(turn)} as held`)) as unknown as {
+    rows: { held: boolean }[];
+  };
+  if (!result.rows[0]?.held) throw new TurnLostError();
 }
 
 // Trips
@@ -195,53 +212,95 @@ export const setStageOverride: SetStageOverride = (id, stage, scope) =>
 const PRIORITY = sql.raw(`array[${SOURCE_PRIORITY.map((s) => `'${s}'`).join(", ")}]::text[]`);
 const ex = (column: string) => sql.raw(`excluded.${column}`);
 
+/** One trip place row as the insert source reads it from jsonb. */
+type TripPlaceRecord = {
+  place_id: string;
+  source: string;
+  category: string;
+  best_affinity: number | null;
+  best_score: number | null;
+  signal_hash: string | null;
+  explainability: unknown;
+  shared_tags: unknown;
+  advisor_place_id: string | null;
+  reason: string | null;
+  position: number;
+};
+
+function toTripPlaceRecord(row: TripPlaceUpsert): TripPlaceRecord {
+  return {
+    place_id: row.placeId,
+    source: row.source,
+    category: row.category,
+    best_affinity: row.bestAffinity ?? null,
+    best_score: row.bestScore ?? null,
+    signal_hash: row.signalHash ?? null,
+    explainability: row.explainability ?? [],
+    shared_tags: row.sharedTags ?? [],
+    advisor_place_id: row.advisorPlaceId && isUuid(row.advisorPlaceId) ? row.advisorPlaceId : null,
+    reason: row.reason ?? null,
+    position: row.position ?? 0,
+  };
+}
+
+// The incoming row is the better evidence (evidence.ts beatsEvidence, in
+// SQL): an affinity beats none; a newer signal set replaces the old one;
+// within one signal set the higher affinity wins, never the higher rank of a
+// smaller result set.
+const BETTER = sql`(case
+  when excluded.best_affinity is null then (
+    ${tripPlaces.bestAffinity} is null and excluded.best_score is not null
+    and (${tripPlaces.bestScore} is null or excluded.best_score > ${tripPlaces.bestScore})
+  )
+  when ${tripPlaces.bestAffinity} is null then true
+  when excluded.signal_hash is not null and ${tripPlaces.signalHash} is distinct from excluded.signal_hash then true
+  else excluded.best_affinity > ${tripPlaces.bestAffinity}
+end)`;
+
 /**
- * The advisor place link, checked in the insert itself: the id only sticks
- * when that saved place is in the caller's scope and saves this same place.
- * Anything else (another advisor's place, a mismatch, a deleted save) stores
- * null, so a card can never show someone else's private note.
+ * The trip places upsert as one statement, not yet run: a jsonb source, the
+ * advisor place link checked in the insert itself (the id only sticks when
+ * that saved place is in the caller's scope and saves this same place, so a
+ * card can never show someone else's private note), and the turn guard.
  */
-function ownAdvisorPlace(advisorPlaceId: string | null | undefined, placeId: string, scope: ScopeInput) {
-  if (!advisorPlaceId || !isUuid(advisorPlaceId)) return null;
-  return sql`(${db
+function tripPlacesUpsert(tripId: string, rows: TripPlaceUpsert[], scope: ScopeInput, turn: TurnGuard | undefined) {
+  const records = rows.map(toTripPlaceRecord);
+  const advisorLink = sql`(${db
     .select({ id: advisorPlaces.id })
     .from(advisorPlaces)
     .where(
       and(
-        eq(advisorPlaces.id, advisorPlaceId),
-        eq(advisorPlaces.placeId, placeId),
+        sql`${advisorPlaces.id} = r.advisor_place_id`,
+        sql`${advisorPlaces.placeId} = r.place_id`,
         inScope(advisorPlaces, scope),
       ),
     )})`;
-}
-
-export const upsertTripPlaces: UpsertTripPlaces = async (tripId, rows, scope) => {
-  await requireTripId(tripId, scope);
-  const folded = foldTripPlaces(rows.filter((row) => isUuid(row.placeId)));
-  if (folded.length === 0) return {};
-
-  // The incoming row has the better score: take its score set.
-  const better = sql`(${ex("best_score")} is not null and (${tripPlaces.bestScore} is null or ${ex("best_score")} > ${tripPlaces.bestScore}))`;
-  const pick = (column: string, current: SQL | typeof tripPlaces.bestScore) =>
-    sql`case when ${better} then ${ex(column)} else ${current} end`;
-
-  const returned = await db
+  const source = insertSelect(
+    tripPlaces,
+    {
+      tripId: sql`${tripId}::uuid`,
+      placeId: sql`r.place_id`,
+      source: sql`r.source`,
+      category: sql`r.category`,
+      bestAffinity: sql`r.best_affinity`,
+      bestScore: sql`r.best_score`,
+      signalHash: sql`r.signal_hash`,
+      explainability: sql`coalesce(r.explainability, '[]'::jsonb)`,
+      sharedTags: sql`coalesce(r.shared_tags, '[]'::jsonb)`,
+      advisorPlaceId: sql`case when r.advisor_place_id is null then null else ${advisorLink} end`,
+      reason: sql`r.reason`,
+      position: sql`coalesce(r.position, 0)`,
+    },
+    sql`jsonb_to_recordset(${JSON.stringify(records)}::jsonb) as r(
+      place_id uuid, source text, category text, best_affinity numeric, best_score int, signal_hash text,
+      explainability jsonb, shared_tags jsonb, advisor_place_id uuid, reason text, position int
+    )`,
+    guardOrTrue(turn, tripId),
+  );
+  const pick = (column: string, current: SQL) => sql`case when ${BETTER} then ${ex(column)} else ${current} end`;
+  return db
     .insert(tripPlaces)
-    .values(
-      folded.map((row) => ({
-        tripId,
-        placeId: row.placeId,
-        source: row.source,
-        category: row.category,
-        bestAffinity: row.bestAffinity ?? null,
-        bestScore: row.bestScore ?? null,
-        explainability: row.explainability ?? [],
-        sharedTags: row.sharedTags ?? [],
-        advisorPlaceId: ownAdvisorPlace(row.advisorPlaceId, row.placeId, scope),
-        reason: row.reason ?? null,
-        position: row.position ?? 0,
-      })),
-    )
+    .select(source)
     .onConflictDoUpdate({
       target: [tripPlaces.tripId, tripPlaces.placeId],
       set: {
@@ -249,6 +308,7 @@ export const upsertTripPlaces: UpsertTripPlaces = async (tripId, rows, scope) =>
         category: sql`case when ${tripPlaces.category} = 'other' then ${ex("category")} else ${tripPlaces.category} end`,
         bestScore: pick("best_score", sql`${tripPlaces.bestScore}`),
         bestAffinity: pick("best_affinity", sql`${tripPlaces.bestAffinity}`),
+        signalHash: pick("signal_hash", sql`${tripPlaces.signalHash}`),
         explainability: pick("explainability", sql`${tripPlaces.explainability}`),
         sharedTags: pick("shared_tags", sql`${tripPlaces.sharedTags}`),
         advisorPlaceId: sql`coalesce(${ex("advisor_place_id")}, ${tripPlaces.advisorPlaceId})`,
@@ -257,28 +317,116 @@ export const upsertTripPlaces: UpsertTripPlaces = async (tripId, rows, scope) =>
       },
     })
     .returning({ id: tripPlaces.id, placeId: tripPlaces.placeId });
+}
+
+export const upsertTripPlaces: UpsertTripPlaces = async (tripId, rows, scope, options = {}) => {
+  await requireTripId(tripId, scope);
+  const folded = foldTripPlaces(rows.filter((row) => isUuid(row.placeId)));
+  if (folded.length === 0) return {};
+  const returned = await tripPlacesUpsert(tripId, folded, scope, options.turn);
+  if (returned.length === 0) await assertGuardHeld(options.turn);
   return Object.fromEntries(returned.map((row) => [row.placeId, row.id]));
 };
 
-export const setTripPlaceStatus: SetTripPlaceStatus = async (tripPlaceId, status, scope) => {
+/** What saveReplacement writes. */
+export type ReplacementInput = {
+  removedTripPlaceId: string;
+  /** The idempotency key, a tool call id. Null for a replacement asked from the UI. */
+  key: string | null;
+  place: TripPlaceUpsert;
+  /** The ask tab the removed place was in: the replacement joins it at `rank`. */
+  ask?: { askId: string; rank: number; affinity?: number | null; score?: number | null; explainability?: Explainability };
+};
+
+/**
+ * The replacement for a removed trip place, in one transaction: the new trip
+ * place, the link on the removed one (`replaced_by`, `replacement_key`) and,
+ * when the removed place was in an ask tab, the new place's row in that tab.
+ * A retry with the same key finds the link and returns the same replacement
+ * (lib/agent/tools/place-tools.ts, replace.ts), so it is never added twice.
+ * Returns the replacement's trip place id, null when nothing was written.
+ */
+export async function saveReplacement(
+  tripId: string,
+  input: ReplacementInput,
+  scope: ScopeInput,
+  options: WriteOptions = {},
+): Promise<string | null> {
+  await requireTripId(tripId, scope);
+  if (!isUuid(input.removedTripPlaceId) || !isUuid(input.place.placeId)) throw new NotFoundError("trip place");
+  const guard = guardOrTrue(options.turn, tripId);
+  const newId = sql`(select tp.id from trip_places tp where tp.trip_id = ${tripId}::uuid and tp.place_id = ${input.place.placeId}::uuid)`;
+  const upsert = tripPlacesUpsert(tripId, [input.place], scope, options.turn);
+  const link = db
+    .update(tripPlaces)
+    .set({ replacedBy: newId, replacementKey: input.key, updatedAt: sql`now()` })
+    .where(and(eq(tripPlaces.id, input.removedTripPlaceId), eq(tripPlaces.tripId, tripId), guard))
+    .returning({ replacedBy: tripPlaces.replacedBy });
+  const ask = input.ask;
+  const [written, linked] =
+    ask && isUuid(ask.askId)
+      ? await db.batch([
+          upsert,
+          link,
+          db
+            .insert(askPlaces)
+            .select(
+              insertSelect(
+                askPlaces,
+                {
+                  askId: sql`${ask.askId}::uuid`,
+                  tripPlaceId: newId,
+                  rank: sql`${ask.rank}::int`,
+                  affinity: sql`${ask.affinity ?? null}::numeric`,
+                  score: sql`${ask.score ?? null}::int`,
+                  explainability: sql`${JSON.stringify(ask.explainability ?? [])}::jsonb`,
+                },
+                sql`${tripAsks}`,
+                and(eq(tripAsks.id, ask.askId), eq(tripAsks.tripId, tripId), guard) as SQL,
+              ),
+            )
+            .onConflictDoNothing(),
+        ])
+      : await db.batch([upsert, link]);
+  const id = written[0]?.id ?? null;
+  if (!id || linked.length === 0) {
+    await assertGuardHeld(options.turn);
+    return null;
+  }
+  return id;
+}
+
+export const setTripPlaceStatus: SetTripPlaceStatus = async (tripPlaceId, status, scope, options = {}) => {
   if (!isUuid(tripPlaceId)) throw new NotFoundError("trip place");
-  const where = and(eq(tripPlaces.id, tripPlaceId), inArray(tripPlaces.tripId, ownedTripIds(scope)));
+  const where = and(
+    eq(tripPlaces.id, tripPlaceId),
+    inArray(tripPlaces.tripId, ownedTripIds(scope)),
+    guardOrTrue(options.turn, sql`${tripPlaces.tripId}`),
+  );
   const update = db
     .update(tripPlaces)
     .set({ status, updatedAt: sql`now()` })
     .where(where)
     .returning();
-  if (status !== "removed") return single(await update, "trip place");
-
-  const [rows] = await db.batch([
-    update,
-    db
-      .update(itinerarySlots)
-      .set({ tripPlaceId: null, updatedAt: sql`now()` })
-      .where(
-        and(eq(itinerarySlots.tripPlaceId, tripPlaceId), inArray(itinerarySlots.tripId, ownedTripIds(scope))),
-      ),
-  ]);
+  let rows: TripPlace[];
+  if (status !== "removed") {
+    rows = await update;
+  } else {
+    [rows] = await db.batch([
+      update,
+      db
+        .update(itinerarySlots)
+        .set({ tripPlaceId: null, updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(itinerarySlots.tripPlaceId, tripPlaceId),
+            inArray(itinerarySlots.tripId, ownedTripIds(scope)),
+            guardOrTrue(options.turn, sql`${itinerarySlots.tripId}`),
+          ),
+        ),
+    ]);
+  }
+  if (rows.length === 0) await assertGuardHeld(options.turn);
   return single(rows, "trip place");
 };
 
@@ -293,18 +441,26 @@ function ownedAsk(askId: string, scope: ScopeInput): SQL {
   return and(eq(tripAsks.id, askId), inArray(tripAsks.tripId, ownedTripIds(scope))) as SQL;
 }
 
-export const createAsk: CreateAsk = async (tripId, input, scope) => {
+export const createAsk: CreateAsk = async (tripId, input, scope, options = {}) => {
   await requireTripId(tripId, scope);
+  const turn = options.turn;
+  const source = insertSelect(
+    tripAsks,
+    {
+      tripId: sql`${tripId}::uuid`,
+      label: sql`${input.label.trim()}::text`,
+      query: sql`${JSON.stringify(input.query ?? {})}::jsonb`,
+      toolCallId: sql`${input.toolCallId ?? null}::text`,
+      chatMessageId: sql`${input.chatMessageId ?? null}::text`,
+      status: sql`${input.status ?? "running"}::text`,
+      turnId: sql`${turn?.turnId ?? null}::text`,
+    },
+    sql`(select 1) as one`,
+    guardOrTrue(turn, tripId),
+  );
   const rows = await db
     .insert(tripAsks)
-    .values({
-      tripId,
-      label: input.label.trim(),
-      query: input.query ?? {},
-      toolCallId: input.toolCallId ?? null,
-      chatMessageId: input.chatMessageId ?? null,
-      status: input.status ?? "running",
-    })
+    .select(source)
     .onConflictDoUpdate({
       target: tripAsks.toolCallId,
       // A retried tool call returns its ask; a clash with another trip's ask returns nothing.
@@ -312,6 +468,7 @@ export const createAsk: CreateAsk = async (tripId, input, scope) => {
       setWhere: eq(tripAsks.tripId, tripId),
     })
     .returning(askWithCount);
+  if (rows.length === 0) await assertGuardHeld(turn);
   const row = single(rows, "ask");
   return toAsk(row, row.liveCount);
 };
@@ -321,7 +478,7 @@ export const createAsk: CreateAsk = async (tripId, input, scope) => {
  * ask moves to "done" without an explicit count, the number of its
  * ask_places rows is stored. The returned Ask carries the live count.
  */
-export const updateAsk: UpdateAsk = async (askId, patch, scope) => {
+export const updateAsk: UpdateAsk = async (askId, patch, scope, options = {}) => {
   if (!isUuid(askId)) throw new NotFoundError("ask");
   const finalCount =
     patch.status === "done" && patch.resultCount === undefined ? { resultCount: ASK_PLACE_COUNT } : {};
@@ -333,15 +490,16 @@ export const updateAsk: UpdateAsk = async (askId, patch, scope) => {
       ...(patch.label ? { label: patch.label.trim() } : {}),
       updatedAt: sql`now()`,
     })
-    .where(ownedAsk(askId, scope))
+    .where(and(ownedAsk(askId, scope), guardOrTrue(options.turn, sql`${tripAsks.tripId}`)))
     .returning(askWithCount);
+  if (rows.length === 0) await assertGuardHeld(options.turn);
   const row = single(rows, "ask");
   return toAsk(row, row.liveCount);
 };
 
 export const archiveAsk: ArchiveAsk = (askId, scope) => updateAsk(askId, { status: "archived" }, scope);
 
-export const addAskPlaces: AddAskPlaces = async (askId, rows, scope) => {
+export const addAskPlaces: AddAskPlaces = async (askId, rows, scope, options = {}) => {
   if (!isUuid(askId)) throw new NotFoundError("ask");
   const [ask] = await db
     .select({ tripId: tripAsks.tripId })
@@ -376,10 +534,48 @@ export const addAskPlaces: AddAskPlaces = async (askId, rows, scope) => {
 
   // No recount here: readers count ask_places themselves, so two writers
   // adding results at once can never leave a stale number behind.
-  if (values.length === 0) return { added: 0, rejected };
-  await db
+  const guard = guardOrTrue(options.turn, ask.tripId);
+  // `replace`: these rows are the whole result set, so a retried tool call
+  // that found fewer places leaves none of the first attempt's behind.
+  const keep = values.map((v) => v.tripPlaceId);
+  const prune = db
+    .delete(askPlaces)
+    .where(
+      and(
+        eq(askPlaces.askId, askId),
+        keep.length > 0 ? sql`not (${askPlaces.tripPlaceId} = any(${`{${keep.join(",")}}`}::uuid[]))` : sql`true`,
+        guard,
+      ),
+    );
+  if (values.length === 0) {
+    if (options.replace) await prune;
+    return { added: 0, rejected };
+  }
+  const insert = db
     .insert(askPlaces)
-    .values(values)
+    .select(
+      insertSelect(
+        askPlaces,
+        {
+          askId: sql`${askId}::uuid`,
+          tripPlaceId: sql`r.trip_place_id`,
+          rank: sql`r.rank`,
+          affinity: sql`r.affinity`,
+          score: sql`r.score`,
+          explainability: sql`coalesce(r.explainability, '[]'::jsonb)`,
+        },
+        sql`jsonb_to_recordset(${JSON.stringify(
+          values.map((v) => ({
+            trip_place_id: v.tripPlaceId,
+            rank: v.rank,
+            affinity: v.affinity,
+            score: v.score,
+            explainability: v.explainability,
+          })),
+        )}::jsonb) as r(trip_place_id uuid, rank int, affinity numeric, score int, explainability jsonb)`,
+        guard,
+      ),
+    )
     .onConflictDoUpdate({
       target: [askPlaces.askId, askPlaces.tripPlaceId],
       set: {
@@ -388,7 +584,10 @@ export const addAskPlaces: AddAskPlaces = async (askId, rows, scope) => {
         score: sql`excluded.score`,
         explainability: sql`excluded.explainability`,
       },
-    });
+    })
+    .returning({ id: askPlaces.id });
+  const inserted = options.replace ? (await db.batch([prune, insert]))[1] : await insert;
+  if (inserted.length === 0) await assertGuardHeld(options.turn);
   return { added: values.length, rejected };
 };
 
@@ -415,6 +614,7 @@ type SlotRow = {
   trip_place_id: string | null;
   note: string;
   note_for_traveler: boolean;
+  note_source: "advisor" | "agent";
   position: number;
 };
 
@@ -436,7 +636,9 @@ function toSlotRow(s: SlotInput, ord: number): SlotRow {
     slot: s.slot,
     trip_place_id: s.tripPlaceId ?? null,
     note: s.note?.trim() ?? "",
-    note_for_traveler: s.noteForTraveler ?? false,
+    // An agent note is for the advisor only, whatever the caller asked.
+    note_for_traveler: s.noteSource === "agent" ? false : (s.noteForTraveler ?? false),
+    note_source: s.noteSource ?? "advisor",
     position: s.position ?? 0,
   };
 }
@@ -446,15 +648,25 @@ function toSlotRow(s: SlotInput, ord: number): SlotRow {
  * removed (or that name no place), one per (day, slot, position), the last
  * one winning. Columns follow the itinerary_slots column order.
  */
-function slotSource(tripId: string, rows: SlotRow[]): SQL {
-  return sql`
-    select gen_random_uuid(), ${tripId}::uuid, v.day, v.date, v.slot, v.trip_place_id,
-      v.note, v.note_for_traveler, v.position, now(), now()
-    from (
+function slotSource(tripId: string, rows: SlotRow[], turn: TurnGuard | undefined): SQL {
+  return insertSelect(
+    itinerarySlots,
+    {
+      tripId: sql`${tripId}::uuid`,
+      day: sql`v.day`,
+      date: sql`v.date`,
+      slot: sql`v.slot`,
+      tripPlaceId: sql`v.trip_place_id`,
+      note: sql`v.note`,
+      noteForTraveler: sql`v.note_for_traveler`,
+      noteSource: sql`v.note_source`,
+      position: sql`v.position`,
+    },
+    sql`(
       select distinct on (r.day, r.slot, r.position) r.*
       from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(
         ord int, day int, date date, slot text, trip_place_id uuid,
-        note text, note_for_traveler boolean, position int
+        note text, note_for_traveler boolean, note_source text, position int
       )
       where r.trip_place_id is null or exists (
         select 1 from trip_places tp
@@ -462,7 +674,9 @@ function slotSource(tripId: string, rows: SlotRow[]): SQL {
         for share
       )
       order by r.day, r.slot, r.position, r.ord desc
-    ) v`;
+    ) v`,
+    guardOrTrue(turn, tripId),
+  );
 }
 
 /**
@@ -475,10 +689,15 @@ function noteSet(mode: SlotMode, noteGiven: boolean): Record<string, SQL> {
     return {
       note: sql`case when excluded.note = '' then ${itinerarySlots.note} else excluded.note end`,
       noteForTraveler: sql`case when excluded.note = '' then ${itinerarySlots.noteForTraveler} else excluded.note_for_traveler end`,
+      noteSource: sql`case when excluded.note = '' then ${itinerarySlots.noteSource} else excluded.note_source end`,
     };
   }
   if (mode === "single" && noteGiven) {
-    return { note: sql`excluded.note`, noteForTraveler: sql`excluded.note_for_traveler` };
+    return {
+      note: sql`excluded.note`,
+      noteForTraveler: sql`excluded.note_for_traveler`,
+      noteSource: sql`excluded.note_source`,
+    };
   }
   return {};
 }
@@ -523,6 +742,7 @@ async function writeSlots(
   slots: SlotInput[],
   mode: SlotMode,
   noteGiven = true,
+  turn?: TurnGuard,
 ): Promise<SetSlotsResult> {
   assertSlotShapes(slots);
   // Ids that are not uuids cannot be on the trip; they never reach the uuid cast.
@@ -535,8 +755,8 @@ async function writeSlots(
     .select({ id: tripPlaces.id, status: tripPlaces.status })
     .from(tripPlaces)
     .where(and(eq(tripPlaces.tripId, tripId), inArray(tripPlaces.id, ids)));
-  const clear = db.delete(itinerarySlots).where(eq(itinerarySlots.tripId, tripId));
-  const insert = db.insert(itinerarySlots).select(slotSource(tripId, rows));
+  const clear = db.delete(itinerarySlots).where(and(eq(itinerarySlots.tripId, tripId), guardOrTrue(turn, tripId)));
+  const insert = db.insert(itinerarySlots).select(slotSource(tripId, rows, turn));
 
   let known: { id: string; status: string }[] = [];
   let applied: (typeof itinerarySlots.$inferSelect)[] = [];
@@ -562,13 +782,14 @@ async function writeSlots(
     ]);
   }
 
+  if (rows.length > 0 && applied.length === 0) await assertGuardHeld(turn);
   const statuses = new Map(known.map((row) => [row.id, row.status]));
   return { applied: applied.map(toSlot), rejected: slotRejections(slots, statuses, applied) };
 }
 
-export const setSlots: SetSlots = async (tripId, slots, mode, scope) => {
+export const setSlots: SetSlots = async (tripId, slots, mode, scope, options = {}) => {
   await requireTripId(tripId, scope);
-  return writeSlots(tripId, slots, mode);
+  return writeSlots(tripId, slots, mode, true, options.turn);
 };
 
 export const upsertSlot: UpsertSlot = async (tripId, slot, scope) => {
@@ -596,20 +817,49 @@ export const clearSlot: ClearSlot = async (slotId, scope) => {
 
 // Call log
 
-export const logTripCall: LogTripCall = async (tripId, call, scope) => {
+/**
+ * One call log row. With `key` (agent calls) the row is upserted on
+ * (tool call, step, index), so a retried step rewrites its rows instead of
+ * adding duplicates; with a turn guard it lands only while the turn holds.
+ */
+export const logTripCall: LogTripCall = async (tripId, call, scope, options = {}) => {
   await requireTripId(tripId, scope);
-  const rows = await db
-    .insert(tripCalls)
-    .values({
-      tripId,
-      endpoint: call.endpoint,
-      params: call.params ?? {},
-      count: call.count ?? 0,
-      ms: Math.round(call.ms ?? 0),
-      loosened: call.loosened ?? [],
-      source: call.source ?? "manual",
-    })
-    .returning();
+  const key = call.key;
+  const source = insertSelect(
+    tripCalls,
+    {
+      tripId: sql`${tripId}::uuid`,
+      endpoint: sql`${call.endpoint}::text`,
+      params: sql`${JSON.stringify(call.params ?? {})}::jsonb`,
+      count: sql`${Math.round(call.count ?? 0)}::int`,
+      ms: sql`${Math.round(call.ms ?? 0)}::int`,
+      loosened: sql`${JSON.stringify(call.loosened ?? [])}::jsonb`,
+      source: sql`${call.source ?? "manual"}::text`,
+      toolCallId: sql`${key?.toolCallId ?? null}::text`,
+      step: sql`${key?.step ?? null}::text`,
+      idx: sql`${key?.index ?? null}::int`,
+    },
+    sql`(select 1) as one`,
+    guardOrTrue(options.turn, tripId),
+  );
+  const insert = db.insert(tripCalls).select(source);
+  const rows = await (key
+    ? insert
+        .onConflictDoUpdate({
+          target: [tripCalls.toolCallId, tripCalls.step, tripCalls.idx],
+          set: {
+            endpoint: sql`excluded.endpoint`,
+            params: sql`excluded.params`,
+            count: sql`excluded.count`,
+            ms: sql`excluded.ms`,
+            loosened: sql`excluded.loosened`,
+            source: sql`excluded.source`,
+          },
+          setWhere: eq(tripCalls.tripId, tripId),
+        })
+        .returning()
+    : insert.returning());
+  if (rows.length === 0) await assertGuardHeld(options.turn);
   return single(rows, "trip");
 };
 

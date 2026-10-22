@@ -53,7 +53,7 @@ export async function getTripContextStep(tripId: string): Promise<TripContextOut
 export async function seedTripStep(turn: TurnRef, toolCallId: string, abortSignal?: AbortSignal): Promise<FindPlacesOutput> {
   "use step";
   await assertTurn(turn);
-  return runToolGenerator(toolCallId, seedTripTool(turn, abortSignal), abortSignal);
+  return runToolGenerator(toolCallId, seedTripTool(turn, toolCallId, abortSignal), abortSignal);
 }
 
 export async function findPlacesStep(
@@ -67,10 +67,10 @@ export async function findPlacesStep(
   return runToolGenerator(toolCallId, findPlacesTool(input, turn, toolCallId, abortSignal), abortSignal);
 }
 
-export async function scorePlacesStep(input: ScorePlacesInput, turn: TurnRef): Promise<ScorePlacesOutput> {
+export async function scorePlacesStep(input: ScorePlacesInput, turn: TurnRef, toolCallId: string): Promise<ScorePlacesOutput> {
   "use step";
   await assertTurn(turn);
-  return scorePlacesTool(input, turn);
+  return scorePlacesTool(input, turn, toolCallId);
 }
 
 export async function lookupPlaceStep(input: { place_id: string }, turn: TurnRef): Promise<LookupPlaceOutput> {
@@ -78,17 +78,22 @@ export async function lookupPlaceStep(input: { place_id: string }, turn: TurnRef
   return lookupPlaceTool(input, turn);
 }
 
-export async function setItineraryStep(input: SetItineraryInput, turn: TurnRef): Promise<SetItineraryOutput> {
+export async function setItineraryStep(
+  input: SetItineraryInput,
+  turn: TurnRef,
+  toolCallId: string,
+): Promise<SetItineraryOutput> {
   "use step";
   await assertTurn(turn);
-  return setItineraryTool(input, turn);
+  return setItineraryTool(input, turn, toolCallId);
 }
 
 export async function removePlaceStep(
   input: { place_id: string; replace: boolean },
   turn: TurnRef,
+  toolCallId: string,
 ): Promise<RemovePlaceOutput> {
   "use step";
   await assertTurn(turn);
-  return removePlaceTool(input, turn);
+  return removePlaceTool(input, turn, toolCallId);
 }

@@ -12,9 +12,11 @@ import { findPlaces as defaultFindPlaces, type QlooClient } from "@/lib/qloo";
 import type { FindPlaces, PlaceResult } from "@/lib/qloo/contracts";
 import { CATEGORY_FILTER_TAGS, categoryOf, displayScore, explainabilityFor, sharedTagsFor } from "@/lib/qloo/normalize";
 
+import { signalSetHash } from "./evidence";
 import { asCategory } from "./map";
-import { addAskPlaces, logTripCall, setTripPlaceStatus, upsertTripPlaces } from "./mutations";
+import { logTripCall, saveReplacement, setTripPlaceStatus } from "./mutations";
 import { getTrip, listTripPlaceCards } from "./queries";
+import type { TurnGuard } from "./turn-guard";
 
 // "Not for Ana": the removed place makes room for the next best one. The ask
 // (or board category) that brought the removed place is asked again with the
@@ -22,7 +24,9 @@ import { getTrip, listTripPlaceCards } from "./queries";
 // excluded, so a removed place never comes back and nothing doubles. The best
 // new place is written as a manual trip place with its score and
 // explainability, joins the ask tab the removed place was in, and the calls
-// land in the trip's call log for "How we got this".
+// land in the trip's call log for "How we got this". The replacement and its
+// link on the removed place are one write (saveReplacement): a repeat with
+// the same key returns the same replacement instead of adding another.
 
 const TAKE = 10;
 
@@ -87,6 +91,10 @@ export type ReplaceDeps = {
   /** Overrides the recommendation client (tests). */
   client?: QlooClient;
   findPlaces?: FindPlaces;
+  /** Idempotency key (a tool call id): a repeat with the same key returns the first replacement. */
+  key?: string;
+  /** An agent turn: every write lands only while it holds the chat (turn-guard.ts). */
+  turn?: TurnGuard;
 };
 
 /**
@@ -106,7 +114,13 @@ export async function replaceTripPlace(
 
   const [removedRows, tripRows, askRows, travelerRows] = await db.batch([
     db
-      .select({ category: tripPlaces.category, types: places.types })
+      .select({
+        category: tripPlaces.category,
+        types: places.types,
+        status: tripPlaces.status,
+        replacedBy: tripPlaces.replacedBy,
+        replacementKey: tripPlaces.replacementKey,
+      })
       .from(tripPlaces)
       .innerJoin(places, eq(places.id, tripPlaces.placeId))
       .where(and(eq(tripPlaces.id, tripPlaceId), eq(tripPlaces.tripId, tripId)))
@@ -130,7 +144,13 @@ export async function replaceTripPlace(
   const removed = removedRows[0];
   if (!removed) throw new NotFoundError("trip place");
 
-  await setTripPlaceStatus(tripPlaceId, "removed", scope);
+  // A repeat of the same replacement (same key): the first one comes back.
+  if (deps.key && removed.replacedBy && removed.replacementKey === deps.key) {
+    const [card] = await listTripPlaceCards(tripId, scope, { tripPlaceIds: [removed.replacedBy] });
+    return card ?? null;
+  }
+
+  if (removed.status !== "removed") await setTripPlaceStatus(tripPlaceId, "removed", scope, { turn: deps.turn });
 
   // Same signals as the board: the favorites of the travelers who drive the search.
   const clientIds = [...new Set([trip.clientId, ...travelerRows.flatMap((t) => (t.clientId ? [t.clientId] : []))])];
@@ -169,11 +189,20 @@ export async function replaceTripPlace(
   );
 
   const source = query.askId ? `ask:${query.askId}` : "profile";
-  for (const call of found.calls) {
+  for (const [index, call] of found.calls.entries()) {
     await logTripCall(
       tripId,
-      { endpoint: call.endpoint, params: call.params, count: call.count, ms: call.ms, loosened: found.loosened, source },
+      {
+        endpoint: call.endpoint,
+        params: call.params,
+        count: call.count,
+        ms: call.ms,
+        loosened: found.loosened,
+        source,
+        ...(deps.key ? { key: { toolCallId: deps.key, step: "replace", index } } : {}),
+      },
       scope,
+      { turn: deps.turn },
     );
   }
 
@@ -190,31 +219,29 @@ export async function replaceTripPlace(
   const score = tripAffinities.length > 0 ? displayScore(best.affinity, [...tripAffinities, best.affinity]) : best.score;
   const explainability = explainabilityFor(best, favorites);
 
-  const written = await upsertTripPlaces(
+  const newTripPlaceId = await saveReplacement(
     tripId,
-    [
-      {
+    {
+      removedTripPlaceId: tripPlaceId,
+      key: deps.key ?? null,
+      place: {
         placeId,
         source: "manual",
         category: categoryOf(best.place) === "other" ? category : categoryOf(best.place),
         bestAffinity: best.affinity,
         bestScore: score,
+        signalHash: signalSetHash(favorites.map((f) => f.entityId)) ?? null,
         explainability,
         sharedTags: sharedTagsFor(best.place, tasteTags),
       },
-    ],
+      ...(query.askId
+        ? { ask: { askId: query.askId, rank: query.rank ?? 0, affinity: best.affinity, score, explainability } }
+        : {}),
+    },
     scope,
+    { turn: deps.turn },
   );
-  const newTripPlaceId = written[placeId];
   if (!newTripPlaceId) return null;
-
-  if (query.askId) {
-    await addAskPlaces(
-      query.askId,
-      [{ tripPlaceId: newTripPlaceId, rank: query.rank ?? 0, affinity: best.affinity, score, explainability }],
-      scope,
-    );
-  }
 
   const [card] = await listTripPlaceCards(tripId, scope, { tripPlaceIds: [newTripPlaceId] });
   return card ?? null;

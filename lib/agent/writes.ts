@@ -1,28 +1,34 @@
 import "server-only";
 
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { FatalError } from "workflow";
 
 import type { BuiltFrom, TripSnapshot } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { chats, tripAsks, tripPlaces, trips } from "@/lib/db/schema";
+import { TurnLostError, turnGuardSql, type TurnGuard } from "@/lib/trips/turn-guard";
 
 // Every write an agent tool makes goes through here. Two rules (PLAN 6.1):
 //
 // 1. A write only lands while the turn that made it still holds the chat's
-//    lock (chats.active_turn_id = turnId). A stopped or superseded run can
-//    never touch the board of a newer turn.
+//    lock (chats.active_turn_id = turnId) and no stop was requested
+//    (stop_requested_at is null). A stopped or superseded run can never
+//    touch the board, not even the board of its own turn after Stop.
 // 2. A write is idempotent by key: asks by toolCallId, trip places by
 //    (trip, place), ask places by (ask, trip place), reasons by trip place.
 //    Workflow retries a failed step from the top, so a replay rewrites the
 //    same rows instead of adding new ones.
 //
-// The writes owned here (reasons, ask status, seed state) carry the lock
-// check inside the statement itself (`turnHolds`). Writes that go through the
-// lib/trips and lib/places slices (upserts of places, trip places, asks, ask
-// places, slots, call logs) are wrapped in `guarded`, which checks the lock
-// right before the slice call; those slice writes are keyed upserts, so the
-// worst a turn stopped in between can do is rewrite the same row.
+// The check is part of every write statement, never a read before it: the
+// writes owned here (reasons, ask status, seed state) carry `turnHolds` in
+// their WHERE, and the lib/trips writes (trip places, asks, ask places,
+// slots, call logs, replacements) take the turn as `{ turn }` and put the
+// same guard into their insert or update (lib/trips/turn-guard.ts). `guarded`
+// hands them the guard and turns a blocked write into TurnSupersededError.
+//
+// Two writes are caches, not trip state, and keep a check right before the
+// write (`cacheWrite`): the shared places cache (lib/places) and a client's
+// taste tags (lib/clients). A stop in between can at most refresh a cache.
 
 /** The turn a tool step runs for. Serializable: it crosses the step boundary. */
 export type TurnRef = { chatId: string; tripId: string; turnId: string };
@@ -35,22 +41,32 @@ export class TurnSupersededError extends FatalError {
   }
 }
 
-/** `exists (chat of this trip whose lock is this turn)`, for a WHERE clause. */
-export function turnHolds(turn: TurnRef): SQL {
-  return sql`exists (
-    select 1 from ${chats}
-    where ${chats.id} = ${turn.chatId}
-      and ${chats.tripId} = ${turn.tripId}
-      and ${chats.activeTurnId} = ${turn.turnId}
-  )`;
+/** The lib/trips guard for this turn. */
+export function guardOf(turn: TurnRef): TurnGuard {
+  return { chatId: turn.chatId, turnId: turn.turnId };
 }
 
-/** True while the turn holds its chat's lock. */
+/**
+ * `exists (chat of this trip whose lock is this turn, no stop requested)`,
+ * for a WHERE clause. Takes a share lock on the chat row (turn-guard.ts).
+ */
+export function turnHolds(turn: TurnRef): SQL {
+  return turnGuardSql(guardOf(turn), turn.tripId);
+}
+
+/** True while the turn holds its chat's lock and no stop was requested. */
 export async function holdsTurn(turn: TurnRef): Promise<boolean> {
   const rows = await db
     .select({ id: chats.id })
     .from(chats)
-    .where(and(eq(chats.id, turn.chatId), eq(chats.tripId, turn.tripId), eq(chats.activeTurnId, turn.turnId)))
+    .where(
+      and(
+        eq(chats.id, turn.chatId),
+        eq(chats.tripId, turn.tripId),
+        eq(chats.activeTurnId, turn.turnId),
+        isNull(chats.stopRequestedAt),
+      ),
+    )
     .limit(1);
   return rows.length > 0;
 }
@@ -61,10 +77,24 @@ export async function assertTurn(turn: TurnRef): Promise<void> {
 }
 
 /**
- * Runs a slice write (lib/trips, lib/places) only while the turn holds the
- * lock. The write itself must be a keyed upsert.
+ * Runs a lib/trips write with this turn's guard inside its statement. The
+ * write must pass the guard on (`{ turn: guard }`) and be a keyed upsert.
+ * @throws TurnSupersededError when the guard blocked the write.
  */
-export async function guarded<T>(turn: TurnRef, write: () => Promise<T>): Promise<T> {
+export async function guarded<T>(turn: TurnRef, write: (guard: TurnGuard) => Promise<T>): Promise<T> {
+  try {
+    return await write(guardOf(turn));
+  } catch (error) {
+    if (error instanceof TurnLostError) throw new TurnSupersededError();
+    throw error;
+  }
+}
+
+/**
+ * A cache write (the places cache, a client's taste tags) checked right
+ * before it runs. Only for writes that are not trip state; see the top.
+ */
+export async function cacheWrite<T>(turn: TurnRef, write: () => Promise<T>): Promise<T> {
   await assertTurn(turn);
   return write();
 }
@@ -139,19 +169,23 @@ export async function writeSeedState(
 }
 
 /**
- * The seed's catch path. A seed that was stopped (lock already released)
- * must not stay "running" forever, so this lands while the turn holds the
- * lock or while no turn holds it, and only over a running seed: it never
- * touches a seed a newer turn is running or has finished.
+ * The seed's cleanup (its catch and its finally, which also runs when Stop
+ * ends the generator at a yield). A stopped seed must not stay "running", so
+ * this lands while the turn still has the lock (stop requested or not) or
+ * while no turn has it, and only over a running seed: it never touches a
+ * seed a newer turn is running or has finished. The turn's release does the
+ * same as a backstop (chat-store.ts releaseTurn).
  */
 export async function markSeedFailed(turn: TurnRef): Promise<boolean> {
-  const noTurn = sql`exists (
-    select 1 from ${chats} where ${chats.id} = ${turn.chatId} and ${chats.activeTurnId} is null
+  const ownsOrFree = sql`exists (
+    select 1 from ${chats}
+    where ${chats.id} = ${turn.chatId}
+      and (${chats.activeTurnId} = ${turn.turnId} or ${chats.activeTurnId} is null)
   )`;
   const rows = await db
     .update(trips)
     .set({ seedStatus: "failed", updatedAt: sql`now()` })
-    .where(and(eq(trips.id, turn.tripId), eq(trips.seedStatus, "running"), sql`(${turnHolds(turn)} or ${noTurn})`))
+    .where(and(eq(trips.id, turn.tripId), eq(trips.seedStatus, "running"), ownsOrFree))
     .returning({ id: trips.id });
   return rows.length > 0;
 }

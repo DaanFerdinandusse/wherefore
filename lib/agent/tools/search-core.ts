@@ -11,7 +11,6 @@ import { upsertPlaces } from "@/lib/places";
 import {
   categoryOf,
   displayScore,
-  explainabilityFor,
   scoreEntities,
   sharedTagsFor,
   type NormalizedPlace,
@@ -19,13 +18,14 @@ import {
   type ScoredEntity,
   type SignalScore,
 } from "@/lib/qloo";
-import { addAskPlaces, listTripPlaceCards, upsertTripPlaces } from "@/lib/trips";
+import { addAskPlaces, listTripPlaceCards, upsertTripPlaces, type TripPlaceUpsert } from "@/lib/trips";
+import { signalSetHash } from "@/lib/trips/evidence";
 import { agentModelRef, agentProviderOptions } from "@/lib/codex/provider";
 
-import { explainPlaces, type ExplainInput } from "../explain";
-import { guarded, writeReasons, type TurnRef } from "../writes";
+import { explainPlaces, factSnippets, type ExplainInput } from "../explain";
+import { cacheWrite, guarded, writeReasons, type TurnRef } from "../writes";
 
-import { favoriteSignalScores } from "./signals";
+import { driversFor, isPlainDriver } from "./signals";
 import type { ToolTrip } from "./trip-data";
 
 // The pieces find_places, seed_trip, score_places and remove_place share:
@@ -43,14 +43,34 @@ export type BoardItem = {
   source: TripPlaceSource;
 };
 
-/** Drivers limited to the client's named favorites (see signals.ts). */
+/** Drivers: the client's named favorites, blended advisor places as one "Your places" entry (signals.ts). */
 export function driversOf(ctx: Pick<ToolTrip, "signals">, signalScores: readonly SignalScore[]): Explainability {
-  return explainabilityFor({ signalScores: favoriteSignalScores(signalScores, ctx.signals) }, ctx.signals.favorites);
+  return driversFor(signalScores, ctx.signals);
+}
+
+/** The signal set this trip's searches run on, stored with every affinity (lib/trips/evidence.ts). */
+export function signalHashOf(ctx: Pick<ToolTrip, "signals">): string | undefined {
+  return signalSetHash(ctx.signals.signals);
 }
 
 /** The advisor's saved place id for an entity, if it is one of theirs in this city. */
 export function advisorPlaceIdOf(ctx: Pick<ToolTrip, "advisorPlaces">, entityId: string): string | undefined {
   return ctx.advisorPlaces.find((p) => p.entityId === entityId)?.id;
+}
+
+/** The trip place row for a board item: score, the signal set it was scored on, drivers, shared tags, the advisor link. */
+export function tripPlaceRowOf(ctx: ToolTrip, item: BoardItem, placeId: string): TripPlaceUpsert {
+  return {
+    placeId,
+    source: item.source,
+    category: item.category,
+    bestAffinity: Math.round(item.affinity * 10_000) / 10_000,
+    bestScore: item.score,
+    signalHash: signalHashOf(ctx) ?? null,
+    explainability: driversOf(ctx, item.signalScores),
+    sharedTags: sharedTagsFor(item.place, ctx.tasteTags),
+    advisorPlaceId: advisorPlaceIdOf(ctx, item.place.entityId) ?? null,
+  };
 }
 
 /**
@@ -63,24 +83,12 @@ export async function persistBoardItems(
   items: BoardItem[],
 ): Promise<Map<string, string>> {
   if (items.length === 0) return new Map();
-  const placeIds = await guarded(turn, () => upsertPlaces(items.map((i) => i.place)));
+  const placeIds = await cacheWrite(turn, () => upsertPlaces(items.map((i) => i.place)));
   const rows = items.flatMap((item) => {
     const placeId = placeIds[item.place.entityId];
-    if (!placeId) return [];
-    return [
-      {
-        placeId,
-        source: item.source,
-        category: item.category,
-        bestAffinity: Math.round(item.affinity * 10_000) / 10_000,
-        bestScore: item.score,
-        explainability: driversOf(ctx, item.signalScores),
-        sharedTags: sharedTagsFor(item.place, ctx.tasteTags),
-        advisorPlaceId: advisorPlaceIdOf(ctx, item.place.entityId) ?? null,
-      },
-    ];
+    return placeId ? [tripPlaceRowOf(ctx, item, placeId)] : [];
   });
-  const tripPlaceIds = await guarded(turn, () => upsertTripPlaces(turn.tripId, rows, ctx.scope));
+  const tripPlaceIds = await guarded(turn, (guard) => upsertTripPlaces(turn.tripId, rows, ctx.scope, { turn: guard }));
   const out = new Map<string, string>();
   for (const item of items) {
     const placeId = placeIds[item.place.entityId];
@@ -90,26 +98,53 @@ export async function persistBoardItems(
   return out;
 }
 
-/** Ask tab membership, ranked in the given order (1 = best). */
+/**
+ * One place of an ask's result set, everything a retry needs to rebuild the
+ * tab without searching again (stored in the ask's checkpoint).
+ */
+export type RankedPlace = {
+  tripPlaceId: string;
+  entityId: string;
+  category: Category;
+  affinity: number;
+  score: number;
+  explainability: Explainability;
+};
+
+export function rankedOf(ctx: Pick<ToolTrip, "signals">, tripPlaceId: string, item: BoardItem): RankedPlace {
+  return {
+    tripPlaceId,
+    entityId: item.place.entityId,
+    category: item.category,
+    affinity: Math.round(item.affinity * 10_000) / 10_000,
+    score: item.score,
+    explainability: driversOf(ctx, item.signalScores),
+  };
+}
+
+/**
+ * The ask tab's whole result set, ranked in the given order (1 = best).
+ * Authoritative: ask_places rows of this ask that are not in `ranked` go,
+ * so a retried tool call never leaves the first attempt's extra places.
+ */
 export async function persistAskPlaces(
   turn: TurnRef,
   ctx: ToolTrip,
   askId: string,
-  ranked: { tripPlaceId: string; item: BoardItem }[],
-  startRank = 1,
+  ranked: RankedPlace[],
 ): Promise<void> {
-  if (ranked.length === 0) return;
-  await guarded(turn, () =>
+  await guarded(turn, (guard) =>
     addAskPlaces(
       askId,
-      ranked.map(({ tripPlaceId, item }, index) => ({
-        tripPlaceId,
-        rank: startRank + index,
-        affinity: Math.round(item.affinity * 10_000) / 10_000,
-        score: item.score,
-        explainability: driversOf(ctx, item.signalScores),
+      ranked.map((r, index) => ({
+        tripPlaceId: r.tripPlaceId,
+        rank: index + 1,
+        affinity: r.affinity,
+        score: r.score,
+        explainability: r.explainability,
       })),
       ctx.scope,
+      { turn: guard, replace: true },
     ),
   );
 }
@@ -157,6 +192,27 @@ export async function scoreAdvisorPlaces(
   };
 }
 
+/** The provider's description fields of a place, in the order they are worth reading. */
+export const DESCRIPTION_KEYS = [
+  "short_description",
+  "description",
+  "overall_description",
+  "ambience_description",
+  "cuisine_description",
+  "unique_selling_points",
+  "neighborhood_description",
+  "physical_setting_description",
+] as const;
+
+/** Every description text of a places row, the short ones first. Verbatim, nothing added. */
+export function descriptionTexts(row: { description: string | null; properties: Record<string, unknown> }): string[] {
+  const texts = [
+    ...DESCRIPTION_KEYS.map((key) => row.properties[key]),
+    row.description,
+  ].flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []));
+  return [...new Set(texts)];
+}
+
 /**
  * explainStep: one model call over the cards, grounded reasons written to
  * trip_places.reason (conditional on the turn). Returns the reasons written.
@@ -169,26 +225,33 @@ export async function explainCards(
 ): Promise<Map<string, string>> {
   const todo = cards.filter((c) => !c.reason);
   if (todo.length === 0) return new Map();
-  const tagRows = await db
-    .select({ id: places.id, tags: places.tags })
+  const factRows = await db
+    .select({ id: places.id, description: places.description, properties: places.properties })
     .from(places)
     .where(inArray(places.id, [...new Set(todo.map((c) => c.placeId))]));
-  const tagsByPlace = new Map(tagRows.map((r) => [r.id, r.tags.map((t) => t.name)]));
+  const factsByPlace = new Map(factRows.map((r) => [r.id, factSnippets(descriptionTexts(r))]));
   const inputs: ExplainInput[] = todo.map((card) => ({
     tripPlaceId: card.tripPlaceId,
     name: card.name,
     category: card.category,
     neighborhood: card.neighborhood,
-    because: card.because.map((b) => ({ name: b.name, share: b.share })),
+    because: card.because
+      .filter((b) => !isPlainDriver(b.entityId))
+      .map((b) => ({ name: b.name, share: b.share, entityId: b.entityId })),
     sharedTags: card.sharedTags.map((t) => t.name),
-    tags: tagsByPlace.get(card.placeId) ?? [],
+    facts: factsByPlace.get(card.placeId) ?? [],
     yourPlace: Boolean(card.yourPlace),
   }));
+  const ownerOf: Record<string, string> = {};
+  for (const used of ctx.signals.favoritesUsed) {
+    for (const name of used.names) ownerOf[name] ??= used.clientName;
+  }
   const { reasons } = await explainPlaces(
     inputs,
     {
       clientName: ctx.clientName,
-      extraNames: [...ctx.travelerNames, ctx.destination.name, ...(ctx.destination.disambiguation ? [ctx.destination.disambiguation] : [])],
+      ownerOf,
+      properNames: [ctx.destination.name, ...(ctx.destination.disambiguation ? [ctx.destination.disambiguation] : [])],
     },
     { modelRef: agentModelRef(), providerOptions: agentProviderOptions(turn.chatId), abortSignal },
   );

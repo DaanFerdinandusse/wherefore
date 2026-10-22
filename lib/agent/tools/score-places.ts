@@ -11,9 +11,9 @@ import { upsertPlaces } from "@/lib/places";
 import { displayScore, haversineM, MAX_DISTANCE_FACTOR, scoreEntities, searchEntities, type QlooCall } from "@/lib/qloo";
 import { listTripPlaceCards } from "@/lib/trips";
 
-import { guarded, type TurnRef } from "../writes";
+import { cacheWrite, type TurnRef } from "../writes";
 
-import { advisorPlaceIdOf, driversOf, resolveTripPlaceIds } from "./search-core";
+import { advisorPlaceIdOf, driversOf, resolveTripPlaceIds, signalHashOf } from "./search-core";
 import { loadToolTrip, logCalls } from "./trip-data";
 
 // score_places (PLAN 7): how well a shortlist fits the client. The shortlist
@@ -30,7 +30,8 @@ export type ScorePlacesInput = {
 
 const MAX_NAMES = 10;
 
-export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef): Promise<ScorePlacesOutput> {
+export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef, toolCallId: string): Promise<ScorePlacesOutput> {
+  const key = { toolCallId, step: "score" };
   const ctx = await loadToolTrip(turn.tripId);
   if (ctx.signals.signals.length === 0) {
     return { phase: "done", places: [], error: `${ctx.clientName} has no resolved favorites to score against yet.` };
@@ -74,12 +75,12 @@ export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef): P
       continue;
     }
     const place = hit.place;
-    await guarded(turn, () => upsertPlaces([place]));
+    await cacheWrite(turn, () => upsertPlaces([place]));
     entityIds.add(hit.entityId);
   }
 
   if (entityIds.size === 0) {
-    await logCalls(turn, ctx, calls, "manual");
+    await logCalls(turn, ctx, calls, "manual", key);
     return {
       phase: "done",
       places: [],
@@ -97,17 +98,20 @@ export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef): P
     calls.push(...result.calls);
     scored = result.scores;
   } catch {
-    await logCalls(turn, ctx, calls, "manual");
+    await logCalls(turn, ctx, calls, "manual", key);
     throw new FatalError("Scoring did not answer. Try again in a moment.");
   }
-  await logCalls(turn, ctx, calls, "manual");
+  await logCalls(turn, ctx, calls, "manual", key);
 
-  // The board's scale: this trip's current best affinities.
+  // The board's scale: this trip's current best affinities, scored against
+  // the same signals as these (lib/trips/evidence.ts); others do not compare.
+  const hash = signalHashOf(ctx);
   const boardRows = await db
-    .select({ affinity: tripPlaces.bestAffinity })
+    .select({ affinity: tripPlaces.bestAffinity, signalHash: tripPlaces.signalHash })
     .from(tripPlaces)
     .where(and(eq(tripPlaces.tripId, turn.tripId), isNotNull(tripPlaces.bestAffinity)));
-  const scale = boardRows.map((r) => r.affinity).filter((a): a is number => a !== null);
+  const sameSet = boardRows.filter((r) => !hash || !r.signalHash || r.signalHash === hash);
+  const scale = sameSet.map((r) => r.affinity).filter((a): a is number => a !== null);
   const setAffinities = scale.length > 0 ? scale : scored.map((s) => s.affinity);
 
   // Which of these are on the board already (cards carry ids and your place).

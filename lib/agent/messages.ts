@@ -4,9 +4,12 @@ import {
   type ModelMessage,
   type ProviderMetadata,
   type ToolResultPart,
+  type ToolSet,
 } from "ai";
 
 import type { AppUIMessage, ChatMessageMetadata } from "@/lib/contracts";
+
+import { budgetHistory, HISTORY_TOKEN_BUDGET } from "./history";
 
 // The transcript in both directions:
 //
@@ -187,12 +190,20 @@ export function projectTurnMessage(
 /**
  * The model history for the next turn. Unsettled tool parts (a crash before
  * persistTurn finalized them) are settled first, so a call never goes out
- * without its result.
+ * without its result. With `tools`, each saved tool output goes through that
+ * tool's `toModelOutput` (the compact <trip_data> copy the model saw when the
+ * tool ran), never the card's full JSON with notes and descriptions. The
+ * result is cut to a token budget (history.ts budgetHistory).
  */
-export async function toModelHistory(messages: AppUIMessage[]): Promise<ModelMessage[]> {
+export async function toModelHistory(
+  messages: AppUIMessage[],
+  { tools, maxTokens = HISTORY_TOKEN_BUDGET }: { tools?: ToolSet; maxTokens?: number } = {},
+): Promise<ModelMessage[]> {
   const settled = messages.map((m) => (m.role === "assistant" ? finalizeTurnMessage(m, m.metadata ?? {}) : m));
-  return convertToModelMessages(settled, {
+  const converted = await convertToModelMessages(settled, {
+    ...(tools ? { tools } : {}),
     // Data parts are UI only; the model never sees them.
     convertDataPart: () => undefined,
   });
+  return budgetHistory(converted, maxTokens);
 }

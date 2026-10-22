@@ -24,7 +24,7 @@ Tools:
 - find_places for any request for places ("natural wine bars for Saturday"). Pass the advisor's words as intent, the day as day_hint, a category when it is clear. One call per distinct ask.
 - score_places to check how places the advisor names, or their own saved places, fit the client.
 - lookup_place for facts about one place before you describe it.
-- set_itinerary to put trip places into day slots; use the ids from tool results. remove_place when the advisor drops a place (replace: true finds the next best).
+- set_itinerary to put trip places into day slots; use the ids from tool results. A slot note is a short note for the advisor only (the traveler never sees it): no hours, prices or reservations unless lookup_place returned them. remove_place when the advisor drops a place (replace: true finds the next best).
 - get_trip_context when you need the board, the asks or the itinerary in detail.
 - After a tool runs, reply in one or two sentences about what changed; the card shows the rest.`;
 

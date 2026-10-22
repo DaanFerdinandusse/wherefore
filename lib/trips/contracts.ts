@@ -26,6 +26,8 @@ import type {
 } from "@/lib/contracts";
 import type { tripCalls, tripPlaces, trips, tripTravelers } from "@/lib/db/schema";
 
+import type { TurnGuard } from "./turn-guard";
+
 export type Trip = typeof trips.$inferSelect;
 export type TripTraveler = typeof tripTravelers.$inferSelect;
 export type TripPlace = typeof tripPlaces.$inferSelect;
@@ -118,12 +120,22 @@ export type TripPlaceUpsert = {
   bestAffinity?: number | null;
   /** 0..100 display score from its result set. */
   bestScore?: number | null;
+  /** The signal set `bestAffinity` was scored against (signalSetHash). */
+  signalHash?: string | null;
   explainability?: Explainability;
   sharedTags?: TasteTag[];
   advisorPlaceId?: string | null;
   reason?: string | null;
   position?: number;
 };
+
+/**
+ * Options for a write an agent tool makes: with `turn`, the write lands only
+ * while that turn holds the chat's lock and no stop was requested, checked
+ * inside the statement (turn-guard.ts). A write the guard blocks throws
+ * TurnLostError.
+ */
+export type WriteOptions = { turn?: TurnGuard };
 
 export type AskPlaceInput = {
   tripPlaceId: string;
@@ -149,6 +161,8 @@ export type AskPatch = Partial<{
   resultCount: number;
   elapsedMs: number | null;
   loosened: string[];
+  /** What an agent tool call already did, for a retried step (lib/agent/tools/find-places.ts). */
+  checkpoint: Record<string, unknown> | null;
 }>;
 
 export type SlotInput = {
@@ -159,6 +173,8 @@ export type SlotInput = {
   note?: string;
   /** Show the note on the public traveler view. Written together with the note. */
   noteForTraveler?: boolean;
+  /** Who wrote the note: the advisor (default) or the agent (never shown to the traveler). */
+  noteSource?: "advisor" | "agent";
   position?: number;
 };
 
@@ -173,6 +189,8 @@ export type TripCallInput = {
   loosened?: string[];
   /** seed | ask:<id> | profile | manual */
   source?: string;
+  /** Agent calls: a retried step rewrites the row with the same key instead of adding one. */
+  key?: { toolCallId: string; step: string; index: number };
 };
 
 export type PastDestination = Destination & { lastTripId: string; lastStartDate: string | null; tripCount: number };
@@ -222,16 +240,19 @@ export type UpsertTripPlaces = (
   tripId: string,
   rows: TripPlaceUpsert[],
   scope: ScopeInput,
+  options?: WriteOptions,
 ) => Promise<Record<string, string>>;
 /** "Removed" also empties any slot holding the place. */
 export type SetTripPlaceStatus = (
   tripPlaceId: string,
   status: TripPlaceStatus,
   scope: ScopeInput,
+  options?: WriteOptions,
 ) => Promise<TripPlace>;
 
-export type CreateAsk = (tripId: string, input: CreateAskInput, scope: ScopeInput) => Promise<Ask>;
-export type UpdateAsk = (askId: string, patch: AskPatch, scope: ScopeInput) => Promise<Ask>;
+/** With a turn guard the ask records the turn (trip_asks.turn_id): finishing the turn finishes it. */
+export type CreateAsk = (tripId: string, input: CreateAskInput, scope: ScopeInput, options?: WriteOptions) => Promise<Ask>;
+export type UpdateAsk = (askId: string, patch: AskPatch, scope: ScopeInput, options?: WriteOptions) => Promise<Ask>;
 export type ArchiveAsk = (askId: string, scope: ScopeInput) => Promise<Ask>;
 /**
  * Add ranked results to an ask tab. Trip places of another trip are skipped
@@ -242,6 +263,8 @@ export type AddAskPlaces = (
   askId: string,
   rows: AskPlaceInput[],
   scope: ScopeInput,
+  /** `replace`: the rows are the ask's whole result set; other ask_places rows of the ask go. */
+  options?: WriteOptions & { replace?: boolean },
 ) => Promise<{ added: number; rejected: string[] }>;
 
 /**
@@ -256,9 +279,15 @@ export type SetSlots = (
   slots: SlotInput[],
   mode: "replace" | "merge",
   scope: ScopeInput,
+  options?: WriteOptions,
 ) => Promise<SetSlotsResult>;
 /** One slot; throws InvalidInputError for a trip place outside the trip. */
 export type UpsertSlot = (tripId: string, slot: SlotInput, scope: ScopeInput) => Promise<ItinerarySlot>;
 export type ClearSlot = (slotId: string, scope: ScopeInput) => Promise<void>;
 
-export type LogTripCall = (tripId: string, call: TripCallInput, scope: ScopeInput) => Promise<TripCall>;
+export type LogTripCall = (
+  tripId: string,
+  call: TripCallInput,
+  scope: ScopeInput,
+  options?: WriteOptions,
+) => Promise<TripCall>;
