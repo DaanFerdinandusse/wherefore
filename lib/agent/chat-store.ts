@@ -250,7 +250,51 @@ export type ReleaseOptions = {
 };
 
 /**
- * Releases the lock held by `turnId` and finalizes its turn record, in one
+ * What a turn leaves behind on the board, finished with the turn (PLAN 6.5):
+ * every ask the turn started that is still running (its tool was stopped,
+ * failed or interrupted) becomes done with the places it found, or failed
+ * when it found none; a seed still "running" becomes failed. CTE parts for
+ * the release statement; `released` must return the chat's `trip_id`.
+ */
+function finalizeTurnRecordsSql(turnId: string) {
+  return sql`
+    asks_finished as (
+      update trip_asks set
+        status = case when exists (select 1 from ask_places ap where ap.ask_id = trip_asks.id) then 'done' else 'failed' end,
+        result_count = (select count(*)::int from ask_places ap where ap.ask_id = trip_asks.id),
+        elapsed_ms = coalesce(trip_asks.elapsed_ms, (extract(epoch from now() - trip_asks.created_at) * 1000)::int),
+        updated_at = now()
+      where trip_asks.turn_id = ${turnId} and trip_asks.status = 'running'
+        and exists (select 1 from released)
+      returning trip_asks.id
+    ),
+    seed_finished as (
+      update trips set seed_status = 'failed', updated_at = now()
+      where trips.id = (select trip_id from released) and trips.seed_status = 'running'
+      returning trips.id
+    )`;
+}
+
+/**
+ * Finishes the turn's running asks and a running seed without touching the
+ * lock: the failure path that keeps the lock for the heal path. Lands while
+ * the turn still has the lock (stop requested or not) or no turn has it, so
+ * it never finishes a seed a newer turn runs. The release does the same.
+ */
+export async function finalizeTurnRecords(chatId: string, turnId: string): Promise<void> {
+  await db.execute(sql`
+    with released as (
+      select id, trip_id from chats
+      where id = ${chatId} and (active_turn_id = ${turnId} or active_turn_id is null)
+    ),
+    ${finalizeTurnRecordsSql(turnId)}
+    select 1
+  `);
+}
+
+/**
+ * Releases the lock held by `turnId` and finalizes its turn record, its
+ * running asks and a running seed (finalizeTurnRecordsSql), in one
  * statement. A newer turn's lock is never touched.
  */
 export async function releaseTurn(
@@ -282,8 +326,9 @@ export async function releaseTurn(
         ${pending}
         updated_at = now()
       where id = ${chatId} and active_turn_id = ${turnId}
-      returning id
+      returning id, trip_id
     ),
+    ${finalizeTurnRecordsSql(turnId)},
     finalized as (
       update chat_turns set status = ${turnStatus}, error = ${error}, finished_at = now()
       where turn_id = ${turnId} and chat_id = ${chatId} and exists (select 1 from released)

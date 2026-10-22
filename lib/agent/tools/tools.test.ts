@@ -6,7 +6,7 @@ import { assignResults, categoryCounts, emptyLoopState, runCategoryLoop } from "
 import { activeToolsFor, SEED_TOOL } from "./index";
 import { askLabel, cleanIntent, loosenedCopy, searchTitle, shortDay } from "./labels";
 import { asTripData, DATA_CLOSE } from "./model-output";
-import { buildSignals, favoriteSignalScores, MAX_SIGNALS } from "./signals";
+import { ADVISOR_DRIVER_ID, buildSignals, driversFor, MAX_SIGNALS } from "./signals";
 
 describe("ask labels", () => {
   it("builds the tab label from the intent and the day", () => {
@@ -72,14 +72,39 @@ describe("buildSignals", () => {
     expect(on.signals).toEqual(["e-via", "e-lilia", "e-uva"]);
     expect(on.favorites.map((f) => f.entityId)).not.toContain("e-uva");
     expect(on.advisorSignals).toEqual(["e-uva"]);
-    const scores = favoriteSignalScores(
+  });
+
+  it("keeps blended advisor places in the denominator as one plain Your places entry", () => {
+    const on = buildSignals({ travelers, favorites, advisorPlaceEntityIds: ["e-uva", "e-tasca"], blendMyTaste: true });
+    const drivers = driversFor(
       [
+        { entityId: "e-uva", score: 0.3 },
         { entityId: "e-via", score: 0.5 },
-        { entityId: "e-uva", score: 0.5 },
+        { entityId: "e-tasca", score: 0.2 },
       ],
       on,
     );
-    expect(scores).toEqual([{ entityId: "e-via", score: 0.5 }]);
+    // Via Carota keeps its true 50%, not an inflated 100%.
+    expect(drivers).toEqual([
+      { entityId: "e-via", name: "Via Carota", share: 50 },
+      { entityId: ADVISOR_DRIVER_ID, name: "Your places", share: 50 },
+    ]);
+    // Only advisor places drove it: no client driver to show.
+    expect(driversFor([{ entityId: "e-uva", score: 1 }], on)).toEqual([]);
+    // Blend off: the client's favorites only, as before.
+    const off = buildSignals({ travelers, favorites });
+    expect(
+      driversFor(
+        [
+          { entityId: "e-via", score: 0.6 },
+          { entityId: "e-lilia", score: 0.4 },
+        ],
+        off,
+      ),
+    ).toEqual([
+      { entityId: "e-via", name: "Via Carota", share: 60 },
+      { entityId: "e-lilia", name: "Lilia", share: 40 },
+    ]);
   });
 
   it("caps the signal count", () => {

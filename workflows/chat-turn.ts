@@ -2,12 +2,12 @@ import { WorkflowAgent } from "@ai-sdk/workflow";
 import { isLoopFinished, isStepCount, type ModelMessage } from "ai";
 import { getWorkflowMetadata, getWritable } from "workflow";
 
-import { getChat, markPendingSave, releaseTurn, saveTurnMessage } from "@/lib/agent/chat-store";
+import { finalizeTurnRecords, getChat, markPendingSave, releaseTurn, saveTurnMessage } from "@/lib/agent/chat-store";
 import { trimHistory } from "@/lib/agent/history";
 import { finalizeTurnMessage, hasContent, toModelHistory } from "@/lib/agent/messages";
 import { buildInstructions, seedTurnInstructions } from "@/lib/agent/prompt";
 import { assistantMessageIdFor, type ChatStreamPart } from "@/lib/agent/stream";
-import { activeToolsFor, createChatTools, SEED_TOOL } from "@/lib/agent/tools";
+import { activeToolsFor, createChatTools, historyTools, SEED_TOOL } from "@/lib/agent/tools";
 import { loadTurnModeStep } from "@/lib/agent/tools/steps";
 import { loadTripContext } from "@/lib/agent/trip-context";
 import { readTurnMessage } from "@/lib/agent/turn-stream";
@@ -59,7 +59,10 @@ async function loadTurnInput(chatId: string, turnId: string): Promise<TurnInput 
   return {
     tripId: chat.tripId,
     instructions: buildInstructions(context),
-    messages: await toModelHistory(history),
+    // Saved tool outputs go back through each tool's toModelOutput (the
+    // compact <trip_data> copy), never as the card's full JSON, and the
+    // whole history stays inside a token budget (messages.ts).
+    messages: await toModelHistory(history, { tools: historyTools() }),
     modelRef: agentModelRef(),
     providerOptions: agentProviderOptions(chatId),
   };
@@ -109,7 +112,10 @@ async function persistTurn(args: {
   }
 }
 
-/** Releases the lock and finalizes the turn record (stopped when a stop was requested, else completed). */
+/**
+ * Releases the lock and finalizes the turn record (stopped when a stop was
+ * requested, else completed), the turn's running asks and a running seed.
+ */
 async function markIdle(chatId: string, turnId: string): Promise<void> {
   "use step";
   await releaseTurn(chatId, turnId, { status: "idle", outcome: "auto" });
@@ -118,10 +124,14 @@ async function markIdle(chatId: string, turnId: string): Promise<void> {
 /**
  * Tells the client the turn failed without releasing the lock: the reply is
  * neither saved nor recorded as pending, so the GET heal path must rebuild it
- * from the stream once the run is over.
+ * from the stream once the run is over. The turn's asks and a running seed
+ * are finished now all the same, so no tab spins until then.
  */
-async function notifyTurnError(error: string): Promise<void> {
+async function notifyTurnError(chatId: string, turnId: string, error: string): Promise<void> {
   "use step";
+  await finalizeTurnRecords(chatId, turnId).catch((e: unknown) =>
+    console.error(`[chat ${chatId}] could not finish the asks of turn ${turnId}`, e),
+  );
   const writer = getWritable<ChatStreamPart>().getWriter();
   try {
     await writer.write({ type: "turn-error", errorText: error });
@@ -225,7 +235,7 @@ export async function chatTurn({ chatId, turnId }: { chatId: string; turnId: str
       kept = false;
     }
     if (kept) await markFailed(chatId, turnId, message, true);
-    else await notifyTurnError(message);
+    else await notifyTurnError(chatId, turnId, message);
     outcome = { status: "failed", error: message };
   } finally {
     await closeTurnStream();

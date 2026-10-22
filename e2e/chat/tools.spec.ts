@@ -86,6 +86,9 @@ test("seed turn fills the board, then an ask adds a tab with tiles", async ({ pa
   const ask = afterAsk.asks[0]!;
   expect(ask.status).toBe("done");
   expect(ask.places).toBeGreaterThan(0);
+  // The finished card shows the ask's final count (your places included),
+  // not the count the search stage had.
+  await expect(searchCard.getByText(new RegExp(`^${ask.places} found · \\d+\\.\\d s$`))).toBeVisible();
 
   console.log(
     `[tools.spec] seed turn ${(seedMs / 1000).toFixed(1)} s, ${afterSeed.categories.reduce((n, c) => n + c.n, 0)} trip places in ${seedCategories.size} categories, ${afterSeed.reasons} reasons; ask "${ask.label}" ${(askMs / 1000).toFixed(1)} s, ${ask.places} places`,

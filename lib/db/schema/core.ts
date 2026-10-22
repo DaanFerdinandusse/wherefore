@@ -234,11 +234,17 @@ export const tripAsks = pgTable(
     resultCount: integer("result_count").notNull().default(0),
     elapsedMs: integer("elapsed_ms"),
     loosened: jsonb("loosened").$type<string[]>().notNull().default([]),
+    // The chat turn that runs the ask. Finishing the turn finishes its asks.
+    turnId: text("turn_id"),
+    // What the tool call already did (search results, scoring, explaining),
+    // so a retried step resumes instead of searching again. Agent asks only.
+    checkpoint: jsonb("checkpoint").$type<Record<string, unknown>>(),
     ...stamps,
   },
   (t) => [
     index("trip_asks_trip_idx").on(t.tripId, t.createdAt),
     uniqueIndex("trip_asks_tool_call_idx").on(t.toolCallId),
+    index("trip_asks_turn_idx").on(t.turnId),
   ],
 );
 
@@ -259,6 +265,9 @@ export const tripPlaces = pgTable(
     category: text("category").notNull().default("other"),
     bestAffinity: numeric("best_affinity", { precision: 6, scale: 4, mode: "number" }),
     bestScore: integer("best_score"),
+    // The signal set (favorites and blended places) best_affinity was scored
+    // against. Affinities are compared only within the same set.
+    signalHash: text("signal_hash"),
     explainability: jsonb("explainability").$type<Explainability>().notNull().default([]),
     sharedTags: jsonb("shared_tags").$type<TasteTag[]>().notNull().default([]),
     advisorPlaceId: uuid("advisor_place_id").references(() => advisorPlaces.id, {
@@ -268,6 +277,10 @@ export const tripPlaces = pgTable(
     // suggested | added | removed
     status: text("status").notNull().default("suggested"),
     position: integer("position").notNull().default(0),
+    // A removed place's replacement, written with the replacement itself, and
+    // the key (a tool call id) that asked for it: a retry returns the same one.
+    replacedBy: uuid("replaced_by"),
+    replacementKey: text("replacement_key"),
     ...stamps,
   },
   (t) => [
@@ -315,6 +328,9 @@ export const itinerarySlots = pgTable(
     note: text("note").notNull().default(""),
     // The note shows on the public traveler view only when this is set.
     noteForTraveler: boolean("note_for_traveler").notNull().default(false),
+    // advisor | agent. An agent note is for the advisor only: never shown to
+    // the traveler unless the advisor rewrites it.
+    noteSource: text("note_source").notNull().default("advisor"),
     position: integer("position").notNull().default(0),
     ...stamps,
   },
@@ -339,7 +355,15 @@ export const tripCalls = pgTable(
     loosened: jsonb("loosened").$type<string[]>().notNull().default([]),
     // seed | ask:<id> | profile | manual
     source: text("source").notNull().default("manual"),
+    // Agent calls are keyed by (tool call, step, index): a retried step
+    // rewrites its rows instead of adding new ones. Null for other callers.
+    toolCallId: text("tool_call_id"),
+    step: text("step"),
+    idx: integer("idx"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("trip_calls_trip_idx").on(t.tripId, t.createdAt)],
+  (t) => [
+    index("trip_calls_trip_idx").on(t.tripId, t.createdAt),
+    uniqueIndex("trip_calls_tool_call_step_idx").on(t.toolCallId, t.step, t.idx),
+  ],
 );

@@ -6,10 +6,20 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createClient } from "@/lib/clients";
 import { db } from "@/lib/db";
 import { cleanup, hasDatabase, LISBON, testRun } from "@/lib/db/__tests__/fixtures";
-import { chats, tripAsks, tripPlaces, trips } from "@/lib/db/schema";
+import { askPlaces, chats, tripAsks, tripCalls, tripPlaces, trips } from "@/lib/db/schema";
 import { upsertPlaces } from "@/lib/places";
-import { createAsk, createTrip, upsertTripPlaces } from "@/lib/trips";
+import {
+  addAskPlaces,
+  createAsk,
+  createTrip,
+  logTripCall,
+  setTripPlaceStatus,
+  TurnLostError,
+  updateAsk,
+  upsertTripPlaces,
+} from "@/lib/trips";
 
+import { releaseTurn } from "./chat-store";
 import {
   finishAsk,
   guarded,
@@ -27,6 +37,7 @@ const run = testRun();
 let turn: TurnRef;
 let stale: TurnRef;
 let tripPlaceId: string;
+let placeId: string;
 let askId: string;
 
 async function lockChat(turnId: string | null) {
@@ -48,7 +59,7 @@ describe.skipIf(!hasDatabase)("lib/agent/writes", () => {
     stale = { ...turn, turnId: randomUUID() };
     await lockChat(turn.turnId);
     const placeIds = await upsertPlaces([{ entityId: `${run.entityPrefix}uva`, name: "Senhor Uva" }]);
-    const placeId = placeIds[`${run.entityPrefix}uva`] as string;
+    placeId = placeIds[`${run.entityPrefix}uva`] as string;
     const ids = await upsertTripPlaces(turn.tripId, [{ placeId, source: "ask", category: "drink" }], run.owner);
     tripPlaceId = ids[placeId] as string;
     askId = (await createAsk(turn.tripId, { label: "Natural wine · Sat", toolCallId: `call-${run.entityPrefix}` }, run.owner)).id;
@@ -87,9 +98,99 @@ describe.skipIf(!hasDatabase)("lib/agent/writes", () => {
     expect(await writeSeedState(turn, { seedStatus: "running" })).toBe(true);
   });
 
-  it("guarded throws a non-retryable error once the turn lost the lock", async () => {
-    await expect(guarded(stale, async () => "written")).rejects.toBeInstanceOf(TurnSupersededError);
-    await expect(guarded(turn, async () => "written")).resolves.toBe("written");
+  it("guarded turns a write the guard blocked into a non-retryable error", async () => {
+    const row = [{ placeId, source: "ask" as const, category: "drink" as const }];
+    await expect(
+      guarded(stale, (guard) => upsertTripPlaces(turn.tripId, row, run.owner, { turn: guard })),
+    ).rejects.toBeInstanceOf(TurnSupersededError);
+    await expect(guarded(turn, (guard) => upsertTripPlaces(turn.tripId, row, run.owner, { turn: guard }))).resolves.toEqual({
+      [placeId]: tripPlaceId,
+    });
+  });
+
+  it("drops every tool write once Stop was requested, inside the write statement", async () => {
+    const guard = { chatId: turn.chatId, turnId: turn.turnId };
+    await db.update(chats).set({ stopRequestedAt: new Date() }).where(eq(chats.id, turn.chatId));
+    try {
+      expect(await holdsTurn(turn)).toBe(false);
+      expect(await writeReasons(turn, [{ tripPlaceId, reason: "After stop." }])).toBe(0);
+      await expect(
+        upsertTripPlaces(turn.tripId, [{ placeId, source: "ask", category: "drink" }], run.owner, { turn: guard }),
+      ).rejects.toBeInstanceOf(TurnLostError);
+      await expect(
+        createAsk(turn.tripId, { label: "After stop", toolCallId: `call-stop-${run.entityPrefix}` }, run.owner, { turn: guard }),
+      ).rejects.toBeInstanceOf(TurnLostError);
+      await expect(updateAsk(askId, { label: "Renamed" }, run.owner, { turn: guard })).rejects.toBeInstanceOf(TurnLostError);
+      await expect(addAskPlaces(askId, [{ tripPlaceId, rank: 1 }], run.owner, { turn: guard })).rejects.toBeInstanceOf(
+        TurnLostError,
+      );
+      await expect(
+        logTripCall(turn.tripId, { endpoint: "/v2/insights" }, run.owner, { turn: guard }),
+      ).rejects.toBeInstanceOf(TurnLostError);
+      await expect(setTripPlaceStatus(tripPlaceId, "removed", run.owner, { turn: guard })).rejects.toBeInstanceOf(
+        TurnLostError,
+      );
+      const [tp] = await db.select({ status: tripPlaces.status, reason: tripPlaces.reason }).from(tripPlaces).where(eq(tripPlaces.id, tripPlaceId));
+      expect(tp?.status).toBe("suggested");
+      expect(tp?.reason).not.toBe("After stop.");
+      const asks = await db.select().from(tripAsks).where(eq(tripAsks.toolCallId, `call-stop-${run.entityPrefix}`));
+      expect(asks).toHaveLength(0);
+    } finally {
+      await db.update(chats).set({ stopRequestedAt: null }).where(eq(chats.id, turn.chatId));
+    }
+  });
+
+  it("keys call logs by tool call, step and index, so a retried step rewrites them", async () => {
+    const guard = { chatId: turn.chatId, turnId: turn.turnId };
+    const key = { toolCallId: `call-log-${run.entityPrefix}`, step: "search", index: 0 };
+    await logTripCall(turn.tripId, { endpoint: "/v2/insights", count: 3, key }, run.owner, { turn: guard });
+    await logTripCall(turn.tripId, { endpoint: "/v2/insights", count: 5, key }, run.owner, { turn: guard });
+    const rows = await db.select().from(tripCalls).where(eq(tripCalls.toolCallId, key.toolCallId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.count).toBe(5);
+  });
+
+  it("makes an ask's result set authoritative with replace", async () => {
+    const guard = { chatId: turn.chatId, turnId: turn.turnId };
+    const placeIds = await upsertPlaces([{ entityId: `${run.entityPrefix}extra`, name: "Extra" }]);
+    const extraPlaceId = placeIds[`${run.entityPrefix}extra`] as string;
+    const ids = await upsertTripPlaces(turn.tripId, [{ placeId: extraPlaceId, source: "ask", category: "drink" }], run.owner);
+    const extraId = ids[extraPlaceId] as string;
+    await addAskPlaces(askId, [{ tripPlaceId, rank: 1 }, { tripPlaceId: extraId, rank: 2 }], run.owner, { turn: guard });
+    await addAskPlaces(askId, [{ tripPlaceId, rank: 1 }], run.owner, { turn: guard, replace: true });
+    const members = await db.select().from(askPlaces).where(eq(askPlaces.askId, askId));
+    expect(members.map((m) => m.tripPlaceId)).toEqual([tripPlaceId]);
+  });
+
+  it("finishes the turn's running asks and a running seed when the turn is released", async () => {
+    const turnId = randomUUID();
+    const t2: TurnRef = { ...turn, turnId };
+    const guard = { chatId: turn.chatId, turnId };
+    await lockChat(turnId);
+    const withPlaces = await createAsk(turn.tripId, { label: "Stopped with places", toolCallId: `call-a-${turnId}` }, run.owner, { turn: guard });
+    const empty = await createAsk(turn.tripId, { label: "Stopped empty", toolCallId: `call-b-${turnId}` }, run.owner, { turn: guard });
+    await addAskPlaces(withPlaces.id, [{ tripPlaceId, rank: 1 }], run.owner, { turn: guard });
+    expect(await writeSeedState(t2, { seedStatus: "running" })).toBe(true);
+
+    expect(await releaseTurn(turn.chatId, turnId, { status: "idle" })).toBe(true);
+
+    const rows = await db.select().from(tripAsks).where(eq(tripAsks.turnId, turnId));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(withPlaces.id)).toMatchObject({ status: "done", resultCount: 1 });
+    expect(byId.get(empty.id)).toMatchObject({ status: "failed", resultCount: 0 });
+    const [trip] = await db.select({ seedStatus: trips.seedStatus }).from(trips).where(eq(trips.id, turn.tripId));
+    expect(trip?.seedStatus).toBe("failed");
+    await lockChat(turn.turnId);
+  });
+
+  it("marks a seed failed after Stop while the stopped turn still holds the lock", async () => {
+    await db.update(trips).set({ seedStatus: "running" }).where(eq(trips.id, turn.tripId));
+    await db.update(chats).set({ stopRequestedAt: new Date() }).where(eq(chats.id, turn.chatId));
+    try {
+      expect(await markSeedFailed(turn)).toBe(true);
+    } finally {
+      await db.update(chats).set({ stopRequestedAt: null }).where(eq(chats.id, turn.chatId));
+    }
   });
 
   it("marks a stopped seed failed, but never a seed a newer turn runs", async () => {

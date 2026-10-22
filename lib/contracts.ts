@@ -92,6 +92,8 @@ export type ItinerarySlot = {
   note: string;
   /** The note shows on the public traveler view ("From your advisor") only when true. */
   noteForTraveler?: boolean;
+  /** "agent": written by the agent. Shown to the advisor as "Agent note", never to the traveler. */
+  noteSource?: "advisor" | "agent";
   position: number;
 };
 

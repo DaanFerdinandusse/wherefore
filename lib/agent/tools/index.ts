@@ -7,10 +7,12 @@ import { echoPlacesStep } from "./echo-places";
 import {
   findPlacesForModel,
   lookupPlaceForModel,
+  modelText,
   removePlaceForModel,
   scorePlacesForModel,
   setItineraryForModel,
   tripContextForModel,
+  type ModelText,
 } from "./model-output";
 import { slowCountStep } from "./slow-count";
 import {
@@ -84,7 +86,7 @@ function realTools(turn: TurnRef) {
         names: z.array(z.string().max(80)).max(10).optional(),
         scope: z.literal("advisor_places").optional(),
       }),
-      execute: (input) => scorePlacesStep(input, turn),
+      execute: (input, { toolCallId }) => scorePlacesStep(input, turn, toolCallId),
       toModelOutput: ({ output }) => scorePlacesForModel(output),
     }),
     lookup_place: tool({
@@ -102,21 +104,33 @@ function realTools(turn: TurnRef) {
           .array(
             z.object({
               day: z.number().int().min(1).max(60),
-              slots: z.array(z.object({ slot: slotSchema, place_id: z.string(), note: z.string().max(200).optional() })).max(10),
+              slots: z
+                .array(
+                  z.object({
+                    slot: slotSchema,
+                    place_id: z.string(),
+                    note: z
+                      .string()
+                      .max(200)
+                      .optional()
+                      .describe("A short note for the advisor only, never shown to the traveler. No hours, prices or reservations."),
+                  }),
+                )
+                .max(10),
             }),
           )
           .min(1)
           .max(30),
         mode: z.enum(["replace", "merge"]),
       }),
-      execute: (input) => setItineraryStep(input, turn),
+      execute: (input, { toolCallId }) => setItineraryStep(input, turn, toolCallId),
       toModelOutput: ({ output }) => setItineraryForModel(output),
     }),
     remove_place: tool({
       description:
         "Remove a place from the trip. With replace true, the same ask (or the place's category) runs again without it and the next best place is added.",
       inputSchema: z.object({ place_id: z.string(), replace: z.boolean() }),
-      execute: (input) => removePlaceStep(input, turn),
+      execute: (input, { toolCallId }) => removePlaceStep(input, turn, toolCallId),
       toModelOutput: ({ output }) => removePlaceForModel(output),
     }),
   };
@@ -138,6 +152,37 @@ function devTools() {
       inputSchema: z.object({ to: z.number().int().min(1).max(10).optional() }),
       execute: (input, { toolCallId, abortSignal }) => slowCountStep(input, toolCallId, abortSignal),
     }),
+  };
+}
+
+/** A tool for history conversion only: no execute, a toModelOutput that never throws on an old output shape. */
+function forHistory<T>(project: (output: T) => ModelText) {
+  return tool({
+    inputSchema: z.unknown(),
+    toModelOutput: ({ output }) => {
+      try {
+        return project(output as T);
+      } catch {
+        return modelText({ note: "An older result that can no longer be shown. Call the tool again if you need it." });
+      }
+    },
+  });
+}
+
+/**
+ * The tools as toModelHistory needs them: only each tool's model view, so a
+ * saved output goes back to the model as the same compact <trip_data> copy
+ * it saw when the tool ran (messages.ts). Pure, safe in any step.
+ */
+export function historyTools() {
+  return {
+    seed_trip: forHistory(findPlacesForModel),
+    get_trip_context: forHistory(tripContextForModel),
+    find_places: forHistory(findPlacesForModel),
+    score_places: forHistory(scorePlacesForModel),
+    lookup_place: forHistory(lookupPlaceForModel),
+    set_itinerary: forHistory(setItineraryForModel),
+    remove_place: forHistory(removePlaceForModel),
   };
 }
 

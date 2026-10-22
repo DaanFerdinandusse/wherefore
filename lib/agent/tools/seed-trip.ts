@@ -14,7 +14,7 @@ import {
   type PlaceResult,
 } from "@/lib/qloo";
 
-import { assertTurn, guarded, markSeedFailed, writeSeedState, type TurnRef } from "../writes";
+import { assertTurn, cacheWrite, guarded, markSeedFailed, writeSeedState, type TurnRef } from "../writes";
 
 import { categoryCounts, runCategoryLoop, type CategoryLoopState } from "./category-loop";
 import { basedOnFavorites, CATEGORY_PHRASE, searchDetails, SEED_CATEGORIES, seconds } from "./labels";
@@ -25,7 +25,7 @@ import {
   scoreAdvisorPlaces,
   type BoardItem,
 } from "./search-core";
-import { firstName, loadToolTrip, logCalls, type ToolTrip } from "./trip-data";
+import { firstName, loadToolTrip, logCalls, type CallKey, type ToolTrip } from "./trip-data";
 
 // seed_trip (PLAN 8): the first turn's deterministic setup, no model inside
 // except the explain step. Five category searches in sequence fill the board
@@ -60,27 +60,36 @@ export function askNextFor(input: {
 
 export async function* seedTripTool(
   turn: TurnRef,
+  toolCallId: string,
   abortSignal?: AbortSignal,
 ): AsyncGenerator<FindPlacesOutput, FindPlacesOutput> {
   const started = Date.now();
   const elapsed = () => Date.now() - started;
   const ctx = await loadToolTrip(turn.tripId);
+  let finished = false;
   try {
-    return yield* seed(ctx, turn, elapsed, abortSignal);
+    const out = yield* seed(ctx, turn, toolCallId, elapsed, abortSignal);
+    finished = true;
+    return out;
   } catch (error) {
-    await markSeedFailed(turn).catch(() => false);
     if (abortSignal?.aborted || error instanceof FatalError) throw error;
     console.error(`[seed_trip ${turn.tripId}] failed`, error);
     throw new FatalError("Could not build the first list. Send it again to retry.");
+  } finally {
+    // Also runs when Stop ends the generator at a yield (generator.return()
+    // skips the catch): a seed that did not reach done never stays "running".
+    if (!finished) await markSeedFailed(turn).catch(() => false);
   }
 }
 
 async function* seed(
   ctx: ToolTrip,
   turn: TurnRef,
+  toolCallId: string,
   elapsed: () => number,
   abortSignal?: AbortSignal,
 ): AsyncGenerator<FindPlacesOutput, FindPlacesOutput> {
+  const key = (step: string): CallKey => ({ toolCallId, step });
   await writeSeedState(turn, { seedStatus: "running" });
   const client = firstName(ctx.clientName);
   const basedOn = basedOnFavorites(ctx.signals.favoritesUsed.map((f) => f.clientName));
@@ -122,9 +131,9 @@ async function* seed(
   if (ctx.client && ownSignals.length > 0 && isStale(ctx.client.tasteTagsAt)) {
     try {
       const portrait = await tastePortrait(ownSignals, { tripId: ctx.trip.id });
-      await logCalls(turn, ctx, portrait.calls, "seed");
+      await logCalls(turn, ctx, portrait.calls, "seed", key("portrait"));
       if (portrait.tags.length > 0) {
-        await guarded(turn, () => setTasteTags(ctx.clientId, portrait.tags, ctx.scope));
+        await cacheWrite(turn, () => setTasteTags(ctx.clientId, portrait.tags, ctx.scope));
         const known = new Set(portrait.tags.map((t) => t.name.toLowerCase()));
         ctx.tasteTags = [...portrait.tags, ...ctx.tasteTags.filter((t) => !known.has(t.name.toLowerCase()))];
       }
@@ -150,7 +159,7 @@ async function* seed(
           },
           { tripId: ctx.trip.id },
         );
-        await logCalls(turn, ctx, found.calls, "seed", found.loosened);
+        await logCalls(turn, ctx, found.calls, "seed", key(`search:${category}`), found.loosened);
         return { results: found.results, loosened: found.loosened };
       } catch (error) {
         if (error instanceof QlooLocalityMismatchError) mismatch = error;
@@ -221,7 +230,7 @@ async function* seed(
     try {
       const seedAffinities = Object.values(state.byCategory).flatMap((list) => list.map((r) => r.affinity));
       const { scores, calls } = await scoreAdvisorPlaces(ctx, seedAffinities);
-      await logCalls(turn, ctx, calls, "seed");
+      await logCalls(turn, ctx, calls, "seed", key("score"));
       const ids = await persistBoardItems(turn, ctx, scores.map((s) => s.item));
       for (const s of scores) {
         const id = ids.get(s.item.place.entityId);
@@ -232,7 +241,7 @@ async function* seed(
       const scoredIds = new Set(scores.map((s) => s.item.place.entityId));
       const unscored = ctx.advisorPlaces.filter((p) => !scoredIds.has(p.entityId));
       if (unscored.length > 0) {
-        const unscoredIds = await guarded(turn, () =>
+        const unscoredIds = await guarded(turn, (guard) =>
           upsertTripPlaces(
             turn.tripId,
             unscored.map((p) => ({
@@ -242,6 +251,7 @@ async function* seed(
               advisorPlaceId: p.id,
             })),
             ctx.scope,
+            { turn: guard },
           ),
         );
         for (const p of unscored) {

@@ -51,12 +51,22 @@ function StepRow({ step }: { step: ToolStep }) {
   );
 }
 
+/** "14 found · 3.2 s": the live count while running, the final count and time once done. */
 function figureFor(output: FindPlacesOutput | undefined, running: boolean): string | undefined {
   if (!output) return undefined;
-  const search = output.steps?.find((s) => s.key === "search");
   if (running && output.count === 0) return undefined;
-  if (search?.note && !running) return search.note;
   return `${output.count} found · ${seconds(output.elapsedMs)}`;
+}
+
+/**
+ * The search stage's own figure ("Search: 12 found · 1.4 s") once the tool is
+ * done, when it differs from the final one (your places joined the ask, or
+ * the total time includes scoring and explaining).
+ */
+function searchStageLine(output: FindPlacesOutput | undefined, running: boolean): string | undefined {
+  const note = output?.steps?.find((s) => s.key === "search")?.note;
+  if (running || !note || !output) return undefined;
+  return note === figureFor(output, false) ? undefined : `Search: ${note}`;
 }
 
 export function SearchCard({ tool, state, preliminary, input, output, destination, errorText, onRetry, ...handlers }: Props) {
@@ -76,6 +86,7 @@ export function SearchCard({ tool, state, preliminary, input, output, destinatio
       : searchTitle(input?.intent ?? "places", running, input?.day_hint));
   const details = running && output?.progress ? output.progress : output?.details;
   const extraSteps = (output?.steps ?? []).filter((s) => s.key !== "search");
+  const stageLine = failed ? undefined : searchStageLine(output, running);
   const notes = [...loosenedCopy(output?.loosened ?? []), ...(!running && output?.progress ? [output.progress] : [])];
 
   return (
@@ -87,6 +98,12 @@ export function SearchCard({ tool, state, preliminary, input, output, destinatio
         details={details}
         figure={figureFor(output, running)}
       />
+
+      {stageLine ? (
+        <p className="pl-8 text-meta text-text-2" data-testid="search-stage-line">
+          {stageLine}
+        </p>
+      ) : null}
 
       {places.length > 0 ? (
         <ul

@@ -8,6 +8,8 @@ export * from "./contracts";
 export { computeStage, tripDayCount, todayIso, TRIP_STAGES } from "./stage";
 export { SOURCE_PRIORITY, mergeTripPlace } from "./merge";
 export { SLOT_ORDER, defaultTripTitle } from "./map";
+export { signalSetHash } from "./evidence";
+export { TurnLostError, type TurnGuard } from "./turn-guard";
 export { toSharedTripView } from "./share";
 export {
   clientPastDestinations,
@@ -28,6 +30,7 @@ export {
   createTrip,
   logTripCall,
   revokeShare,
+  saveReplacement,
   setShareToken,
   setSlots,
   setStageOverride,

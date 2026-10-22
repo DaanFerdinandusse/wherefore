@@ -1,4 +1,6 @@
-import type { BuiltFrom } from "@/lib/contracts";
+import type { BuiltFrom, Explainability } from "@/lib/contracts";
+import type { SignalScore } from "@/lib/qloo/contracts";
+import { explainabilityFor, OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
 
 // Which entities drive a search for this trip (PLAN 8 step 1). Pure.
 //
@@ -9,8 +11,9 @@ import type { BuiltFrom } from "@/lib/contracts";
 //   a companion without favorites (the "Built from" box says so).
 // - The advisor's own places are extra signals only when the advisor turned
 //   on "Blend my taste". They never count as the client's favorites: their
-//   share is left out of the drivers so a card never says the client loves a
-//   place she has not named.
+//   share is one "Your places" driver entry (driversFor), so a card never
+//   says the client loves a place she has not named, and the client's own
+//   shares keep their true size.
 
 /** More signals than this only add noise and length to the request. */
 export const MAX_SIGNALS = 24;
@@ -88,15 +91,39 @@ export function buildSignals(input: {
   return { signals, favorites, favoritesUsed, companionsWithoutFavorites, advisorSignals };
 }
 
+/** The one driver entry that holds every blended advisor place: a plain bar, never a favorite. */
+export const ADVISOR_DRIVER_ID = "advisor";
+export const ADVISOR_DRIVER_NAME = "Your places";
+
 /**
- * Signal scores limited to the client's named favorites, so blended advisor
- * signals never show up as drivers (not even as "Other favorites").
+ * A result's drivers ("because they loved"), with blended advisor signals
+ * kept in the denominator: their share becomes one `{ entityId: "advisor",
+ * name: "Your places" }` entry after the named favorites (and before "Other
+ * favorites"), so a client favorite's share is never inflated by leaving the
+ * advisor's places out, and the advisor's places never read as something the
+ * client loves.
  */
-export function favoriteSignalScores<T extends { entityId: string }>(
-  signalScores: readonly T[],
-  signals: Pick<TripSignals, "advisorSignals">,
-): T[] {
-  if (signals.advisorSignals.length === 0) return [...signalScores];
-  const skip = new Set(signals.advisorSignals);
-  return signalScores.filter((s) => !skip.has(s.entityId));
+export function driversFor(
+  signalScores: readonly SignalScore[],
+  signals: Pick<TripSignals, "favorites" | "advisorSignals">,
+): Explainability {
+  const advisor = new Set(signals.advisorSignals);
+  const merged = signalScores.map((s) => (advisor.has(s.entityId) ? { entityId: ADVISOR_DRIVER_ID, score: s.score } : s));
+  const rows = explainabilityFor({ signalScores: merged }, [
+    ...signals.favorites.filter((f) => !advisor.has(f.entityId)),
+    ...(advisor.size > 0 ? [{ entityId: ADVISOR_DRIVER_ID, name: ADVISOR_DRIVER_NAME }] : []),
+  ]);
+  // explainabilityFor needs one named client favorite: "Your places" alone is not a driver list.
+  if (!rows.some((r) => r.entityId !== ADVISOR_DRIVER_ID && r.entityId !== OTHER_FAVORITES_ID)) return [];
+  const named = rows.filter((r) => r.entityId !== ADVISOR_DRIVER_ID && r.entityId !== OTHER_FAVORITES_ID);
+  return [
+    ...named,
+    ...rows.filter((r) => r.entityId === ADVISOR_DRIVER_ID),
+    ...rows.filter((r) => r.entityId === OTHER_FAVORITES_ID),
+  ];
+}
+
+/** True for a driver entry that is not one of the client's favorites ("Your places", "Other favorites"). */
+export function isPlainDriver(entityId: string): boolean {
+  return entityId === ADVISOR_DRIVER_ID || entityId === OTHER_FAVORITES_ID;
 }
