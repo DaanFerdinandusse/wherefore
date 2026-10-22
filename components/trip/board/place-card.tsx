@@ -28,7 +28,10 @@ export type PlaceCardProps = {
   card: TripPlaceCard;
   clientName: string;
   size: PhotoCardSize;
-  /** Arch top: the featured card when it carries the advisor's note. */
+  /**
+   * Arch top: the featured card when it carries the advisor's note. A soft
+   * 72px arch, because a full half circle on a wide card clips the badges.
+   */
   arch?: boolean;
   highlighted: boolean;
   /** "New from your ask" when an ask tab is showing its own results. */
@@ -125,7 +128,7 @@ export function PlaceCard({
       onBlur={() => onHover(null)}
       onClickCapture={onClickCapture}
       onKeyDown={onKeyNav}
-      className={cn("rise-in @container", className)}
+      className={cn("rise-in", className)}
     >
       <PhotoCard
         src={card.imageUrl ?? NO_IMAGE}
@@ -136,7 +139,7 @@ export function PlaceCard({
         href={`?place=${card.tripPlaceId}`}
         highlighted={highlighted}
         priority={priority}
-        className={cn("size-full", arch && "arch-top-fluid!")}
+        className={cn("size-full", arch && "rounded-t-[72px]!")}
         badges={
           <>
             {card.score !== undefined ? <MatchPill score={card.score} tone="light" /> : null}

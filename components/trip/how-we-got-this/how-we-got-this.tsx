@@ -23,7 +23,7 @@ export function keyParams(params: Record<string, unknown>): { key: string; value
   return Object.entries(params)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
     .map(([key, value]) => ({ key: key.replace(/^(filter|signal)\./, ""), value: paramText(value) }))
-    .slice(0, 6);
+    .slice(0, 10);
 }
 
 function sourceLabel(source: string): string {

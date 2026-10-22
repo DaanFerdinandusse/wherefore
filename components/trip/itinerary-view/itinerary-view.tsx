@@ -145,7 +145,7 @@ function EmptySlot({ day, slot, actions }: { day: number; slot: SlotName; action
     >
       <span className="flex flex-col gap-0.5">
         <span className="label-caps text-text-muted">{SLOT_LABELS[slot]}</span>
-        <span className="text-ui-sm text-text-muted">{drop.over ? "Drop to add" : "Drag a place here or ask the agent"}</span>
+        <span className="text-ui-sm text-text-muted">{drop.over ? "Drop to add" : "Drag a place here"}</span>
       </span>
       <Button
         variant="outline"
