@@ -42,3 +42,6 @@ next-env.d.ts
 
 # workflow devkit local world
 /.workflow-data/
+
+# e2e session state and throwaway credentials
+/e2e/.auth/
