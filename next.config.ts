@@ -5,8 +5,12 @@ const nextConfig: NextConfig = {
   // The Next agent-rules block contains an em dash, which this repo bans.
   agentRules: false,
   images: {
-    // Provider images on cards, Google photos through our proxy (same origin),
-    // and Google avatar or photo hosts.
+    // Provider images and our photo proxy load directly (unoptimized, see
+    // lib/images/source.ts); the optimizer keeps static files and Google
+    // avatar or photo hosts. The provider hosts stay listed so an explicit
+    // optimized use still works.
+    // Optimized copies live a day at least, whatever the upstream header says.
+    minimumCacheTTL: 86_400,
     remotePatterns: [
       { protocol: "https", hostname: "images.qloo.com" },
       { protocol: "https", hostname: "**.qloo.com" },

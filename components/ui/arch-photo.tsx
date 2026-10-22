@@ -1,6 +1,7 @@
 import type { ImageProps } from "next/image";
 import { Images } from "lucide-react";
 
+import { imagePolicy } from "@/lib/images/source";
 import { cn } from "@/lib/ui/cn";
 
 import { FilmImage } from "./film-image";
@@ -8,7 +9,9 @@ import { FilmImage } from "./film-image";
 // The arch-topped photo of the place profile: a true half circle on top
 // (`arch-top-fluid`, sized from the wrapper's width), 24px corners below, and
 // an optional caption chip ("1 of 214 photos"). Size it with `className`
-// (width plus height or an aspect ratio).
+// (width plus height or an aspect ratio). Provider photos and our photo proxy
+// load directly over the warm frame (imagePolicy in lib/images/source.ts), so
+// `sizes` only matters for optimized sources.
 export function ArchPhoto({
   src,
   alt,
@@ -25,10 +28,11 @@ export function ArchPhoto({
   sizes?: string;
   className?: string;
 }) {
+  const policy = imagePolicy(src);
   return (
     <div className={cn("@container relative", className)}>
-      <div className="arch-top-fluid relative size-full overflow-hidden bg-avatar">
-        <FilmImage src={src} alt={alt} priority={priority} sizes={sizes} />
+      <div data-image-source={policy.source} className="arch-top-fluid relative size-full overflow-hidden bg-avatar">
+        <FilmImage src={src} alt={alt} priority={priority} sizes={policy.unoptimized ? undefined : sizes} />
       </div>
       {caption ? (
         <span className="absolute bottom-4 left-4 inline-flex items-center gap-1.5 rounded-pill border border-white/30 bg-ink/35 px-3 py-[7px] text-ui-sm font-semibold text-white backdrop-blur-[14px]">
