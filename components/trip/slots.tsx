@@ -24,13 +24,6 @@ export function PlaceProfileSlot(props: PlaceProfileProps) {
   return <PlaceProfile {...props} />;
 }
 
-export function ChatDockSlot({ toggle, className, ...props }: ChatDockProps) {
-  // The Board / Map toggle sits centered above the dock until the dock takes
-  // it through its own `toggle` prop (the tools branch adds onPlaces and toggle).
-  return (
-    <div className={className}>
-      {toggle ? <div className="mb-4 flex justify-center">{toggle}</div> : null}
-      <ChatDock {...props} />
-    </div>
-  );
+export function ChatDockSlot(props: ChatDockProps) {
+  return <ChatDock {...props} />;
 }
