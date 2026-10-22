@@ -23,6 +23,7 @@ async function Lab({ searchParams }: Props) {
     <ChatDock
       key={chatId}
       chatId={chatId}
+      tripId={snapshot.chat.tripId}
       initial={snapshot}
       className="h-[calc(100dvh-7rem)] w-full max-w-[440px]"
     />
