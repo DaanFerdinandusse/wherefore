@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { NewTripLauncher } from "@/components/new-trip/new-trip-launcher";
 import { AppBarContainer } from "@/components/shell/app-bar-container";
 import { getOptionalUser } from "@/lib/auth/server";
 
@@ -18,6 +19,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <SignedInAppBar />
       </Suspense>
       {children}
+      <Suspense fallback={null}><NewTripLauncher /></Suspense>
     </div>
   );
 }
