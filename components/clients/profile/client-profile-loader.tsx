@@ -1,0 +1,41 @@
+import { notFound } from "next/navigation";
+
+import { requirePageUser } from "@/lib/auth/server";
+import { getClientProfile, listClientTripCards } from "@/lib/clients";
+
+import { toFavoriteTile } from "../favorites";
+import { todayIso } from "../format";
+import { ClientProfile } from "./client-profile";
+import type { ClientProfileData } from "./types";
+
+// Loads one client for C (the profile) on the server and hands the screen
+// plain data. Out of scope or unknown ids are a 404.
+export async function ClientProfileLoader({ params }: { params: Promise<{ id: string }> }) {
+  const user = await requirePageUser();
+  const { id } = await params;
+  const profile = await getClientProfile(id, user);
+  if (!profile) notFound();
+
+  const { client, favorites, trips } = profile;
+  const ids = [...trips.upcoming, ...trips.past].map((trip) => trip.id);
+  const cards = new Map((await listClientTripCards(ids, user)).map((card) => [card.id, card]));
+  const toCards = (rows: { id: string }[]) => rows.flatMap((row) => cards.get(row.id) ?? []);
+
+  const data: ClientProfileData = {
+    id: client.id,
+    name: client.name,
+    homeCity: client.homeCity ?? "",
+    homeLat: client.homeLat,
+    homeLon: client.homeLon,
+    notes: client.notes,
+    groundRules: client.groundRules,
+    mediaFavorites: client.mediaFavorites,
+    tasteTags: client.tasteTags,
+    createdAt: client.createdAt.toISOString(),
+    favorites: favorites.map(toFavoriteTile),
+    trips: { upcoming: toCards(trips.upcoming), past: toCards(trips.past) },
+  };
+
+  // Keyed by id so a soft navigation to another client starts from its own data.
+  return <ClientProfile key={client.id} initial={data} isNew={false} today={todayIso()} />;
+}
