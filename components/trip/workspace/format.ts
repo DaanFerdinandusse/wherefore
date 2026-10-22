@@ -3,6 +3,7 @@
 // and only ever built from data we have (no invented facts).
 
 import type { BuiltFrom, Category, Explainability, SlotName, TripSnapshot } from "@/lib/contracts";
+import { OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
 
 export const SLOT_LABELS: Record<SlotName, string> = {
   morning: "Morning",
@@ -68,9 +69,14 @@ function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
-/** "Because Ana loves Via Carota and Lilia", from the top two drivers. Empty without drivers. */
+/** The favorites a place is credited to by name: never the synthetic "Other favorites" bucket. */
+export function namedDrivers(because: Explainability): Explainability {
+  return because.filter((d) => d.entityId !== OTHER_FAVORITES_ID && d.name.trim().length > 0);
+}
+
+/** "Because Ana loves Via Carota and Lilia", from the top two named drivers. Empty without one. */
 export function becauseLine(because: Explainability, clientName: string): string {
-  const top = [...because]
+  const top = namedDrivers(because)
     .sort((a, b) => b.share - a.share)
     .slice(0, 2)
     .map((d) => d.name)

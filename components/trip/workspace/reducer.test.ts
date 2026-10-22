@@ -6,15 +6,16 @@ import {
   activeAskPlaceIds,
   dayCount,
   initialState,
+  applySlotWrites,
   liveAsks,
-  moveWrites,
   nextFreeSlot,
   reduce,
+  swapWrites,
   tabCounts,
   visiblePlaces,
   type WorkspaceState,
 } from "./reducer";
-import { readUrlState, writeUrlState } from "./url-state";
+import { historyMode, readUrlState, writeUrlState } from "./url-state";
 
 const ASK = "11111111-1111-4111-8111-111111111111";
 
@@ -201,6 +202,27 @@ describe("slots and days", () => {
     expect(dayCount(unset)).toBe(3);
     unset = reduce(unset, { type: "addDay" });
     expect(dayCount(unset)).toBe(4);
+    expect(unset.requestedDays).toBe(4);
+  });
+
+  it("filling an added day does not add another (requestedDays is absolute)", () => {
+    let state = initialState(snapshot({ places: [card("a")] }, { startDate: undefined, endDate: undefined, datesMode: "unset" }));
+    state = reduce(state, { type: "addDay" });
+    expect(dayCount(state)).toBe(4);
+    state = reduce(state, { type: "slot", write: { day: 4, slot: "lunch", tripPlaceId: "a" } });
+    expect(dayCount(state)).toBe(4);
+    state = reduce(state, { type: "addDay" });
+    expect(dayCount(state)).toBe(5);
+    // A slot on a later day (from the agent) grows the count; the request is kept.
+    state = reduce(state, { type: "slot", write: { day: 7, slot: "dinner", tripPlaceId: "a" } });
+    expect(dayCount(state)).toBe(7);
+  });
+
+  it("days are the largest of dates, occupied days and the requested count", () => {
+    let state = initialState(snapshot({ places: [card("a")], slots: [slot(6, "lunch", "a")] }));
+    expect(dayCount(state)).toBe(6);
+    state = reduce(state, { type: "addDay" });
+    expect(dayCount(state)).toBe(7);
   });
 
   it("finds the next free slot that suits the category", () => {
@@ -211,13 +233,49 @@ describe("slots and days", () => {
     expect(nextFreeSlot(full, "stay")).toBeNull();
   });
 
-  it("moves a place within a day by swapping with the target slot", () => {
-    const slots = [slot(1, "morning", "a", "Early"), slot(1, "afternoon", "b")];
-    expect(moveWrites(slots, { day: 1, slot: "morning" }, { day: 1, slot: "afternoon" })).toEqual([
-      { day: 1, slot: "afternoon", tripPlaceId: "a", note: "Early" },
-      { day: 1, slot: "morning", tripPlaceId: "b", note: "" },
+  it("reorder swaps place, note and traveler flag exactly", () => {
+    const slots = [{ ...slot(1, "morning", "a", "Early"), noteForTraveler: true }, slot(1, "afternoon", "b")];
+    const writes = swapWrites(slots, { day: 1, slot: "morning" }, { day: 1, slot: "afternoon" });
+    expect(writes).toEqual([
+      { day: 1, slot: "afternoon", position: 0, tripPlaceId: "a", note: "Early", noteForTraveler: true },
+      { day: 1, slot: "morning", position: 0, tripPlaceId: "b", note: "", noteForTraveler: false },
     ]);
-    expect(moveWrites(slots, { day: 1, slot: "morning" }, { day: 1, slot: "night" })[1]).toMatchObject({ tripPlaceId: null });
+    // The noted place moved over an unnoted one: the note is on one slot only.
+    let state = initialState(snapshot({ places: [card("a"), card("b")], slots }));
+    for (const write of writes) state = reduce(state, { type: "slot", write });
+    expect(state.slots.map((s) => [s.slot, s.tripPlaceId, s.note, s.noteForTraveler])).toEqual([
+      ["morning", "b", "", false],
+      ["afternoon", "a", "Early", true],
+    ]);
+    // The server applies the same writes in its replace and lands on the same rows.
+    expect(applySlotWrites(slots, writes).map((s) => [s.slot, s.tripPlaceId, s.note, s.noteForTraveler]).sort()).toEqual([
+      ["afternoon", "a", "Early", true],
+      ["morning", "b", "", false],
+    ]);
+  });
+
+  it("a move onto a slot without a row takes the source row away", () => {
+    const slots = [slot(1, "morning", "a", "Early")];
+    const writes = swapWrites(slots, { day: 1, slot: "morning" }, { day: 1, slot: "night" });
+    expect(writes[1]).toEqual({ day: 1, slot: "morning", position: 0, tripPlaceId: null });
+    const rows = applySlotWrites(slots, writes);
+    expect(rows).toEqual([{ day: 1, slot: "night", position: 0, date: null, tripPlaceId: "a", note: "Early", noteForTraveler: false }]);
+    expect(swapWrites(slots, { day: 1, slot: "lunch" }, { day: 1, slot: "night" })).toEqual([]);
+  });
+
+  it("reorder addresses additional positions in a slot", () => {
+    const slots = [slot(1, "lunch", "a"), { ...slot(1, "lunch", "b", "Second"), id: "lunch-1", position: 1 }];
+    const writes = swapWrites(slots, { day: 1, slot: "lunch", position: 1 }, { day: 1, slot: "dinner" });
+    expect(writes[0]).toMatchObject({ slot: "dinner", position: 0, tripPlaceId: "b", note: "Second" });
+    expect(writes[1]).toEqual({ day: 1, slot: "lunch", position: 1, tripPlaceId: null });
+  });
+
+  it("a note write keeps the traveler flag unless it says otherwise", () => {
+    let state = initialState(snapshot({ places: [card("a")], slots: [{ ...slot(1, "lunch", "a", "Book"), noteForTraveler: true }] }));
+    state = reduce(state, { type: "slot", write: { day: 1, slot: "lunch", tripPlaceId: "a", note: "Book ahead" } });
+    expect(state.slots[0]).toMatchObject({ note: "Book ahead", noteForTraveler: true });
+    state = reduce(state, { type: "slot", write: { day: 1, slot: "lunch", tripPlaceId: "a", note: "Book ahead", noteForTraveler: false } });
+    expect(state.slots[0].noteForTraveler).toBe(false);
   });
 });
 
@@ -225,9 +283,26 @@ describe("url state", () => {
   it("reads and writes view, tab and place", () => {
     const params = new URLSearchParams(`view=map&tab=${ASK}&place=${ASK}&x=1`);
     const state = readUrlState(params);
-    expect(state).toEqual({ view: "map", activeTab: `ask:${ASK}`, selectedPlaceId: ASK });
+    expect(state).toEqual({ view: "map", activeTab: `ask:${ASK}`, selectedPlaceId: ASK, camera: null });
     expect(writeUrlState("?x=1", { view: "board", activeTab: "eat", selectedPlaceId: null })).toBe("?x=1&tab=eat");
     expect(readUrlState(new URLSearchParams("view=nope&tab=nope")).view).toBe("board");
+  });
+
+  it("round-trips the map camera and drops a bad one", () => {
+    const search = writeUrlState("", { view: "map", activeTab: "all", selectedPlaceId: null, camera: { lat: 38.712345678, lon: -9.1, zoom: 13.25 } });
+    expect(search).toBe("?view=map&cam=38.71235%2C-9.1%2C13.25");
+    expect(readUrlState(new URLSearchParams(search)).camera).toEqual({ lat: 38.71235, lon: -9.1, zoom: 13.25 });
+    expect(readUrlState(new URLSearchParams("cam=91,0,3")).camera).toBeNull();
+    expect(readUrlState(new URLSearchParams("cam=abc")).camera).toBeNull();
+  });
+
+  it("pushes view and place changes, replaces tab and camera changes", () => {
+    const base = { view: "board" as const, activeTab: "all" as const, selectedPlaceId: null, camera: null };
+    expect(historyMode(base, { ...base, view: "map" })).toBe("pushState");
+    expect(historyMode(base, { ...base, selectedPlaceId: ASK })).toBe("pushState");
+    expect(historyMode(base, { ...base, activeTab: "eat" })).toBe("replaceState");
+    expect(historyMode(base, { ...base, camera: { lat: 1, lon: 2, zoom: 3 } })).toBe("camera");
+    expect(historyMode(base, { ...base })).toBeNull();
   });
 });
 

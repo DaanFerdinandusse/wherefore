@@ -12,8 +12,18 @@ export const SLOT_ORDER: readonly SlotName[] = ["morning", "lunch", "afternoon",
 export const BOARD_CATEGORIES = ["eat", "drink", "coffee", "see", "stay"] as const;
 export type BoardCategory = (typeof BOARD_CATEGORIES)[number];
 
-/** The store's state: the shared contract plus the days added with "Add a day". */
-export type WorkspaceState = TripWorkspaceState & { extraDays: number };
+/**
+ * The store's state: the shared contract plus the day count asked for with
+ * "Add a day" (absolute, so filling an added day never adds another), and the
+ * revision stamps the optimistic patches in patches.ts check before a rollback.
+ */
+export type WorkspaceState = TripWorkspaceState & {
+  /** The day count "Add a day" asked for; 0 until it is used. */
+  requestedDays: number;
+  /** Bumped by every change; the last revision that touched each entity key is in `revs`. */
+  revision: number;
+  revs: Record<string, number>;
+};
 
 /** A slot as the UI writes it: identified by (day, slot, position), not by row id. */
 export type SlotWrite = {
@@ -23,6 +33,8 @@ export type SlotWrite = {
   /** null empties the slot (the row goes away, as clearSlot deletes it). */
   tripPlaceId: string | null;
   note?: string;
+  /** Show the note to the traveler. Kept from the row when left out. */
+  noteForTraveler?: boolean;
   date?: string;
 };
 
@@ -41,6 +53,8 @@ export type WorkspaceEvent =
   | { type: "status"; tripPlaceId: string; status: TripPlaceStatus }
   /** A field change from a workspace write ("In my places", a note). An explicit undefined clears. */
   | { type: "placePatch"; tripPlaceId: string; patch: Partial<Pick<TripPlaceCard, "yourPlace" | "reason">> }
+  /** A card the server wrote outside a tool run (a replacement): merged by tripPlaceId. */
+  | { type: "upsertPlace"; card: TripPlaceCard }
   | { type: "archiveAsk"; askId: string }
   | { type: "trip"; patch: Partial<TripSnapshot["trip"]> }
   | { type: "addDay" };
@@ -60,7 +74,9 @@ export function initialState(
     highlightedPlaceId: null,
     selectedPlaceId: client.selectedPlaceId ?? null,
     camera: client.camera ?? null,
-    extraDays: 0,
+    requestedDays: 0,
+    revision: 0,
+    revs: {},
   };
   return reduce(base, { type: "snapshot", snapshot });
 }
@@ -70,14 +86,14 @@ export function initialState(
 export const askTab = (askId: string): BoardTab => `ask:${askId}`;
 export const askIdOf = (tab: BoardTab): string | null => (tab.startsWith("ask:") ? tab.slice(4) : null);
 
-const slotKey = (s: { day: number; slot: string; position?: number }) => `${s.day}|${s.slot}|${s.position ?? 0}`;
+export const slotKey = (s: { day: number; slot: string; position?: number }) => `${s.day}|${s.slot}|${s.position ?? 0}`;
 
 export function compareSlots(a: ItinerarySlot, b: ItinerarySlot): number {
   return a.day - b.day || SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot) || a.position - b.position;
 }
 
 /** Mirrors the server: in a slot means "added", otherwise "suggested". Removed stays removed. */
-function syncStatuses(places: Record<string, TripPlaceCard>, slots: ItinerarySlot[]): Record<string, TripPlaceCard> {
+export function syncStatuses(places: Record<string, TripPlaceCard>, slots: ItinerarySlot[]): Record<string, TripPlaceCard> {
   const inItinerary = new Set(slots.map((s) => s.tripPlaceId).filter((id): id is string => !!id));
   let changed = false;
   const next: Record<string, TripPlaceCard> = {};
@@ -142,6 +158,8 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
         activeTab,
         highlightedPlaceId: state.highlightedPlaceId && places[state.highlightedPlaceId] ? state.highlightedPlaceId : null,
         selectedPlaceId: state.selectedPlaceId && places[state.selectedPlaceId] ? state.selectedPlaceId : null,
+        // The server is canonical: no optimistic rollback reaches past it.
+        revs: {},
       };
     }
 
@@ -218,6 +236,7 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
           date: write.date ?? existing?.date,
           tripPlaceId: write.tripPlaceId ?? undefined,
           note: write.note ?? existing?.note ?? "",
+          noteForTraveler: write.noteForTraveler ?? existing?.noteForTraveler ?? false,
         };
         slots = index === -1 ? [...state.slots, slot] : state.slots.map((s, i) => (i === index ? slot : s));
       }
@@ -227,7 +246,8 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
 
     case "slots": {
       const slots = [...event.slots].sort(compareSlots);
-      return { ...state, slots, places: syncStatuses(state.places, slots) };
+      const revs = Object.fromEntries(Object.entries(state.revs).filter(([key]) => !key.startsWith("slot:")));
+      return { ...state, slots, places: syncStatuses(state.places, slots), revs };
     }
 
     case "slotsSaved": {
@@ -260,6 +280,11 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
       return { ...state, places: { ...state.places, [card.tripPlaceId]: { ...card, ...event.patch } } };
     }
 
+    case "upsertPlace": {
+      const places = { ...state.places, [event.card.tripPlaceId]: mergeCard(state.places[event.card.tripPlaceId], event.card) };
+      return { ...state, places: syncStatuses(places, state.slots) };
+    }
+
     case "archiveAsk": {
       const ask = state.asks[event.askId];
       if (!ask) return state;
@@ -279,7 +304,7 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
       return { ...state, trip: { ...state.trip, ...event.patch } };
 
     case "addDay":
-      return { ...state, extraDays: state.extraDays + 1 };
+      return { ...state, requestedDays: dayCount(state) + 1 };
   }
 }
 
@@ -330,12 +355,15 @@ export function tabCounts(state: Pick<WorkspaceState, "places">): TabCounts {
   return counts;
 }
 
-/** Itinerary days: from the dates, else at least three, growing with slots and "Add a day". */
-export function dayCount(state: Pick<WorkspaceState, "trip" | "slots" | "extraDays">): number {
+/**
+ * Itinerary days: the largest of the dates' days (three without dates), the
+ * highest day a slot uses and the count "Add a day" asked for.
+ */
+export function dayCount(state: Pick<WorkspaceState, "trip" | "slots" | "requestedDays">): number {
   const { startDate, endDate } = state.trip;
-  if (startDate && endDate) return daysBetween(startDate, endDate);
+  const fromDates = startDate && endDate ? daysBetween(startDate, endDate) : DEFAULT_UNSET_DAYS;
   const maxDay = state.slots.reduce((max, s) => Math.max(max, s.day), 0);
-  return Math.max(DEFAULT_UNSET_DAYS, maxDay) + state.extraDays;
+  return Math.max(fromDates, maxDay, state.requestedDays);
 }
 
 /** The ISO date of a trip day, when the trip has a start date. */
@@ -381,7 +409,7 @@ export function categoryForSlot(slot: SlotName): BoardCategory {
  * its category. Null when every suitable slot is taken (the UI opens a picker).
  */
 export function nextFreeSlot(
-  state: Pick<WorkspaceState, "trip" | "slots" | "extraDays">,
+  state: Pick<WorkspaceState, "trip" | "slots" | "requestedDays">,
   category: Category,
 ): { day: number; slot: SlotName } | null {
   const days = dayCount(state);
@@ -396,22 +424,88 @@ export function filledSlotCount(slots: ItinerarySlot[]): number {
   return slots.filter((s) => !!s.tripPlaceId).length;
 }
 
+export type SlotRef = { day: number; slot: SlotName; position?: number };
+
+/** Every row of a day's slot, by position. */
+export function slotRows(slots: ItinerarySlot[], day: number, slot: SlotName): ItinerarySlot[] {
+  return slots.filter((s) => s.day === day && s.slot === slot).sort((a, b) => a.position - b.position);
+}
+
 /**
- * The writes for moving a place to another slot of the same day: the target
- * takes the dragged place (and its note), the source takes whatever the target
- * held. Used by the itinerary view's drag to reorder (setSlots merge).
+ * The writes for moving a place to another slot of the same day: an exact
+ * swap of (place, note, noteForTraveler) between the two slots, so a note
+ * never stays behind or doubles. A move onto a slot with no row takes the
+ * source row away. Used by drag to reorder and the move up and down controls;
+ * the server applies the same writes in one replace (applySlotWrites).
  */
-export function moveWrites(
-  slots: ItinerarySlot[],
-  from: { day: number; slot: SlotName },
-  to: { day: number; slot: SlotName },
-): SlotWrite[] {
-  if (from.day === to.day && from.slot === to.slot) return [];
-  const source = slotAt(slots, from.day, from.slot);
+export function swapWrites(slots: ItinerarySlot[], from: SlotRef, to: SlotRef): SlotWrite[] {
+  const a = { day: from.day, slot: from.slot, position: from.position ?? 0 };
+  const b = { day: to.day, slot: to.slot, position: to.position ?? 0 };
+  if (slotKey(a) === slotKey(b)) return [];
+  const source = slotAt(slots, a.day, a.slot, a.position);
   if (!source?.tripPlaceId) return [];
-  const target = slotAt(slots, to.day, to.slot);
+  const target = slotAt(slots, b.day, b.slot, b.position);
   return [
-    { day: to.day, slot: to.slot, tripPlaceId: source.tripPlaceId, note: source.note },
-    { day: from.day, slot: from.slot, tripPlaceId: target?.tripPlaceId ?? null, note: target?.note ?? "" },
+    { ...b, tripPlaceId: source.tripPlaceId, note: source.note, noteForTraveler: source.noteForTraveler ?? false },
+    target
+      ? { ...a, tripPlaceId: target.tripPlaceId ?? null, note: target.note, noteForTraveler: target.noteForTraveler ?? false }
+      : { ...a, tripPlaceId: null },
   ];
+}
+
+/** A slot row's content, as the server's replace writes it. */
+export type SlotContent = {
+  day: number;
+  slot: SlotName;
+  position: number;
+  date?: string | null;
+  tripPlaceId: string | null;
+  note: string;
+  noteForTraveler: boolean;
+};
+
+/**
+ * Rows after the writes, with the reducer's rules: a write with no place and
+ * no note takes the row away, any other write replaces the row's content.
+ * Pure, so the server action and the tests share it.
+ */
+export function applySlotWrites(
+  rows: readonly { day: number; slot: SlotName; position: number; date?: string | null; tripPlaceId?: string | null; note: string; noteForTraveler?: boolean }[],
+  writes: readonly SlotWrite[],
+): SlotContent[] {
+  const byKey = new Map<string, SlotContent>();
+  for (const r of rows) {
+    byKey.set(slotKey(r), {
+      day: r.day,
+      slot: r.slot,
+      position: r.position,
+      date: r.date ?? null,
+      tripPlaceId: r.tripPlaceId ?? null,
+      note: r.note,
+      noteForTraveler: r.noteForTraveler ?? false,
+    });
+  }
+  for (const w of writes) {
+    const key = slotKey(w);
+    const existing = byKey.get(key);
+    if (w.tripPlaceId === null && w.note === undefined) {
+      byKey.delete(key);
+      continue;
+    }
+    byKey.set(key, {
+      day: w.day,
+      slot: w.slot,
+      position: w.position ?? 0,
+      date: w.date ?? existing?.date ?? null,
+      tripPlaceId: w.tripPlaceId,
+      note: w.note ?? existing?.note ?? "",
+      noteForTraveler: w.noteForTraveler ?? existing?.noteForTraveler ?? false,
+    });
+  }
+  return [...byKey.values()];
+}
+
+/** The slot a move up or down lands on: the previous or next slot of the day. */
+export function neighborSlot(slot: SlotName, direction: -1 | 1): SlotName | null {
+  return SLOT_ORDER[SLOT_ORDER.indexOf(slot) + direction] ?? null;
 }

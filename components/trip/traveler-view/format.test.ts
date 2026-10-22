@@ -185,3 +185,18 @@ describe("hero helpers", () => {
     );
   });
 });
+
+describe("the other favorites bucket", () => {
+  const because = [
+    { name: "Other favorites", share: 70 },
+    { name: "Via Carota", share: 20 },
+    { name: "Lilia", share: 10 },
+  ];
+
+  it("is left out of the because line and the favorites behind the trip", () => {
+    expect(becauseLine(because)).toBe("Because you love Via Carota and Lilia");
+    expect(becauseLine([{ name: "Other favorites", share: 100 }])).toBeNull();
+    const days: SharedTripView["days"] = [{ day: 1, slots: [{ slot: "dinner", position: 0, place: { ...place(), because } }] }];
+    expect(favoritesBehind({ days })).toEqual(["Via Carota", "Lilia"]);
+  });
+});

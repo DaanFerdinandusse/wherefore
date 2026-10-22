@@ -1,4 +1,5 @@
 import type { SharedTripDay, SharedTripPlace, SharedTripSlot, SharedTripView, SlotName } from "@/lib/contracts";
+import { OTHER_FAVORITES_NAME } from "@/lib/qloo/normalize";
 
 // Pure helpers for the traveler view. Everything the page says about a place
 // comes from the shared view (names, explainability, tags, advisor notes);
@@ -34,10 +35,20 @@ function isoOf(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * A favorite the traveler can be told about: a real name. The shared view
+ * carries no entity ids, and the server already drops the "Other favorites"
+ * bucket; its name is filtered too for views written before that.
+ */
+function isNamedFavorite(item: { name: string }): boolean {
+  const name = item.name.trim();
+  return name !== "" && name !== OTHER_FAVORITES_NAME;
+}
+
 /** "Because you love Via Carota and Lilia": the top two favorites by share. Null without any. */
 export function becauseLine(because: SharedTripPlace["because"]): string | null {
-  const names = [...because]
-    .filter((item) => item.name.trim() !== "")
+  const names = because
+    .filter(isNamedFavorite)
     .sort((a, b) => b.share - a.share)
     .slice(0, 2)
     .map((item) => item.name.trim());
@@ -158,8 +169,9 @@ export function favoritesBehind(view: Pick<SharedTripView, "days">, limit = 5): 
   for (const day of view.days) {
     for (const slot of day.slots) {
       for (const item of slot.place?.because ?? []) {
+        if (!isNamedFavorite(item)) continue;
         const name = item.name.trim();
-        if (name) totals.set(name, (totals.get(name) ?? 0) + item.share);
+        totals.set(name, (totals.get(name) ?? 0) + item.share);
       }
     }
   }

@@ -50,6 +50,7 @@ describe("placeDetails", () => {
     expect(headers.get("X-Goog-Api-Key")).toBe("server-key");
     expect(headers.get("X-Goog-FieldMask")).toBe(fieldMask("basic"));
     expect(fieldMask("basic")).toContain("photos");
+    expect(fieldMask("basic").split(",")).toContain("utcOffsetMinutes");
     expect(fieldMask("basic")).not.toContain("reviews");
     expect(fieldMask("basic")).not.toContain("OpeningHours");
     for (const field of ["rating", "userRatingCount", "currentOpeningHours", "regularOpeningHours", "websiteUri", "nationalPhoneNumber", "priceLevel", "reviews", "editorialSummary"]) {

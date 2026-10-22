@@ -1,4 +1,5 @@
 import type { SharedTripView, TripSnapshot } from "@/lib/contracts";
+import { OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
 import { type SharedSlotRow, toSharedTripView } from "@/lib/trips/share";
 
 // The workspace's "Traveler view" tab renders before a share link exists, so
@@ -18,7 +19,8 @@ export function travelerViewFromSnapshot(snapshot: TripSnapshot, advisorName: st
             category: card.category,
             imageUrl: card.imageUrl ?? null,
             neighborhood: card.neighborhood ?? null,
-            explainability: card.because,
+            // Never credit the "Other favorites" bucket as a favorite (toSharedTripView drops it too).
+            explainability: card.because.filter((d) => d.entityId !== OTHER_FAVORITES_ID),
             sharedTags: card.sharedTags,
             reason: card.reason ?? null,
           }

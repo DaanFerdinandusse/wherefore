@@ -116,3 +116,21 @@ describe("share helpers", () => {
     expect(dayDate(null, 2)).toBeUndefined();
   });
 });
+
+describe("the other favorites bucket", () => {
+  it("never reaches the traveler as a favorite", () => {
+    const place = {
+      ...uva,
+      explainability: [
+        { entityId: "e-via-carota", name: "Via Carota", share: 40 },
+        { entityId: "other", name: "Other favorites", share: 45 },
+        { entityId: "e-lilia", name: "Lilia", share: 15 },
+      ],
+    };
+    const view = toSharedTripView(trip, [slot({ place })]);
+    expect(view.days[0].slots[0].place?.because).toEqual([
+      { name: "Via Carota", share: 40 },
+      { name: "Lilia", share: 15 },
+    ]);
+  });
+});

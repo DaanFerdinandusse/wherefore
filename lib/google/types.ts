@@ -43,6 +43,7 @@ export const placeDetailsSchema = z.looseObject({
   primaryTypeDisplayName: localizedText.optional(),
   businessStatus: z.string().optional(),
   location: z.looseObject({ latitude: z.number(), longitude: z.number() }).optional(),
+  utcOffsetMinutes: z.number().optional(),
   photos: z.array(photoSchema).optional(),
   // full tier
   rating: z.number().optional(),

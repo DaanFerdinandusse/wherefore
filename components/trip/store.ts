@@ -1,24 +1,29 @@
 "use client";
 
-import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, createElement, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useSearchParams } from "next/navigation";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 
 import type { TripPlaceCard, TripPlaceStatus, TripSnapshot } from "@/lib/contracts";
 
 import type { BoardTab, MapCamera, PlacesMeta, TripView } from "./contracts";
-import { initialState, reduce, type SlotWrite, type WorkspaceEvent, type WorkspaceState } from "./workspace/reducer";
-import { writeUrlState } from "./workspace/url-state";
+import { applyOptimistic, applyRemote, commitPatch, revertPatch, type Patch } from "./workspace/patches";
+import { initialState, type SlotWrite, type WorkspaceEvent, type WorkspaceState } from "./workspace/reducer";
+import { historyMode, readUrlState, writeUrlState, type UrlState } from "./workspace/url-state";
 
 // The trip workspace store: TripWorkspaceState from contracts.ts plus actions.
-// Every transition goes through the pure `reduce` in workspace/reducer.ts, so
-// the store only adds React wiring, rollbacks and the URL mirror. One store
-// per mounted workspace (a context, not a module singleton), so two requests
-// on the server never share state.
+// Every transition goes through the pure `reduce` in workspace/reducer.ts;
+// optimistic writes go through workspace/patches.ts, which records the exact
+// inverse of each write, so a rollback reverts only what that write changed
+// and never a later change. One store per mounted workspace (a context, not a
+// module singleton), so two requests on the server never share state.
 
-export type Rollback = () => void;
+/** An optimistic write in flight: roll it back when the server refuses it, commit it when it lands. */
+export type Optimistic = { rollback: () => void; commit: () => void };
 
 export type TripStoreActions = {
+  /** A change that is not optimistic (a server answer, a view change). */
   dispatch: (event: WorkspaceEvent) => void;
   applySnapshot: (snapshot: TripSnapshot) => void;
   /** Places streamed by a tool (preliminary or final). Merges by tripPlaceId, creates or updates the ask. */
@@ -29,14 +34,16 @@ export type TripStoreActions = {
   setView: (view: TripView) => void;
   setTab: (tab: BoardTab) => void;
   setCamera: (camera: MapCamera | null) => void;
-  /** Applies a slot write now; call the returned rollback if the server refuses it. */
-  optimisticSlot: (write: SlotWrite | SlotWrite[]) => Rollback;
-  optimisticStatus: (tripPlaceId: string, status: TripPlaceStatus) => Rollback;
+  /** Applies events now as one write; roll it back if the server refuses it, commit it when it lands. */
+  optimistic: (events: WorkspaceEvent[]) => Optimistic;
+  optimisticSlot: (write: SlotWrite | SlotWrite[]) => Optimistic;
+  optimisticStatus: (tripPlaceId: string, status: TripPlaceStatus) => Optimistic;
   /** Hides an ask tab (archived); its places stay on the board. */
-  removeAskTab: (askId: string) => Rollback;
+  removeAskTab: (askId: string) => Optimistic;
   addDay: () => void;
   setSeedStatus: (status: TripSnapshot["trip"]["seedStatus"]) => void;
-  setShareToken: (token: string) => void;
+  /** The trip's share token, or null once sharing stopped. */
+  setShareToken: (token: string | null) => void;
   toast: { message: string; id: number } | null;
   showToast: (message: string) => void;
   dismissToast: () => void;
@@ -44,33 +51,35 @@ export type TripStoreActions = {
 
 export type TripStore = WorkspaceState & TripStoreActions;
 
-type DataSlice = Pick<WorkspaceState, "places" | "slots" | "asks" | "activeTab" | "selectedPlaceId" | "highlightedPlaceId">;
-
 export function createTripStore(initial: WorkspaceState): StoreApi<TripStore> {
   return createStore<TripStore>()((set, get) => {
+    // The patches of optimistic writes still waiting for the server.
+    let pending: Patch[] = [];
+
     const dispatch = (event: WorkspaceEvent) => {
       const state = get();
-      const next = reduce(state, event);
+      const next = applyRemote(state, event);
       if (next !== state) set(next);
     };
 
-    // Captures the data a write touches and puts it back on rollback. Later
-    // unrelated changes (a streamed place, a new ask) are kept.
-    const checkpoint = (): Rollback => {
-      const before: DataSlice = get();
-      const saved: DataSlice = {
-        places: before.places,
-        slots: before.slots,
-        asks: before.asks,
-        activeTab: before.activeTab,
-        selectedPlaceId: before.selectedPlaceId,
-        highlightedPlaceId: before.highlightedPlaceId,
-      };
-      return () => {
-        const now = get();
-        const places = { ...now.places };
-        for (const [id, card] of Object.entries(saved.places)) places[id] = { ...(places[id] ?? card), status: card.status, askIds: card.askIds };
-        set({ places, slots: saved.slots, asks: { ...now.asks, ...saved.asks }, activeTab: saved.activeTab });
+    const optimistic = (events: WorkspaceEvent[]): Optimistic => {
+      const { state, patch } = applyOptimistic(get(), events);
+      set(state);
+      pending = [...pending, patch];
+      let settled = false;
+      return {
+        rollback: () => {
+          if (settled) return;
+          settled = true;
+          const result = revertPatch(get(), patch, pending);
+          pending = result.pending;
+          set(result.state);
+        },
+        commit: () => {
+          if (settled) return;
+          settled = true;
+          pending = commitPatch(pending, patch);
+        },
       };
     };
 
@@ -86,24 +95,13 @@ export function createTripStore(initial: WorkspaceState): StoreApi<TripStore> {
       setView: (view) => dispatch({ type: "view", view }),
       setTab: (tab) => dispatch({ type: "tab", tab }),
       setCamera: (camera) => dispatch({ type: "camera", camera }),
-      optimisticSlot: (write) => {
-        const rollback = checkpoint();
-        for (const w of Array.isArray(write) ? write : [write]) dispatch({ type: "slot", write: w });
-        return rollback;
-      },
-      optimisticStatus: (tripPlaceId, status) => {
-        const rollback = checkpoint();
-        dispatch({ type: "status", tripPlaceId, status });
-        return rollback;
-      },
-      removeAskTab: (askId) => {
-        const rollback = checkpoint();
-        dispatch({ type: "archiveAsk", askId });
-        return rollback;
-      },
+      optimistic,
+      optimisticSlot: (write) => optimistic((Array.isArray(write) ? write : [write]).map((w) => ({ type: "slot", write: w }))),
+      optimisticStatus: (tripPlaceId, status) => optimistic([{ type: "status", tripPlaceId, status }]),
+      removeAskTab: (askId) => optimistic([{ type: "archiveAsk", askId }]),
       addDay: () => dispatch({ type: "addDay" }),
       setSeedStatus: (seedStatus) => dispatch({ type: "trip", patch: { seedStatus } }),
-      setShareToken: (shareToken) => dispatch({ type: "trip", patch: { shareToken } }),
+      setShareToken: (shareToken) => dispatch({ type: "trip", patch: { shareToken: shareToken ?? undefined } }),
       toast: null,
       showToast: (message) => set({ toast: { message, id: ++toastId } }),
       dismissToast: () => set({ toast: null }),
@@ -113,25 +111,78 @@ export function createTripStore(initial: WorkspaceState): StoreApi<TripStore> {
 
 const TripStoreContext = createContext<StoreApi<TripStore> | null>(null);
 
-/** Mirrors view, tab and the open place to the URL (replaceState, no navigation). */
+const CAMERA_WRITE_MS = 400;
+
+function urlStateOf(state: TripStore): UrlState {
+  return { view: state.view, activeTab: state.activeTab, selectedPlaceId: state.selectedPlaceId, camera: state.camera };
+}
+
+/**
+ * Mirrors view, tab, the open place and the map camera to the URL, both
+ * ways. A view or place change adds a history entry (Back undoes it); a tab
+ * or camera change replaces the current one. Back, Forward and Next
+ * navigations to the same page read the URL back into the store.
+ */
 function useUrlMirror(store: StoreApi<TripStore>) {
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  // True while the URL is being read into the store: what follows from it
+  // only tidies the current entry, it never adds one.
+  const applying = useRef(false);
+
+  // Store to URL.
   useEffect(() => {
-    let last = "";
-    const write = (state: TripStore) => {
-      const search = writeUrlState(window.location.search, {
-        view: state.view,
-        activeTab: state.activeTab,
-        selectedPlaceId: state.selectedPlaceId,
-      });
-      if (search === last) return;
-      last = search;
-      if (search !== window.location.search) {
-        window.history.replaceState(window.history.state, "", `${window.location.pathname}${search}${window.location.hash}`);
-      }
+    let previous = urlStateOf(store.getState());
+    let cameraTimer: number | undefined;
+    const write = (state: TripStore, mode: "pushState" | "replaceState") => {
+      const next = writeUrlState(window.location.search, urlStateOf(state));
+      if (next === window.location.search) return;
+      window.history[mode](null, "", `${window.location.pathname}${next}${window.location.hash}`);
     };
-    write(store.getState());
-    return store.subscribe(write);
+    write(store.getState(), "replaceState");
+    const unsubscribe = store.subscribe((state) => {
+      const current = urlStateOf(state);
+      const mode = historyMode(previous, current);
+      previous = current;
+      if (!mode) return;
+      window.clearTimeout(cameraTimer);
+      if (applying.current) return write(state, "replaceState");
+      if (mode === "camera") cameraTimer = window.setTimeout(() => write(store.getState(), "replaceState"), CAMERA_WRITE_MS);
+      else write(state, mode);
+    });
+    return () => {
+      window.clearTimeout(cameraTimer);
+      unsubscribe();
+    };
   }, [store]);
+
+  // URL to store: Back and Forward (with the camera of that entry).
+  useEffect(() => {
+    const onPopState = () => applyUrlState(store, applying, readUrlState(new URLSearchParams(window.location.search)), true);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [store]);
+
+  // URL to store: a Next navigation to this page with other params (a link
+  // with ?place=). Our own history writes land here too and change nothing.
+  useEffect(() => {
+    applyUrlState(store, applying, readUrlState(new URLSearchParams(search)), false);
+  }, [store, search]);
+}
+
+function applyUrlState(store: StoreApi<TripStore>, applying: RefObject<boolean>, url: UrlState, withCamera: boolean) {
+  const state = store.getState();
+  applying.current = true;
+  try {
+    if (state.view !== url.view) state.setView(url.view);
+    if (state.activeTab !== url.activeTab) state.setTab(url.activeTab);
+    if (state.selectedPlaceId !== url.selectedPlaceId) {
+      state.select(url.selectedPlaceId && state.places[url.selectedPlaceId] ? url.selectedPlaceId : null);
+    }
+    if (withCamera && url.camera) state.setCamera(url.camera);
+  } finally {
+    applying.current = false;
+  }
 }
 
 export function TripStoreProvider({
@@ -140,7 +191,7 @@ export function TripStoreProvider({
   children,
 }: {
   snapshot: TripSnapshot;
-  url: Pick<WorkspaceState, "view" | "activeTab" | "selectedPlaceId">;
+  url: UrlState;
   children: ReactNode;
 }) {
   const [store] = useState(() => createTripStore(initialState(snapshot, url)));

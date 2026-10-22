@@ -40,7 +40,51 @@ import { WhoMenu } from "./who-menu";
 // Create trip. Each segment opens its own menu under the bar, and picking a
 // value moves on to the next one. Create trip is enabled once who and where
 // are set; it posts to /api/trips and hands the new id to `onCreated`.
-// Escape closes the open menu first, then the panel.
+// Escape closes the open menu first, then the panel. While it is open the
+// page behind it (app bar included) is inert and Tab cycles inside the
+// panel; on close focus goes back to what opened it ("+ New trip").
+
+/** Makes everything outside `panel` inert; returns the elements to release. */
+function inertBackground(panel: HTMLElement): HTMLElement[] {
+  const changed: HTMLElement[] = [];
+  let node: HTMLElement = panel;
+  while (node.parentElement && node !== document.body) {
+    for (const sibling of Array.from(node.parentElement.children)) {
+      if (sibling === node || !(sibling instanceof HTMLElement) || sibling.inert) continue;
+      sibling.inert = true;
+      changed.push(sibling);
+    }
+    node = node.parentElement;
+  }
+  return changed;
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Tab and Shift+Tab wrap around inside the panel. */
+function trapTab(event: KeyboardEvent, panel: HTMLElement) {
+  const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.getClientRects().length > 0);
+  if (items.length === 0) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement;
+  const outside = !(active instanceof Node) || !panel.contains(active);
+  if (event.shiftKey && (active === first || outside)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (active === last || outside)) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+/** The app bar's "+ New trip", when the panel opened from a link or a page load. */
+function launcherButton(): HTMLElement | null {
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>("header button")).find((b) => b.textContent?.trim() === "New trip") ?? null
+  );
+}
+
 function toDraftClient(client: TripBarClient): DraftClient {
   return {
     id: client.id,
@@ -76,6 +120,7 @@ export function NewTripPanel({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const firstSegmentRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // What the menus show before typing: recent clients, cities, the prefill.
   useEffect(() => {
@@ -100,21 +145,26 @@ export function NewTripPanel({
 
   // Escape: the open menu first, then the panel. Scroll stays on the panel.
   const onKey = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key === "Tab" && panelRef.current) return trapTab(event, panelRef.current);
     if (event.key !== "Escape" || creating) return;
     if (open) setOpen(null);
     else onClose();
   });
   useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const active = document.activeElement;
+    const previous = active instanceof HTMLElement && active !== document.body ? active : null;
     const root = document.documentElement;
     const overflow = root.style.overflow;
     root.style.overflow = "hidden";
+    const inerted = panelRef.current ? inertBackground(panelRef.current) : [];
     window.addEventListener("keydown", onKey);
     firstSegmentRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
     return () => {
       window.removeEventListener("keydown", onKey);
       root.style.overflow = overflow;
-      if (previous && document.contains(previous)) previous.focus({ preventScroll: true });
+      for (const el of inerted) el.inert = false;
+      const back = previous && document.contains(previous) ? previous : launcherButton();
+      back?.focus({ preventScroll: true });
     };
   }, []);
 
@@ -177,7 +227,7 @@ export function NewTripPanel({
   });
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-x-0 top-[76px] bottom-0 z-40">
+    <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-x-0 top-[76px] bottom-0 z-40">
       <div aria-hidden className="absolute inset-0 bg-scrim-soft" onClick={() => !creating && onClose()} />
 
       <div className="rise-in relative flex flex-col items-center gap-6 border-t border-rule bg-canvas px-7 pt-7 pb-9 shadow-menu">

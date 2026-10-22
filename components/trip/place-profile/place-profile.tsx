@@ -180,7 +180,7 @@ function PlaceProfileBody({
   const street = shortAddress(card.address ?? place?.address);
   const price = priceSigns(place?.priceLevel ?? details?.priceLevel);
   const rating = full?.rating ?? place?.rating ?? undefined;
-  const open_ = full ? openState({ openNow: full.openNow, openingHours: full.openingHours, lon: card.lon ?? place?.lon }) : null;
+  const open_ = full ? openState({ openNow: full.openNow, openingHours: full.openingHours, utcOffsetMinutes: full.utcOffsetMinutes }) : null;
 
   const hours = full?.openingHours?.length
     ? googleHoursRows(full.openingHours, days)

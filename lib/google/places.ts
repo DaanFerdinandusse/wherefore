@@ -22,6 +22,9 @@ export const BASIC_FIELDS = [
   "businessStatus",
   "photos",
   "location",
+  // The place's offset from UTC, so the profile can read today's closing
+  // time in the place's own day instead of guessing it.
+  "utcOffsetMinutes",
 ] as const;
 
 // Field mask tiers (Place Details, Places API New): BASIC_FIELDS stay within
@@ -144,6 +147,7 @@ export function normalizeDetails(raw: RawPlaceDetails, tier: DetailsTier): Googl
     primaryTypeLabel: raw.primaryTypeDisplayName?.text,
     businessStatus: raw.businessStatus,
     location: raw.location ? { lat: raw.location.latitude, lon: raw.location.longitude } : undefined,
+    utcOffsetMinutes: raw.utcOffsetMinutes,
     photos: (raw.photos ?? []).map((photo) => ({
       name: photo.name,
       url: photoProxyUrl(photo.name),

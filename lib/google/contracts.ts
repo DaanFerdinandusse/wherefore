@@ -36,6 +36,8 @@ export type GooglePlaceDetails = {
   primaryTypeLabel?: string;
   businessStatus?: string;
   location?: { lat: number; lon: number };
+  /** The place's offset from UTC in minutes, for its local time. */
+  utcOffsetMinutes?: number;
   photos: GooglePhoto[];
   // full tier only
   rating?: number;
