@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
-import { inScope, isUuid } from "@/lib/auth/scope";
+import { inScope, isUuid, type ScopeInput } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
 import { advisorPlaces, places } from "@/lib/db/schema";
 import { normalizeQuery, trgmMatch, trgmRank } from "@/lib/search/trgm";
@@ -114,3 +114,21 @@ export const advisorCities: AdvisorCities = async (ownerId) =>
     .where(inScope(advisorPlaces, ownerId))
     .groupBy(advisorPlaces.city)
     .orderBy(desc(sql`count(*)`), advisorPlaces.city);
+
+/**
+ * Which of these entity ids the caller has already saved, as
+ * `{ [entityId]: { id, city } }`. For "Already in your places" in search.
+ */
+export async function advisorPlacesByEntityIds(
+  scope: ScopeInput,
+  entityIds: string[],
+): Promise<Record<string, { id: string; city: string }>> {
+  const ids = [...new Set(entityIds)].filter(Boolean);
+  if (ids.length === 0) return {};
+  const rows = await db
+    .select({ entityId: places.entityId, id: advisorPlaces.id, city: advisorPlaces.city })
+    .from(advisorPlaces)
+    .innerJoin(places, eq(places.id, advisorPlaces.placeId))
+    .where(and(inScope(advisorPlaces, scope), inArray(places.entityId, ids)));
+  return Object.fromEntries(rows.map((row) => [row.entityId, { id: row.id, city: row.city }]));
+}
