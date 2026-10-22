@@ -2,12 +2,12 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, eq, getTableColumns, sql, type SQL } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
 import { NotFoundError } from "@/lib/auth/errors";
-import { inScope, isUuid, toScope } from "@/lib/auth/scope";
+import { inScope, isUuid, toScope, type ScopeInput } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
-import { advisorPlaces, places } from "@/lib/db/schema";
+import { advisorPlaces, places, tripPlaces, trips } from "@/lib/db/schema";
 
 import type {
   AdvisorPlace,
@@ -17,7 +17,7 @@ import type {
   UpdateAdvisorPlaceNote,
   UpsertPlaces,
 } from "./contracts";
-import { getPlace } from "./queries";
+import { getAdvisorPlaceForPlace, getPlace } from "./queries";
 
 // Place cache writes and My places writes. advisor_places.place_name and
 // search are maintained here: every write ends with refreshAdvisorPlaceSearch
@@ -144,3 +144,97 @@ export const removeAdvisorPlace: RemoveAdvisorPlace = async (id, scope) => {
     .returning({ id: advisorPlaces.id });
   if (rows.length === 0) throw new NotFoundError("saved place");
 };
+
+/** What a removal hands back so "Undo" can put the row back as it was. */
+export type RemovedAdvisorPlace = {
+  id: string;
+  placeId: string;
+  city: string;
+  note: string;
+  tags: string[];
+  savedAt: string;
+  lastUsedAt: string | null;
+  /** trip_places that pointed at the row ("Your place" on those trips). */
+  tripPlaceIds: string[];
+};
+
+/**
+ * Remove a saved place and return what undo needs: the row and the trip
+ * places that pointed at it (the foreign key nulls them on delete). One
+ * transaction, so the list of links matches the row that was removed.
+ */
+export async function takeAdvisorPlace(id: string, scope: ScopeInput): Promise<RemovedAdvisorPlace> {
+  if (!isUuid(id)) throw new NotFoundError("saved place");
+  const where = and(eq(advisorPlaces.id, id), inScope(advisorPlaces, scope)) as SQL;
+  const [links, removed] = await db.batch([
+    db
+      .select({ id: tripPlaces.id })
+      .from(tripPlaces)
+      .innerJoin(advisorPlaces, eq(advisorPlaces.id, tripPlaces.advisorPlaceId))
+      .where(where),
+    db.delete(advisorPlaces).where(where).returning(),
+  ]);
+  const row = removed[0];
+  if (!row) throw new NotFoundError("saved place");
+  return {
+    id: row.id,
+    placeId: row.placeId,
+    city: row.city,
+    note: row.note,
+    tags: row.tags,
+    savedAt: row.savedAt.toISOString(),
+    lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
+    tripPlaceIds: links.map((link) => link.id),
+  };
+}
+
+/**
+ * Undo a removal: insert the row again with its old id and saved date, owned
+ * by the caller, and point the trip places it had back at it (only places of
+ * the caller's trips that still have no saved place). When the place was
+ * saved again in the meantime, that newer row wins and is returned.
+ */
+export async function restoreAdvisorPlace(removed: RemovedAdvisorPlace, scope: ScopeInput): Promise<AdvisorPlace> {
+  if (!isUuid(removed.id)) throw new NotFoundError("saved place");
+  const place = await getPlace(removed.placeId);
+  if (!place) throw new NotFoundError("place");
+  const owner = toScope(scope);
+  const tripPlaceIds = removed.tripPlaceIds.filter(isUuid);
+  const own = and(eq(advisorPlaces.id, removed.id), eq(advisorPlaces.ownerId, owner.ownerId)) as SQL;
+
+  const insert = db
+    .insert(advisorPlaces)
+    .values({
+      id: removed.id,
+      ownerId: owner.ownerId,
+      orgId: owner.orgId,
+      placeId: place.id,
+      city: removed.city.trim(),
+      note: removed.note.trim(),
+      tags: removed.tags,
+      savedAt: new Date(removed.savedAt),
+      lastUsedAt: removed.lastUsedAt ? new Date(removed.lastUsedAt) : null,
+      placeName: place.name,
+    })
+    .onConflictDoNothing();
+  // Re-link only when the row above is the caller's: the insert is skipped
+  // when the place was saved again under a new id in the meantime.
+  const relink = db
+    .update(tripPlaces)
+    .set({ advisorPlaceId: removed.id })
+    .where(
+      and(
+        inArray(tripPlaces.id, tripPlaceIds.length > 0 ? tripPlaceIds : [removed.id]),
+        eq(tripPlaces.placeId, place.id),
+        isNull(tripPlaces.advisorPlaceId),
+        inArray(tripPlaces.tripId, db.select({ id: trips.id }).from(trips).where(inScope(trips, scope))),
+        sql`exists (select 1 from advisor_places ap where ap.id = ${removed.id} and ap.owner_id = ${owner.ownerId})`,
+      ),
+    );
+  const [, refreshed] = await db.batch([insert, refreshAdvisorPlaceSearch(own), relink]);
+  const restored = refreshed[0];
+  if (restored) return restored;
+  const current = await getAdvisorPlaceForPlace(scope, place.id);
+  if (!current) throw new NotFoundError("saved place");
+  return current;
+}
