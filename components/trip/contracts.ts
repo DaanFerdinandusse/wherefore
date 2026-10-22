@@ -52,13 +52,29 @@ export type PlaceProfileProps = {
   onEditNote?: (advisorPlaceId: string, note: string) => Promise<void> | void;
 };
 
+/**
+ * What a streamed tool output says about the places it carries. `label`,
+ * `count`, `elapsedMs` and `loosened` mirror FindPlacesOutput so the ask tab
+ * can show its label and count before the next snapshot.
+ */
+export type PlacesMeta = {
+  askId?: string;
+  toolCallId: string;
+  /** ToolPhase: "searching" | "scoring" | "explaining" | "done", or "error". */
+  phase: string;
+  label?: string;
+  count?: number;
+  elapsedMs?: number;
+  loosened?: string[];
+};
+
 /** The glass chat dock. Owned by the chat runtime. */
 export type ChatDockProps = {
   chatId: string;
   tripId: string;
   initial: ChatSnapshot;
   /** Places streamed by tools (preliminary and final), for the board and map. */
-  onPlaces?: (places: TripPlaceCard[], meta: { askId?: string; toolCallId: string; phase: string }) => void;
+  onPlaces?: (places: TripPlaceCard[], meta: PlacesMeta) => void;
   onPlacesHover?: (tripPlaceId: string | null) => void;
   onPlaceClick?: (tripPlaceId: string) => void;
   /** Rendered centered above the dock (the Board / Map toggle). */
