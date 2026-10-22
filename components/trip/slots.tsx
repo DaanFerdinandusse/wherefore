@@ -2,7 +2,7 @@
 
 // Integration seam. The trip workspace renders these; each one points at the
 // real component once its branch has merged:
-//   TripMapSlot      -> components/trip/map/trip-map.tsx (pending)
+//   TripMapSlot      -> components/trip/map/trip-map.tsx
 //   PlaceProfileSlot -> components/trip/place-profile/place-profile.tsx
 //   ChatDockSlot     -> components/trip/chat/chat-dock.tsx
 // Agents building those components export them with the props in
@@ -10,19 +10,14 @@
 
 import { ChatDock } from "./chat/chat-dock";
 import type { ChatDockProps, PlaceProfileProps, TripMapProps } from "./contracts";
+import { TripMap } from "./map/trip-map";
 import { PlaceProfile } from "./place-profile/place-profile";
 
-function Placeholder({ name }: { name: string }) {
-  return (
-    <div className="flex h-full min-h-40 items-center justify-center rounded-card border border-rule bg-surface text-text-2">
-      {name} is not wired in yet.
-    </div>
-  );
-}
+// The glass dock covers the bottom of the map; pins fit above it.
+const DOCK_INSET_PX = 220;
 
 export function TripMapSlot(props: TripMapProps) {
-  void props;
-  return <Placeholder name="The map" />;
+  return <TripMap {...props} insets={{ bottom: DOCK_INSET_PX }} />;
 }
 
 export function PlaceProfileSlot(props: PlaceProfileProps) {
