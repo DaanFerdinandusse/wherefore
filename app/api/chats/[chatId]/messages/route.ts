@@ -2,7 +2,7 @@ import { createUIMessageStreamResponse } from "ai";
 import { start } from "workflow/api";
 
 import { ChatRouteError, healChat, loadOwnedChat, promptBodySchema } from "@/lib/agent/chat-routes";
-import { getChat, releaseTurn, setActiveRun, takeTurnLock } from "@/lib/agent/chat-store";
+import { canResend, getChat, releaseTurn, setActiveRun, takeTurnLock } from "@/lib/agent/chat-store";
 import { chatRoute } from "@/lib/agent/route-handler";
 import { turnUIStream } from "@/lib/agent/turn-stream";
 import type { AppUIMessage } from "@/lib/contracts";
@@ -52,6 +52,10 @@ export const POST = chatRoute(async ({ request, chatId, user }) => {
     ...parsed.data.message,
     metadata: { ...parsed.data.message.metadata, turnId, createdAt: new Date().toISOString() },
   };
+
+  if (row.activeTurnId !== turnId && !canResend(row.messages, message.id)) {
+    throw new ChatRouteError("bad_request:chat", 400, "That message was already answered. Send a new one instead.");
+  }
 
   if (!(await takeTurnLock(row.id, turnId, message))) {
     const runId = await waitForRunId(row.id, turnId);

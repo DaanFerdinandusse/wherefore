@@ -52,9 +52,12 @@ export async function createChatForTrip(tripId: string, ownerId: string): Promis
 
 /**
  * Takes the turn lock and appends the user message in the same statement, so
- * a chat is never locked without the message that locked it. The message is
- * not appended again when it already is the last message: the Retry of a
- * failed turn re-sends that same user message under a new turn id.
+ * a chat is never locked without the message that locked it. When the
+ * message id is already in the transcript (the Retry of a failed turn
+ * re-sends the same user message under a new turn id) the transcript is cut
+ * back to that message instead: the failed partial reply is replaced, the
+ * message is never duplicated. The caller checks first that the id is the
+ * last user message (canResend), so a stale client cannot cut history.
  *
  * @returns true when this call took the lock.
  */
@@ -68,7 +71,15 @@ export async function takeTurnLock(chatId: string, turnId: string, message: AppU
       stopRequestedAt: null,
       lastError: null,
       messages: sql`case
-        when ${chats.messages}->-1->>'id' = ${message.id} then ${chats.messages}
+        when exists (select 1 from jsonb_array_elements(${chats.messages}) m where m->>'id' = ${message.id})
+        then (
+          select jsonb_agg(m order by ord)
+          from jsonb_array_elements(${chats.messages}) with ordinality as t(m, ord)
+          where ord <= (
+            select ord from jsonb_array_elements(${chats.messages}) with ordinality as k(km, ord)
+            where km->>'id' = ${message.id} limit 1
+          )
+        )
         else ${chats.messages} || jsonb_build_array(${JSON.stringify(message)}::jsonb)
       end`,
       updatedAt: sql`now()`,
@@ -76,6 +87,16 @@ export async function takeTurnLock(chatId: string, turnId: string, message: AppU
     .where(and(eq(chats.id, chatId), sql`${chats.activeTurnId} is null`))
     .returning({ id: chats.id });
   return rows.length > 0;
+}
+
+/**
+ * A message id already in the transcript may only be re-sent when it is the
+ * last user message (a Retry); anything else would cut answered history.
+ */
+export function canResend(messages: AppUIMessage[], messageId: string): boolean {
+  const index = messages.findIndex((m) => m.id === messageId);
+  if (index === -1) return true;
+  return messages.slice(index + 1).every((m) => m.role !== "user") && messages[index]?.role === "user";
 }
 
 /** Records the Workflow run id for the turn that holds the lock. */

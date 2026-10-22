@@ -4,9 +4,9 @@ import { getRun } from "workflow/api";
 import { z } from "zod";
 
 import type { AuthUser } from "@/lib/auth/server";
-import type { AppUIMessage } from "@/lib/contracts";
+import type { AppUIMessage, ChatSnapshot } from "@/lib/contracts";
 
-import { getChat, isOrphanLock, releaseTurn, saveTurnMessage, type ChatRow } from "./chat-store";
+import { getChat, isOrphanLock, releaseTurn, saveTurnMessage, toChatSnapshot, type ChatRow } from "./chat-store";
 import { finalizeTurnMessage, hasContent } from "./messages";
 import { assistantMessageIdFor } from "./stream";
 import { readTurnMessage } from "./turn-stream";
@@ -106,6 +106,14 @@ export async function healChat(row: ChatRow): Promise<ChatRow> {
     lastError: status === "failed" ? "The last reply did not finish. Send it again to retry." : undefined,
   });
   return (await getChat(row.id)) ?? row;
+}
+
+/**
+ * The healed snapshot a server component passes to <ChatDock initial>.
+ * @throws ChatRouteError not_found:chat for a missing or foreign chat.
+ */
+export async function loadChatSnapshot(chatId: string, user: AuthUser): Promise<ChatSnapshot> {
+  return toChatSnapshot(await healChat(await loadOwnedChat(chatId, user)));
 }
 
 /** Rebuilds and saves a turn's assistant message from its run stream. */
