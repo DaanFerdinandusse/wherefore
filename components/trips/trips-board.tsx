@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Toast } from "@/components/ui/toast";
 import type { TripStage } from "@/lib/contracts";
 import { moveTripToStage } from "@/lib/trips/actions";
-import type { TripsByStage } from "@/lib/trips/contracts";
+import type { TripsBoardState } from "./columns";
 import { cn } from "@/lib/ui/cn";
 
 import { COLUMN_LIMIT, findCard, moveCard, restoreCard, STAGE_COLUMNS, stageLabel, totalTrips } from "./columns";
@@ -19,7 +19,7 @@ import { TripCard } from "./trip-card";
 // and saves the stage override in the background; a failed save puts the
 // card back and says so. Each column shows its first cards and a "Show N
 // more" for the rest.
-export function TripsBoard({ initial, today }: { initial: TripsByStage; today: string }) {
+export function TripsBoard({ initial, today }: { initial: TripsBoardState; today: string }) {
   const [grouped, setGrouped] = useState(initial);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<TripStage | null>(null);

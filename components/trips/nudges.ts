@@ -1,7 +1,8 @@
 // The Trips page's quiet assistant: plain sentences computed from the trips
 // rows, no model call. Each nudge links to the trip it is about.
 
-import type { TripCard, TripsByStage } from "@/lib/trips/contracts";
+import type {TripCard} from "@/lib/trips/contracts";
+import type { TripsBoardState } from "./columns";
 
 import { daysUntil, firstName, plural, tripDayToday } from "./format";
 
@@ -60,7 +61,7 @@ function nudgeFor(card: TripCard, today: string): Nudge | null {
 }
 
 /** Nudges for the dock, most urgent first, at most `limit`. */
-export function buildNudges(grouped: TripsByStage, today: string, limit = 3): Nudge[] {
+export function buildNudges(grouped: TripsBoardState, today: string, limit = 3): Nudge[] {
   const cards = [...grouped.planning, ...grouped.shared, ...grouped.traveling];
   return cards
     .map((card) => nudgeFor(card, today))
@@ -81,7 +82,7 @@ export function nudgeMessage(nudges: Nudge[]): string {
 }
 
 /** The line under the page title: "3 trips in progress. Priya is on day 2 in Lisbon." */
-export function summaryLine(grouped: TripsByStage, today: string): string {
+export function summaryLine(grouped: TripsBoardState, today: string): string {
   const inProgress = grouped.planning.length + grouped.shared.length + grouped.traveling.length;
   const head = inProgress === 0 ? "No trips in progress." : `${plural(inProgress, "trip")} in progress.`;
   const traveling = grouped.traveling

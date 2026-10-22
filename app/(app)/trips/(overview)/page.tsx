@@ -8,6 +8,7 @@ import { TripsSkeleton } from "@/components/trips/trips-skeleton";
 import { buildNudges, summaryLine } from "@/components/trips/nudges";
 import { requirePageUser } from "@/lib/auth/server";
 import { listTrips, todayIso } from "@/lib/trips";
+import { boardState } from "@/components/trips/columns";
 
 export const metadata: Metadata = { title: "Trips · Tastebrief" };
 
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "Trips · Tastebrief" };
 // this page from `?new=1` (NewTripLauncher in the app layout).
 async function TripsContent() {
   const user = await requirePageUser();
-  const grouped = await listTrips(user);
+  const grouped = boardState(await listTrips(user));
   const today = todayIso();
   return (
     <>

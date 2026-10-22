@@ -1,9 +1,8 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { inScope } from "@/lib/auth/scope";
 import { requireUser } from "@/lib/auth/server";
 import { createClient, listClients, type ClientSummary } from "@/lib/clients";
 import { selectClientSummaries } from "@/lib/clients/queries";
@@ -60,7 +59,7 @@ export async function loadTripBarContext(input: { clientId?: string | null }): P
     listRecentClientsForTripBar(user, 4),
     advisorCities(user),
     clientId
-      ? selectClientSummaries(and(eq(clients.id, clientId), inScope(clients, user)), { limit: 1 })
+      ? selectClientSummaries(user, eq(clients.id, clientId), { limit: 1 })
       : Promise.resolve([]),
     clientId ? clientPastDestinations(clientId, user) : Promise.resolve([]),
   ]);

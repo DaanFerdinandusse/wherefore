@@ -1,6 +1,7 @@
 // Test fixtures for the Trips board helpers.
 
-import type { TripCard, TripsByStage } from "@/lib/trips/contracts";
+import type {TripCard} from "@/lib/trips/contracts";
+import type { TripsBoardState } from "./columns";
 
 export function tripCard(
   overrides: Partial<Omit<TripCard, "counts">> & { counts?: Partial<TripCard["counts"]> } = {},
@@ -28,8 +29,8 @@ export function tripCard(
   };
 }
 
-export function board(cards: TripCard[]): TripsByStage {
-  const grouped: TripsByStage = { planning: [], shared: [], traveling: [], done: [] };
+export function board(cards: TripCard[]): TripsBoardState {
+  const grouped: TripsBoardState = { planning: [], shared: [], traveling: [], done: [] };
   for (const card of cards) grouped[card.stage].push(card);
   return grouped;
 }
