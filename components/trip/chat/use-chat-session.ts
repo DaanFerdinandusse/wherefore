@@ -126,6 +126,7 @@ export function useChatSession({ chatId, initial }: { chatId: string; initial: C
       if (!trimmed || busyRef.current) return;
       sendSeq.current += 1;
       chat.clearError();
+      setStopping(false);
       setServer((s) => ({ ...s, status: "running", lastError: undefined }));
       void chat.sendMessage({ text: trimmed });
     },
@@ -137,6 +138,7 @@ export function useChatSession({ chatId, initial }: { chatId: string; initial: C
     if (busyRef.current) return;
     sendSeq.current += 1;
     chat.clearError();
+    setStopping(false);
     setServer((s) => ({ ...s, status: "running", lastError: undefined }));
     void chat.regenerate();
   }, [chat]);
