@@ -202,8 +202,9 @@ textarea {
 
 @utility glass {
   background: var(--color-glass);
-  backdrop-filter: var(--glass-filter);
-  -webkit-backdrop-filter: var(--glass-filter);
+  /* Through Tailwind's own backdrop utilities: the CSS pipeline keeps the
+     standard property for those, but drops it from a literal declaration. */
+  @apply backdrop-blur-[18px];
 }
 
 @utility film {
@@ -251,15 +252,13 @@ textarea {
 /* The bottom chat dock: stronger frost than `glass`, as in the designs. */
 @utility glass-dock {
   background: var(--color-glass);
-  backdrop-filter: var(--glass-dock-filter);
-  -webkit-backdrop-filter: var(--glass-dock-filter);
+  @apply backdrop-blur-[26px] backdrop-saturate-[1.6];
 }
 
 /* Small frosted controls that sit on photos or the map (Board / Map toggle). */
 @utility glass-control {
   background: var(--color-glass-strong);
-  backdrop-filter: var(--glass-control-filter);
-  -webkit-backdrop-filter: var(--glass-control-filter);
+  @apply backdrop-blur-[14px];
 }
 
 /* Darkens the lower part of a photo so white type reads on it. */
