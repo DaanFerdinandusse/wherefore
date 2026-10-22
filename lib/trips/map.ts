@@ -56,7 +56,8 @@ export function toSlot(row: typeof itinerarySlots.$inferSelect): ItinerarySlot {
     slot: asSlotName(row.slot),
     tripPlaceId: row.tripPlaceId ?? undefined,
     note: row.note,
-    noteForTraveler: row.noteForTraveler,
+    // An agent note is never for the traveler, whatever the stored flag says.
+    noteForTraveler: row.noteSource === "agent" ? false : row.noteForTraveler,
     ...(row.noteSource === "agent" ? { noteSource: "agent" as const } : {}),
     position: row.position,
   };
