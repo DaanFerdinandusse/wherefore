@@ -37,7 +37,7 @@ export async function refreshCodexTokens(
       refresh_token: refreshToken,
       client_id: CODEX_CLIENT_ID,
     }),
-    signal: signal ?? AbortSignal.timeout(30_000),
+    signal: signal ?? AbortSignal.timeout(20_000), // Well under the 60 s refresh lease (lease.ts).
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");

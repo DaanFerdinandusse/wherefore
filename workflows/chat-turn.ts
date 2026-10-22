@@ -2,7 +2,7 @@ import { WorkflowAgent } from "@ai-sdk/workflow";
 import { isLoopFinished, isStepCount, type ModelMessage } from "ai";
 import { getWorkflowMetadata, getWritable } from "workflow";
 
-import { getChat, releaseTurn, saveTurnMessage } from "@/lib/agent/chat-store";
+import { getChat, markPendingSave, releaseTurn, saveTurnMessage } from "@/lib/agent/chat-store";
 import { trimHistory } from "@/lib/agent/history";
 import { finalizeTurnMessage, hasContent, toModelHistory } from "@/lib/agent/messages";
 import { buildInstructions } from "@/lib/agent/prompt";
@@ -68,6 +68,12 @@ async function loadTurnInput(chatId: string, turnId: string): Promise<TurnInput 
  * Saves exactly what the client was shown: writes a marker to the run's
  * stream, then folds the stream up to that marker into the assistant message.
  * Idempotent: the message id is deterministic and the save is an upsert.
+ *
+ * A read or save that fails is not swallowed: the turn gets a pending save
+ * record (chats.pending_run_id) while it still holds the lock, and the next
+ * GET rebuilds the reply from this run's stream. If even that record cannot
+ * be written the step throws, and the catch path keeps the lock so the GET
+ * heal path reconciles from the stream instead.
  */
 async function persistTurn(args: {
   chatId: string;
@@ -83,21 +89,44 @@ async function persistTurn(args: {
   } finally {
     writer.releaseLock();
   }
-  const streamed = await readTurnMessage({ runId: args.runId, turnId: args.turnId, untilMarker: markerId });
-  if (!streamed) return false;
-  const message = finalizeTurnMessage(streamed, {
-    turnId: args.turnId,
-    kind: "turn",
-    createdAt: new Date().toISOString(),
-    ...(args.stopped ? { stopped: true } : {}),
-  });
-  if (!hasContent(message)) return false;
-  return saveTurnMessage(args.chatId, args.turnId, message);
+  try {
+    const streamed = await readTurnMessage({ runId: args.runId, turnId: args.turnId, untilMarker: markerId });
+    if (!streamed) return false;
+    const message = finalizeTurnMessage(streamed, {
+      turnId: args.turnId,
+      kind: "turn",
+      createdAt: new Date().toISOString(),
+      ...(args.stopped ? { stopped: true } : {}),
+    });
+    if (!hasContent(message)) return false;
+    // false: the lock moved on (superseded); nothing of ours to keep.
+    return await saveTurnMessage(args.chatId, args.turnId, message);
+  } catch (error) {
+    console.error(`[chat ${args.chatId}] could not save turn ${args.turnId}; recording a pending save`, error);
+    await markPendingSave(args.chatId, args.turnId, args.runId);
+    return false;
+  }
 }
 
+/** Releases the lock and finalizes the turn record (stopped when a stop was requested, else completed). */
 async function markIdle(chatId: string, turnId: string): Promise<void> {
   "use step";
-  await releaseTurn(chatId, turnId, { status: "idle" });
+  await releaseTurn(chatId, turnId, { status: "idle", outcome: "auto" });
+}
+
+/**
+ * Tells the client the turn failed without releasing the lock: the reply is
+ * neither saved nor recorded as pending, so the GET heal path must rebuild it
+ * from the stream once the run is over.
+ */
+async function notifyTurnError(error: string): Promise<void> {
+  "use step";
+  const writer = getWritable<ChatStreamPart>().getWriter();
+  try {
+    await writer.write({ type: "turn-error", errorText: error });
+  } finally {
+    writer.releaseLock();
+  }
 }
 
 async function markFailed(chatId: string, turnId: string, error: string, notifyStream: boolean): Promise<void> {
@@ -174,12 +203,15 @@ export async function chatTurn({ chatId, turnId }: { chatId: string; turnId: str
     }
   } catch (error) {
     const message = errorText(error);
+    // Release only once the reply is saved or recorded as pending.
+    let kept = true;
     try {
       await persistTurn({ chatId, turnId, runId: workflowRunId, stopped: false });
     } catch {
-      // The failure itself is what the advisor needs to see; keep going.
+      kept = false;
     }
-    await markFailed(chatId, turnId, message, true);
+    if (kept) await markFailed(chatId, turnId, message, true);
+    else await notifyTurnError(message);
     outcome = { status: "failed", error: message };
   } finally {
     await closeTurnStream();
