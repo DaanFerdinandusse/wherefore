@@ -17,9 +17,27 @@ the Workflow run, its stream and a conditional UPDATE.
 | `turn-stream.ts` | Reading a run's stream: the route response, and `readTurnMessage` for persistence. |
 | `messages.ts` | `finalizeTurnMessage`, `projectTurnMessage`, `toModelHistory`. Pure. |
 | `history.ts` | `trimHistory` for `prepareStep`. Pure. |
-| `prompt.ts`, `trip-context.ts` | System prompt with the trip header; the trip context read with Drizzle. |
-| `tools/*` | One file per tool step; `tools/index.ts` builds the tool set for a turn. |
-| `dev-setup.ts` | Dev trip and chats for the chat lab and the e2e tests. |
+| `prompt.ts`, `trip-context.ts` | System prompt with the trip header (as a `<trip_data>` block) and the seed-turn brief; `TripContextOutput`, capped under about 3k tokens. |
+| `writes.ts` | Every tool write: conditional on `chats.active_turn_id = turnId`, keyed upserts. |
+| `explain.ts` | explainStep: one model call per ask, each reason validated against the facts it got. |
+| `tools/index.ts` | The tool set for a turn (`toModelOutput` per tool), `activeToolsFor` (seed turn). |
+| `tools/steps.ts` | Every `"use step"` function, and nothing else (keeps server code out of the workflow bundle). |
+| `tools/*.ts` | The tool bodies: `seed-trip`, `find-places`, `score-places`, `place-tools` (lookup, itinerary, remove), shared `search-core`, `trip-data`, pure `signals`, `category-loop`, `labels`, `model-output`. |
+| `dev-setup.ts`, `tools/dev-fixtures.ts` | Dev trip and chats for the chat lab; the seeded Lisbon trip for `e2e/chat/tools.spec.ts`. |
+
+## Tools
+
+| Tool | Input | Output (`details`, the card reads it) |
+| --- | --- | --- |
+| `seed_trip` | `{}`, forced on step 0 of the seed turn only | `FindPlacesOutput` with `kind: "seed"`, `steps`, `summary: SeedSummary` |
+| `get_trip_context` | `{}` | `TripContextOutput` |
+| `find_places` | `{ intent, category?, tags?, price_max?, area?, day_hint?, take? }` | `FindPlacesOutput` (phases searching, scoring, explaining, done) |
+| `score_places` | `{ place_ids?, names?, scope?: "advisor_places" }` | `ScorePlacesOutput` |
+| `lookup_place` | `{ place_id }` | `LookupPlaceOutput` |
+| `set_itinerary` | `{ days: [{ day, slots: [{ slot, place_id, note? }] }], mode }` | `SetItineraryOutput` |
+| `remove_place` | `{ place_id, replace }` | `RemovePlaceOutput` |
+
+The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives it a compact copy wrapped in `<trip_data>`, because client names, ground rules and advisor notes are typed by people. Ids the model passes back (`place_id`) are trip place ids; place ids are accepted too. Provider calls are logged with `logTripCall` (source `seed`, `ask:<id>`, or `manual` for score_places and a replacement outside an ask). The spike tools (`echo_places`, `slow_count`) exist only with `AGENT_DEV_TOOLS=1` outside production (playwright.config.ts sets it); their places never reach the board (`extractChatPlaces` reads only find_places, seed_trip and remove_place).
 
 ## Invariants
 

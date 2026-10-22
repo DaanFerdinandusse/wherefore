@@ -18,13 +18,14 @@ type Props = {
   onRetryAsk: (assistantMessageId: string) => void;
   onPlacesHover?: (placeId: string | null) => void;
   onPlaceClick?: (placeId: string) => void;
+  placeName?: (tripPlaceId: string) => string | undefined;
 };
 
 function Cursor() {
   return <span aria-hidden data-testid="stream-cursor" className="ml-0.5 inline-block h-[1em] w-[2px] translate-y-[2px] animate-pulse bg-amber" />;
 }
 
-export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, onPlaceClick }: Props) {
+export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, onPlaceClick, placeName }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const visible = messages.filter((m) => !m.metadata?.hidden);
   const last = visible.at(-1);
@@ -65,6 +66,7 @@ export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, on
                     onRetry={!streaming ? () => onRetryAsk(message.id) : undefined}
                     onPlacesHover={onPlacesHover}
                     onPlaceClick={onPlaceClick}
+                    placeName={placeName}
                   />
                 );
               }

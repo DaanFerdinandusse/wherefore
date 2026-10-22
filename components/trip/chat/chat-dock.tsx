@@ -1,31 +1,52 @@
 "use client";
 
 import { CircleAlert, RotateCcw } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import type { ChatSnapshot } from "@/lib/contracts";
+import type { ChatDockProps } from "../contracts";
 
 import { describeChatError } from "./chat-errors";
+import { extractChatPlaces, toolPlaceEvents } from "./chat-places";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
 import { useChatSession } from "./use-chat-session";
 
 // The glass chat dock for a trip. Owns the durable chat session; hands
-// place hover and click out to the map and the board.
+// place hover and click out to the map and the board, and every batch of
+// places a tool streams (preliminary and final) to `onPlaces`, so the board
+// and the map fill before the model finishes talking. Props: ChatDockProps
+// in components/trip/contracts.ts.
 
-export type ChatDockProps = {
-  chatId: string;
-  initial: ChatSnapshot;
-  /** A place tile in a tool card is hovered (null when the pointer leaves). */
-  onPlacesHover?: (placeId: string | null) => void;
-  /** A place tile in a tool card is clicked. */
-  onPlaceClick?: (placeId: string) => void;
-  className?: string;
-};
+export type { ChatDockProps };
 
-export function ChatDock({ chatId, initial, onPlacesHover, onPlaceClick, className }: ChatDockProps) {
+export function ChatDock({
+  chatId,
+  initial,
+  onPlaces,
+  onPlacesHover,
+  onPlaceClick,
+  toggle,
+  className,
+}: ChatDockProps) {
   const session = useChatSession({ chatId, initial });
   const { messages, busy, stopping, error, server, send, retryLast, stop } = session;
+
+  // Each tool output is announced once per change (phase, count, reasons).
+  const announced = useRef(new Set<string>());
+  const onPlacesRef = useRef(onPlaces);
+  useEffect(() => {
+    onPlacesRef.current = onPlaces;
+  }, [onPlaces]);
+  useEffect(() => {
+    for (const event of toolPlaceEvents(messages)) {
+      if (announced.current.has(event.key)) continue;
+      announced.current.add(event.key);
+      onPlacesRef.current?.(event.places, { askId: event.askId, toolCallId: event.toolCallId, phase: event.phase });
+    }
+  }, [messages]);
+
+  const names = useMemo(() => new Map(extractChatPlaces(messages).map((p) => [p.tripPlaceId, p.name])), [messages]);
+  const placeName = useCallback((id: string) => names.get(id), [names]);
 
   const problem =
     describeChatError(error) ??
@@ -38,10 +59,15 @@ export function ChatDock({ chatId, initial, onPlacesHover, onPlaceClick, classNa
       const ask = messages
         .slice(0, index === -1 ? messages.length : index)
         .findLast((m) => m.role === "user");
+      // The seed message is hidden and carries kind "seed": re-run it as is.
+      if (ask?.metadata?.kind === "seed") {
+        if (messages.findLast((m) => m.role === "user")?.id === ask.id) retryLast();
+        return;
+      }
       const text = ask?.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
       if (text) send(text);
     },
-    [messages, send],
+    [messages, send, retryLast],
   );
 
   return (
@@ -49,8 +75,9 @@ export function ChatDock({ chatId, initial, onPlacesHover, onPlaceClick, classNa
       aria-label="Planning assistant"
       data-testid="chat-dock"
       data-busy={busy ? "true" : "false"}
-      className={`glass flex min-h-0 flex-col gap-3 rounded-sheet p-3 hairline ${className ?? ""}`}
+      className={`glass relative flex min-h-0 flex-col gap-3 rounded-sheet p-3 hairline ${className ?? ""}`}
     >
+      {toggle ? <div className="absolute -top-14 left-1/2 -translate-x-1/2">{toggle}</div> : null}
       <header className="flex items-center justify-between px-1">
         <span className="label-caps text-text-2">Assistant</span>
         {busy ? <span className="label-caps text-amber">{stopping ? "Stopping" : "Working"}</span> : null}
@@ -66,6 +93,7 @@ export function ChatDock({ chatId, initial, onPlacesHover, onPlaceClick, classNa
             onRetryAsk={retryAsk}
             onPlacesHover={onPlacesHover}
             onPlaceClick={onPlaceClick}
+            placeName={placeName}
           />
         )}
       </div>

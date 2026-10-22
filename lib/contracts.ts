@@ -155,6 +155,34 @@ export type TripSnapshot = {
 // Tool phases streamed as preliminary outputs while a tool runs.
 export type ToolPhase = "searching" | "scoring" | "explaining" | "done";
 
+/** One line under the search card's tiles ("Score your places", "Explain picks"). */
+export type ToolStepState = "pending" | "running" | "done" | "skipped" | "failed";
+export type ToolStep = {
+  key: "search" | "score" | "explain";
+  label: string;
+  /** "Your 3 Lisbon places, scored for Ana". */
+  detail?: string;
+  state: ToolStepState;
+  done?: number;
+  total?: number;
+  /** Right-hand figure: "2 kept · 0.8 s", "3 of 5". */
+  note?: string;
+};
+
+/** What the seed tool hands the model for the first message (PLAN 8). */
+export type SeedSummary = {
+  clientName: string;
+  destination: string;
+  total: number;
+  categories: { category: Category; count: number }[];
+  favoritesUsed: { clientName: string; names: string[] }[];
+  advisorPlaces: { name: string; score?: number; onBoard: boolean }[];
+  companionsWithoutFavorites: string[];
+  rules: string[];
+  explained: number;
+  askNext: string[];
+};
+
 export type FindPlacesOutput = {
   phase: ToolPhase;
   askId?: string;
@@ -166,13 +194,58 @@ export type FindPlacesOutput = {
   loosened: string[];
   places: TripPlaceCard[];
   error?: string;
+  /** "ask" for find_places, "seed" for seed_trip. */
+  kind?: "ask" | "seed";
+  /** Card title: "Searched natural wine bars". */
+  title?: string;
+  /** Card details line: "Lisbon · based on Ana's favorites". */
+  details?: string;
+  /** Live line while running: "Searching places to eat · 3 of 5". */
+  progress?: string;
+  steps?: ToolStep[];
+  /** Seed only, on the final output. */
+  summary?: SeedSummary;
 };
 
 export type ScorePlacesOutput = {
   phase: ToolPhase;
   places: (Pick<TripPlaceCard, "tripPlaceId" | "placeId" | "name" | "score" | "because" | "yourPlace"> & {
     imageUrl?: string;
+    /** The provider's id, for places scored by name that are not on the board. */
+    entityId?: string;
+    category?: Category;
   })[];
+  /** Names that did not resolve to a place near the destination. */
+  unresolved?: string[];
+  error?: string;
+};
+
+/** lookup_place: the trimmed facts block of one place, nothing added. */
+export type LookupPlaceOutput = {
+  placeId: string;
+  tripPlaceId?: string;
+  name: string;
+  address?: string;
+  neighborhood?: string;
+  priceLevel?: number;
+  rating?: number;
+  description?: string;
+  descriptions?: string[];
+  keywords?: string[];
+  tags: string[];
+  hours?: Record<string, string>;
+  website?: string;
+  phone?: string;
+  error?: string;
+};
+
+/** remove_place: what was removed and the next best place that replaced it. */
+export type RemovePlaceOutput = {
+  removed?: Pick<TripPlaceCard, "tripPlaceId" | "placeId" | "name" | "category">;
+  replacement?: TripPlaceCard;
+  /** Why no replacement came back, in plain words. */
+  note?: string;
+  error?: string;
 };
 
 export type SetItineraryOutput = {
@@ -182,10 +255,18 @@ export type SetItineraryOutput = {
 
 export type TripContextOutput = {
   trip: TripSnapshot["trip"];
-  travelers: { name: string; role: string; favorites: string[]; tasteTags: string[]; rules: string[] }[];
+  travelers: {
+    name: string;
+    role: string;
+    favorites: string[];
+    tasteTags: string[];
+    rules: string[];
+    drivesSearch?: boolean;
+  }[];
   advisorPlaces: { placeId: string; name: string; note: string; score?: number }[];
   board: { categories: { category: Category; count: number }[]; asks: Ask[] };
   itinerary: ItinerarySlot[];
+  party?: { adults: number; children: number };
 };
 
 export type ChatMessageMetadata = {

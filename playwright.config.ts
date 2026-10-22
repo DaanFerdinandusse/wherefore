@@ -29,6 +29,9 @@ export default defineConfig({
   },
   webServer: {
     command: `npx next dev -p ${port}`,
+    // The chat-lab specs drive the spike tools (echo_places, slow_count);
+    // real turns never get them. A reused server must be started with it too.
+    env: { AGENT_DEV_TOOLS: "1" },
     url: `http://localhost:${port}/sign-in`,
     reuseExistingServer: true,
     timeout: 120_000,
