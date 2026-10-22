@@ -15,6 +15,7 @@ import type {
   Destination,
   Explainability,
   ItinerarySlot,
+  SharedTripView,
   SlotName,
   TasteTag,
   TripPlaceCard,
@@ -84,7 +85,23 @@ export type TripCard = {
   updatedAt: Date;
 };
 
-export type TripsByStage = Record<TripStage, TripCard[]>;
+/** One column of the Trips board: a page of cards, newest first. */
+export type TripStageColumn = {
+  trips: TripCard[];
+  /** Every trip in this stage, not just this page. */
+  total: number;
+  /** More trips in this stage after this page (ask again with a larger `offset`). */
+  hasMore: boolean;
+};
+
+export type TripsByStage = Record<TripStage, TripStageColumn>;
+
+export type ListTripsOptions = {
+  /** Cards per stage, default 30, at most 100. */
+  perStage?: number;
+  /** Skip this many cards in each stage, for "Show more". Default 0. */
+  offset?: number;
+};
 
 export type TripPatch = Partial<
   Pick<Trip, "title" | "destination" | "startDate" | "endDate" | "adults" | "children" | "builtFrom"> & {
@@ -140,6 +157,8 @@ export type SlotInput = {
   slot: SlotName;
   tripPlaceId?: string | null;
   note?: string;
+  /** Show the note on the public traveler view. Written together with the note. */
+  noteForTraveler?: boolean;
   position?: number;
 };
 
@@ -162,11 +181,13 @@ export type PastDestination = Destination & { lastTripId: string; lastStartDate:
 
 export type GetTrip = (id: string, scope: ScopeInput) => Promise<Trip | null>;
 export type GetTripSnapshot = (tripId: string, ownerId: ScopeInput) => Promise<TripSnapshot | null>;
-/** The public traveler view by share token. No scope: the token is the key. */
-export type GetSharedTripSnapshot = (
-  token: string,
-) => Promise<{ snapshot: TripSnapshot; advisorName: string | null } | null>;
-export type ListTrips = (ownerId: ScopeInput) => Promise<TripsByStage>;
+/**
+ * The public traveler view by share token. No scope: the token is the key, so
+ * the result holds only what the traveler may see (see SharedTripView).
+ */
+export type GetSharedTripView = (token: string) => Promise<SharedTripView | null>;
+/** The Trips board: each stage bounded to a page, newest first. */
+export type ListTrips = (ownerId: ScopeInput, options?: ListTripsOptions) => Promise<TripsByStage>;
 /** Cards for some or all of a trip's places, for tool outputs that stream cards. */
 export type ListTripPlaceCards = (
   tripId: string,
@@ -193,6 +214,8 @@ export type SetStageOverride = (id: string, stage: TripStage | null, scope: Scop
  * Insert or merge trip places, unique on (trip, place). On a repeat the
  * stronger source wins (seed < ask < advisor < manual), the best score is
  * kept with its explainability and tags, status and position are left alone.
+ * An `advisorPlaceId` is kept only when that saved place is in the caller's
+ * scope and saves the same `placeId`; otherwise the link is stored as null.
  * Returns `{ [placeId]: tripPlaceId }`.
  */
 export type UpsertTripPlaces = (
@@ -211,8 +234,9 @@ export type CreateAsk = (tripId: string, input: CreateAskInput, scope: ScopeInpu
 export type UpdateAsk = (askId: string, patch: AskPatch, scope: ScopeInput) => Promise<Ask>;
 export type ArchiveAsk = (askId: string, scope: ScopeInput) => Promise<Ask>;
 /**
- * Add ranked results to an ask tab and update its result count. Trip places
- * of another trip are skipped and returned in `rejected`.
+ * Add ranked results to an ask tab. Trip places of another trip are skipped
+ * and returned in `rejected`. The result count is counted on read; the stored
+ * `result_count` is written once, by `updateAsk` when the ask completes.
  */
 export type AddAskPlaces = (
   askId: string,

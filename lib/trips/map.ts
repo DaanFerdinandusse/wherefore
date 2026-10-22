@@ -31,12 +31,17 @@ export function isSlotName(value: string): value is SlotName {
   return (SLOT_ORDER as readonly string[]).includes(value);
 }
 
-export function toAsk(row: typeof tripAsks.$inferSelect): Ask {
+/**
+ * `liveCount` is the number of ask_places rows, counted on read. The stored
+ * `result_count` is only the final count written when the ask completes, so
+ * it is the fallback, not the source.
+ */
+export function toAsk(row: typeof tripAsks.$inferSelect, liveCount?: number): Ask {
   return {
     id: row.id,
     label: row.label,
     status: asAskStatus(row.status),
-    resultCount: row.resultCount,
+    resultCount: liveCount ?? row.resultCount,
     elapsedMs: row.elapsedMs ?? undefined,
     toolCallId: row.toolCallId ?? undefined,
     loosened: row.loosened,
@@ -51,6 +56,7 @@ export function toSlot(row: typeof itinerarySlots.$inferSelect): ItinerarySlot {
     slot: asSlotName(row.slot),
     tripPlaceId: row.tripPlaceId ?? undefined,
     note: row.note,
+    noteForTraveler: row.noteForTraveler,
     position: row.position,
   };
 }

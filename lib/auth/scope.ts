@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, inArray, or, type SQL } from "drizzle-orm";
+import { eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 // Who may see a row. Every owned table carries owner_id and a nullable org_id;
@@ -37,7 +37,23 @@ export function isUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
 
-type OwnedColumns ={ ownerId: PgColumn; orgId: PgColumn };
+type OwnedColumns = { ownerId: PgColumn; orgId: PgColumn };
+
+/**
+ * The same predicate for an aliased table inside hand-written SQL, such as a
+ * correlated subquery over `trips t`: `(t.owner_id = $owner or t.org_id in (...))`.
+ */
+export function inScopeAs(alias: string, input: ScopeInput): SQL {
+  const scope = toScope(input);
+  const table = sql.identifier(alias);
+  const own = sql`${table}.owner_id = ${scope.ownerId}`;
+  if (scope.orgIds.length === 0) return own;
+  const orgs = sql.join(
+    scope.orgIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  return sql`(${own} or ${table}.org_id in (${orgs}))`;
+}
 
 /** `owner_id = $owner or org_id = any($orgs)` for one owned table. */
 export function inScope(table: OwnedColumns, input: ScopeInput): SQL {

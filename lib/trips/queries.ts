@@ -1,10 +1,10 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import { inScope, isUuid } from "@/lib/auth/scope";
 import { listRecentClients } from "@/lib/clients/queries";
-import type { TripPlaceCard, TripSnapshot } from "@/lib/contracts";
+import type { TripPlaceCard, TripSnapshot, TripStage } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import {
   advisorPlaces,
@@ -22,7 +22,7 @@ import {
 
 import type {
   ClientPastDestinations,
-  GetSharedTripSnapshot,
+  GetSharedTripView,
   GetTrip,
   GetTripSnapshot,
   ListRecentClientsForTripBar,
@@ -34,12 +34,13 @@ import type {
   TripsByStage,
 } from "./contracts";
 import { asCategory, asPlaceStatus, asSource, compareSlots, toAsk, toSlot } from "./map";
-import { computeStage, todayIso, tripDayCount } from "./stage";
+import { type SharedSlotRow, toSharedTripView } from "./share";
+import { computeStage, isTripStage, todayIso, tripDayCount } from "./stage";
 
 // Drizzle prints a single-table select's columns unqualified, which a
 // correlated subquery would read as its own. Name the outer row explicitly.
-const TRIP_ID = sql.raw(`"trips"."id"`);
 const TRAVELER_CLIENT_ID = sql.raw(`"trip_travelers"."client_id"`);
+const TRIP_ASK_ID = sql.raw(`"trip_asks"."id"`);
 
 export const getTrip: GetTrip = async (id, scope) => {
   if (!isUuid(id)) return null;
@@ -52,6 +53,20 @@ export const getTrip: GetTrip = async (id, scope) => {
 };
 
 // Trip place cards: trip_places + places + the advisor's saved row.
+
+/**
+ * "Your place" joins only a saved place of the trip's own owner (or org) for
+ * the same place. The write side checks this too (upsertTripPlaces); the read
+ * side does not trust stored links.
+ */
+const yourPlaceJoin = and(
+  eq(advisorPlaces.id, tripPlaces.advisorPlaceId),
+  eq(advisorPlaces.placeId, tripPlaces.placeId),
+  or(
+    eq(advisorPlaces.ownerId, trips.ownerId),
+    and(isNotNull(trips.orgId), eq(advisorPlaces.orgId, trips.orgId)),
+  ),
+);
 
 function cardsQuery(where: SQL | undefined) {
   return db
@@ -69,7 +84,8 @@ function cardsQuery(where: SQL | undefined) {
     })
     .from(tripPlaces)
     .innerJoin(places, eq(places.id, tripPlaces.placeId))
-    .leftJoin(advisorPlaces, eq(advisorPlaces.id, tripPlaces.advisorPlaceId))
+    .innerJoin(trips, eq(trips.id, tripPlaces.tripId))
+    .leftJoin(advisorPlaces, yourPlaceJoin)
     .where(where)
     .orderBy(asc(tripPlaces.position), sql`${tripPlaces.bestScore} desc nulls last`, asc(places.name));
 }
@@ -142,7 +158,11 @@ export const getTripSnapshot: GetTripSnapshot = async (tripId, ownerId) => {
     cardsQuery(eq(tripPlaces.tripId, tripId)),
     membershipQuery(tripId),
     db
-      .select()
+      .select({
+        ask: tripAsks,
+        // Counted on read, so concurrent result writes never leave a stale count.
+        liveCount: sql<number>`(select count(*)::int from ask_places ap where ap.ask_id = ${TRIP_ASK_ID})`,
+      })
       .from(tripAsks)
       .where(and(eq(tripAsks.tripId, tripId), ne(tripAsks.status, "archived")))
       .orderBy(asc(tripAsks.createdAt)),
@@ -176,7 +196,7 @@ export const getTripSnapshot: GetTripSnapshot = async (tripId, ownerId) => {
       favoritesCount: traveler.clientId ? favoritesCount : 0,
     })),
     places: cardRows.map((row) => toCard(row, askIds.get(row.tripPlace.id) ?? [])),
-    asks: askRows.map(toAsk),
+    asks: askRows.map(({ ask, liveCount }) => toAsk(ask, liveCount)),
     slots: slotRows.map(toSlot).sort(compareSlots),
   };
   return snapshot;
@@ -186,17 +206,78 @@ function asSeedStatus(value: string): TripSnapshot["trip"]["seedStatus"] {
   return value === "running" || value === "done" || value === "failed" ? value : "pending";
 }
 
-export const getSharedTripSnapshot: GetSharedTripSnapshot = async (token) => {
+/**
+ * The public traveler view. It never goes through the advisor snapshot: the
+ * two selects below name every column the traveler may see, and
+ * `toSharedTripView` drops what the page does not show (ids, scores, asks,
+ * advisor place notes, slot notes not marked for the traveler). Removed
+ * places do not join.
+ */
+export const getSharedTripView: GetSharedTripView = async (token) => {
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
-  const [row] = await db
-    .select({ id: trips.id, ownerId: trips.ownerId, advisorName: advisors.displayName })
-    .from(trips)
-    .leftJoin(advisors, eq(advisors.userId, trips.ownerId))
-    .where(eq(trips.shareToken, token))
-    .limit(1);
-  if (!row) return null;
-  const snapshot = await getTripSnapshot(row.id, row.ownerId);
-  return snapshot ? { snapshot, advisorName: row.advisorName } : null;
+  const sharedTripId = db.select({ id: trips.id }).from(trips).where(eq(trips.shareToken, token));
+  const [tripRows, slotRows] = await db.batch([
+    db
+      .select({
+        title: trips.title,
+        destinationName: sql<string>`${trips.destination} ->> 'name'`,
+        startDate: trips.startDate,
+        endDate: trips.endDate,
+        clientName: trips.clientName,
+        advisorName: advisors.displayName,
+      })
+      .from(trips)
+      .leftJoin(advisors, eq(advisors.userId, trips.ownerId))
+      .where(eq(trips.shareToken, token))
+      .limit(1),
+    db
+      .select({
+        day: itinerarySlots.day,
+        date: itinerarySlots.date,
+        slot: itinerarySlots.slot,
+        position: itinerarySlots.position,
+        note: itinerarySlots.note,
+        noteForTraveler: itinerarySlots.noteForTraveler,
+        placeName: places.name,
+        category: tripPlaces.category,
+        imageUrl: sql<string | null>`${places.images} -> 0 ->> 'url'`,
+        neighborhood: places.neighborhood,
+        explainability: tripPlaces.explainability,
+        sharedTags: tripPlaces.sharedTags,
+        reason: tripPlaces.reason,
+      })
+      .from(itinerarySlots)
+      .leftJoin(
+        tripPlaces,
+        and(eq(tripPlaces.id, itinerarySlots.tripPlaceId), ne(tripPlaces.status, "removed")),
+      )
+      .leftJoin(places, eq(places.id, tripPlaces.placeId))
+      .where(inArray(itinerarySlots.tripId, sharedTripId)),
+  ]);
+  const trip = tripRows[0];
+  if (!trip) return null;
+
+  const slots: SharedSlotRow[] = slotRows.map((row) => ({
+    day: row.day,
+    date: row.date,
+    slot: row.slot,
+    position: row.position,
+    note: row.note,
+    noteForTraveler: row.noteForTraveler,
+    place:
+      row.placeName === null
+        ? null
+        : {
+            name: row.placeName,
+            category: row.category ?? "other",
+            imageUrl: row.imageUrl,
+            neighborhood: row.neighborhood,
+            explainability: row.explainability ?? [],
+            sharedTags: row.sharedTags ?? [],
+            reason: row.reason,
+          },
+  }));
+  return toSharedTripView(trip, slots);
 };
 
 export const listTripPlaceCards: ListTripPlaceCards = async (tripId, scope, options = {}) => {
@@ -219,42 +300,131 @@ export const listTripPlaceCards: ListTripPlaceCards = async (tripId, scope, opti
   return cardRows.map((row) => toCard(row, askIds.get(row.tripPlace.id) ?? []));
 };
 
-export const listTrips: ListTrips = async (ownerId) => {
+export const DEFAULT_TRIPS_PER_STAGE = 30;
+const MAX_TRIPS_PER_STAGE = 100;
+
+/**
+ * computeStage (stage.ts) as SQL, so the board can page each stage in the
+ * database. Keep the two in step; the board test checks they agree.
+ */
+export function stageSql(today: string): SQL<TripStage> {
+  const end = sql`coalesce(${trips.endDate}, ${trips.startDate})`;
+  const day = sql`${today}::date`;
+  return sql<TripStage>`case
+    when ${trips.stageOverride} in ('planning', 'shared', 'traveling', 'done') then ${trips.stageOverride}
+    when ${end} is not null and ${day} > ${end} then 'done'
+    when ${trips.startDate} is not null and ${day} >= ${trips.startDate} and (${end} is null or ${day} <= ${end}) then 'traveling'
+    when ${trips.shareToken} is not null then 'shared'
+    else 'planning'
+  end`;
+}
+
+/**
+ * The Trips board. One statement: the scoped trips ranked per stage, the
+ * requested page of each stage, and the card aggregates as grouped joins over
+ * that page only (no per-trip subqueries).
+ */
+export const listTrips: ListTrips = async (ownerId, options = {}) => {
+  const perStage = Math.min(Math.max(1, Math.floor(options.perStage ?? DEFAULT_TRIPS_PER_STAGE)), MAX_TRIPS_PER_STAGE);
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const today = todayIso();
+  const stage = stageSql(today);
+
+  const ranked = db.$with("ranked").as(
+    db
+      .select({
+        id: trips.id,
+        stage: sql<TripStage>`${stage}`.as("stage"),
+        rn: sql<number>`row_number() over (partition by ${stage} order by ${trips.updatedAt} desc, ${trips.id})`.as("rn"),
+        total: sql<number>`count(*) over (partition by ${stage})`.as("total"),
+      })
+      .from(trips)
+      .where(inScope(trips, ownerId)),
+  );
+  const page = db.$with("page").as(
+    db
+      .select()
+      .from(ranked)
+      .where(and(sql`${ranked.rn} > ${offset}`, sql`${ranked.rn} <= ${offset + perStage}`)),
+  );
+  const pageIds = db.select({ id: page.id }).from(page);
+
+  const placeCounts = db
+    .select({
+      tripId: tripPlaces.tripId,
+      places: sql<number>`(count(*) filter (where ${tripPlaces.status} <> 'removed'))::int`.as("places"),
+      added: sql<number>`(count(*) filter (where ${tripPlaces.status} = 'added'))::int`.as("added"),
+    })
+    .from(tripPlaces)
+    .where(inArray(tripPlaces.tripId, pageIds))
+    .groupBy(tripPlaces.tripId)
+    .as("place_counts");
+
+  const slotCounts = db
+    .select({
+      tripId: itinerarySlots.tripId,
+      filledSlots: sql<number>`(count(*) filter (where ${itinerarySlots.tripPlaceId} is not null))::int`.as(
+        "filled_slots",
+      ),
+      filledDays: sql<number>`(count(distinct ${itinerarySlots.day}) filter (where ${itinerarySlots.tripPlaceId} is not null))::int`.as(
+        "filled_days",
+      ),
+      maxDay: sql<number | null>`max(${itinerarySlots.day})`.as("max_day"),
+    })
+    .from(itinerarySlots)
+    .where(inArray(itinerarySlots.tripId, pageIds))
+    .groupBy(itinerarySlots.tripId)
+    .as("slot_counts");
+
+  // The city photo: the first image of the best scored place still on the trip.
+  const covers = db
+    .selectDistinctOn([tripPlaces.tripId], {
+      tripId: tripPlaces.tripId,
+      imageUrl: sql<string | null>`${places.images} -> 0 ->> 'url'`.as("image_url"),
+    })
+    .from(tripPlaces)
+    .innerJoin(places, eq(places.id, tripPlaces.placeId))
+    .where(
+      and(
+        inArray(tripPlaces.tripId, pageIds),
+        ne(tripPlaces.status, "removed"),
+        sql`jsonb_array_length(${places.images}) > 0`,
+      ),
+    )
+    .orderBy(tripPlaces.tripId, sql`${tripPlaces.bestScore} desc nulls last`)
+    .as("covers");
+
   const rows = await db
+    .with(ranked, page)
     .select({
       trip: trips,
+      stage: page.stage,
+      total: page.total,
       clientAvatarUrl: clients.avatarUrl,
-      imageUrl: sql<string | null>`(
-        select p.images -> 0 ->> 'url'
-        from trip_places tp
-        join places p on p.id = tp.place_id
-        where tp.trip_id = ${TRIP_ID} and tp.status <> 'removed' and jsonb_array_length(p.images) > 0
-        order by tp.best_score desc nulls last
-        limit 1
-      )`,
-      places: sql<number>`(
-        select count(*)::int from trip_places tp where tp.trip_id = ${TRIP_ID} and tp.status <> 'removed'
-      )`,
-      added: sql<number>`(
-        select count(*)::int from trip_places tp where tp.trip_id = ${TRIP_ID} and tp.status = 'added'
-      )`,
-      filledSlots: sql<number>`(
-        select count(*)::int from itinerary_slots s where s.trip_id = ${TRIP_ID} and s.trip_place_id is not null
-      )`,
-      filledDays: sql<number>`(
-        select count(distinct s.day)::int from itinerary_slots s where s.trip_id = ${TRIP_ID} and s.trip_place_id is not null
-      )`,
-      maxDay: sql<number | null>`(select max(s.day) from itinerary_slots s where s.trip_id = ${TRIP_ID})`,
+      imageUrl: covers.imageUrl,
+      places: placeCounts.places,
+      added: placeCounts.added,
+      filledSlots: slotCounts.filledSlots,
+      filledDays: slotCounts.filledDays,
+      maxDay: slotCounts.maxDay,
     })
-    .from(trips)
+    .from(page)
+    .innerJoin(trips, eq(trips.id, page.id))
     .leftJoin(clients, eq(clients.id, trips.clientId))
-    .where(inScope(trips, ownerId))
-    .orderBy(desc(trips.updatedAt));
+    .leftJoin(placeCounts, eq(placeCounts.tripId, trips.id))
+    .leftJoin(slotCounts, eq(slotCounts.tripId, trips.id))
+    .leftJoin(covers, eq(covers.tripId, trips.id))
+    .orderBy(desc(trips.updatedAt), asc(trips.id));
 
-  const today = todayIso();
-  const grouped: TripsByStage = { planning: [], shared: [], traveling: [], done: [] };
+  const board: TripsByStage = {
+    planning: { trips: [], total: 0, hasMore: false },
+    shared: { trips: [], total: 0, hasMore: false },
+    traveling: { trips: [], total: 0, hasMore: false },
+    done: { trips: [], total: 0, hasMore: false },
+  };
   for (const row of rows) {
     const t = row.trip;
+    const cardStage = isTripStage(row.stage) ? row.stage : computeStage(t, today);
     const days = tripDayCount(t, row.maxDay);
     const card: TripCard = {
       id: t.id,
@@ -268,22 +438,25 @@ export const listTrips: ListTrips = async (ownerId) => {
       datesMode: t.datesMode,
       adults: t.adults,
       children: t.children,
-      stage: computeStage(t, today),
+      stage: cardStage,
       shareToken: t.shareToken,
       seedStatus: t.seedStatus,
-      imageUrl: row.imageUrl,
+      imageUrl: row.imageUrl ?? null,
       counts: {
-        places: row.places,
-        added: row.added,
-        filledSlots: row.filledSlots,
+        places: row.places ?? 0,
+        added: row.added ?? 0,
+        filledSlots: row.filledSlots ?? 0,
         days,
-        emptyDays: Math.max(0, days - row.filledDays),
+        emptyDays: Math.max(0, days - (row.filledDays ?? 0)),
       },
       updatedAt: t.updatedAt,
     };
-    grouped[card.stage].push(card);
+    const column = board[cardStage];
+    column.trips.push(card);
+    column.total = Number(row.total);
+    column.hasMore = Number(row.total) > offset + perStage;
   }
-  return grouped;
+  return board;
 };
 
 export const listRecentClientsForTripBar: ListRecentClientsForTripBar = (ownerId, limit = 4) =>

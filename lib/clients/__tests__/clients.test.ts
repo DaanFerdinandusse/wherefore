@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+
+import { eq, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { NotFoundError } from "@/lib/auth/errors";
@@ -12,8 +15,9 @@ import {
   updateClientFields,
 } from "@/lib/clients";
 import { cleanup, hasDatabase, LISBON, testRun } from "@/lib/db/__tests__/fixtures";
-import { clients } from "@/lib/db/schema";
-import { searchRows } from "@/lib/search/trgm";
+import { db } from "@/lib/db";
+import { clients, trips } from "@/lib/db/schema";
+import { searchRows, setWordThreshold, trgmMatch } from "@/lib/search/trgm";
 import { createTrip, getTrip } from "@/lib/trips";
 
 const run = testRun();
@@ -62,6 +66,57 @@ describe.skipIf(!hasDatabase)("clients", () => {
     await expect(updateClientFields(marcus.id, { name: "Hijack" }, run.otherOwner)).rejects.toBeInstanceOf(
       NotFoundError,
     );
+  });
+
+  it("summaries ignore trips outside the caller's scope", async () => {
+    const nora = await createClient({ name: "Nora Quist" }, run.owner);
+    const { trip: mine } = await createTrip(run.owner, {
+      clientId: nora.id,
+      destination: LISBON,
+      startDate: "2099-03-01",
+      endDate: "2099-03-04",
+      datesMode: "exact",
+      adults: 1,
+      children: 0,
+      travelers: [],
+    });
+    // A row another advisor wrote against her client id, past the helpers.
+    const otherId = randomUUID();
+    await db.insert(trips).values({
+      id: otherId,
+      ownerId: run.otherOwner,
+      clientId: nora.id,
+      title: "Not yours",
+      destination: LISBON,
+      startDate: "2098-01-01",
+      endDate: "2098-01-02",
+      datesMode: "exact",
+      clientName: "Nora Quist",
+      updatedAt: new Date("2100-01-01T00:00:00Z"),
+    });
+
+    try {
+      const [summary] = await listClients(run.owner, { q: "Nora Quist" });
+      expect(summary?.nextTrip).toEqual({ id: mine.id, title: mine.title, startDate: "2099-03-01" });
+      expect(summary?.lastActivityAt.getTime()).toBeLessThan(new Date("2100-01-01T00:00:00Z").getTime());
+    } finally {
+      // It points at this owner's client, so it must go before cleanup() deletes clients.
+      await db.delete(trips).where(eq(trips.id, otherId));
+    }
+  });
+
+  it("serves the whole search predicate from the trigram index", async () => {
+    // With sequential scans priced out, an unindexable OR branch would still
+    // force a scan; every branch here is a gin_trgm_ops operator.
+    const [, , plan] = await db.batch([
+      setWordThreshold(),
+      db.execute(sql`select set_config('enable_seqscan', 'off', true)`),
+      db.execute(
+        sql`explain select id from clients where ${trgmMatch(clients.search, "Anna Ruis")}`,
+      ),
+    ]);
+    const text = plan.rows.map((row) => String(Object.values(row)[0])).join("\n");
+    expect(text).toContain("clients_search_trgm_idx");
   });
 
   it("keeps favorites in order and scoped to the owner", async () => {
