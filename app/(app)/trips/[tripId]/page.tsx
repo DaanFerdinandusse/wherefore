@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import type { TripSwitcherItem } from "@/components/shell/trip-top-bar";
@@ -8,13 +9,30 @@ import { paramsFromRecord, readUrlState } from "@/components/trip/workspace/url-
 import { requirePageUser } from "@/lib/auth/server";
 import type { ChatSnapshot } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { chats } from "@/lib/db/schema";
+import { advisors, chats } from "@/lib/db/schema";
 import { getTripSnapshot, listTrips } from "@/lib/trips";
+import { shareUrl } from "@/lib/trips/share-actions";
 
 // /trips/[tripId]: the trip workspace. Loads the snapshot, the chat row and
 // the owner's other trips on the server, then hands them to the client
 // workspace, which hydrates the store. loading.tsx is the Suspense boundary
-// for the session read.
+// for the session read. The share link is passed on its own: ShareButton
+// refreshes the route after Share or Stop sharing, and the workspace keeps
+// the store's token in step with it.
+
+/** The name the traveler page shows as "Prepared by", as the shared view reads it. */
+async function advisorDisplayName(userId: string): Promise<string | null> {
+  const [row] = await db.select({ name: advisors.displayName }).from(advisors).where(eq(advisors.userId, userId)).limit(1);
+  return row?.name?.trim() || null;
+}
+
+/** The request's own origin, for the link when APP_URL is not set. */
+async function requestOrigin(): Promise<string | undefined> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (!host) return undefined;
+  return `${h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`;
+}
 
 async function loadChat(chatId: string, tripId: string): Promise<ChatSnapshot> {
   const empty: ChatSnapshot = { chat: { id: chatId, tripId, status: "idle", messages: [] } };
@@ -56,7 +74,11 @@ export default async function TripPage({
   const [{ tripId }, query, user] = await Promise.all([params, searchParams, requirePageUser()]);
   const [snapshot, byStage] = await Promise.all([getTripSnapshot(tripId, user), listTrips(user)]);
   if (!snapshot) notFound();
-  const chat = await loadChat(snapshot.trip.chatId, snapshot.trip.id);
+  const [chat, advisorName, origin] = await Promise.all([
+    loadChat(snapshot.trip.chatId, snapshot.trip.id),
+    advisorDisplayName(user.userId),
+    requestOrigin(),
+  ]);
 
   const otherTrips: TripSwitcherItem[] = Object.values(byStage)
     .flatMap((column) => column.trips)
@@ -77,7 +99,9 @@ export default async function TripPage({
       chat={chat}
       otherTrips={otherTrips}
       userName={user.name || user.email}
+      advisorName={advisorName ?? (user.name || null)}
       url={readUrlState(paramsFromRecord(query))}
+      shareUrl={snapshot.trip.shareToken ? shareUrl(snapshot.trip.shareToken, origin) : undefined}
     />
   );
 }

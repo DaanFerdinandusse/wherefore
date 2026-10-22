@@ -8,6 +8,8 @@ import type {
   TasteTag,
 } from "@/lib/contracts";
 
+import { OTHER_FAVORITES_ID } from "@/lib/qloo/normalize";
+
 import { asCategory, asSlotName, SLOT_ORDER } from "./map";
 
 // The public traveler view, projected from rows. Pure: the query in
@@ -63,7 +65,10 @@ function toSharedPlace(place: NonNullable<SharedSlotRow["place"]>): SharedTripPl
     category,
     imageUrl: place.imageUrl ?? undefined,
     neighborhood: place.neighborhood ?? undefined,
-    because: place.explainability.map(({ name, share }) => ({ name, share })),
+    // Named favorites only: the "Other favorites" bucket is no favorite of the traveler's.
+    because: place.explainability
+      .filter((d) => d.entityId !== OTHER_FAVORITES_ID && d.name.trim() !== "")
+      .map(({ name, share }) => ({ name, share })),
     sharedTags: place.sharedTags.map((tag) => tag.name),
     reason: place.reason?.trim() || undefined,
   };

@@ -1,7 +1,7 @@
 "use client";
 
 import Image, { type ImageProps } from "next/image";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, Route, Share } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,7 @@ export function TripTopBar({
   onHowWeGotThis,
   onShare,
   sharing = false,
+  share,
   userName,
   onSignOut,
 }: {
@@ -57,9 +58,11 @@ export function TripTopBar({
   view: TripView;
   onViewChange: (view: TripView) => void;
   onHowWeGotThis: () => void;
-  onShare: () => void;
+  onShare?: () => void;
   /** Shows a spinner on Share while the link is being made. */
   sharing?: boolean;
+  /** Replaces the Share button, for a control with its own menu (the workspace's ShareButton). */
+  share?: ReactNode;
   userName: string;
   onSignOut: () => void;
 }) {
@@ -128,9 +131,11 @@ export function TripTopBar({
           <Route size={16} strokeWidth={2} aria-hidden className="xl:hidden" />
           <span className="max-xl:hidden">How we got this</span>
         </button>
-        <Button icon={<Share size={16} strokeWidth={2} aria-hidden />} onClick={onShare} loading={sharing}>
-          Share itinerary
-        </Button>
+        {share ?? (
+          <Button icon={<Share size={16} strokeWidth={2} aria-hidden />} onClick={onShare} loading={sharing}>
+            Share itinerary
+          </Button>
+        )}
         <UserMenu userName={userName} onSignOut={onSignOut} />
       </div>
     </header>

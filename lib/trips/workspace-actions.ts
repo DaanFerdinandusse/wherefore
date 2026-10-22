@@ -1,36 +1,44 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { isAppError, NotFoundError } from "@/lib/auth/errors";
+import { applySlotWrites, swapWrites } from "@/components/trip/workspace/reducer";
+import { InvalidInputError, isAppError, NotFoundError } from "@/lib/auth/errors";
 import { requireUser } from "@/lib/auth/server";
 import type { Ask, ItinerarySlot, TripPlaceStatus } from "@/lib/contracts";
-import { env } from "@/lib/env";
-
-import type { SetSlotsResult } from "./contracts";
+import { db } from "@/lib/db";
+import { itinerarySlots } from "@/lib/db/schema";
 import { getAdvisorPlaceForPlace, removeAdvisorPlace, saveAdvisorPlace, updateAdvisorPlaceNote } from "@/lib/places";
 
-import { archiveAsk, clearSlot, setShareToken, setSlots, setTripPlaceStatus, upsertSlot, upsertTripPlaces } from "./mutations";
+import type { SetSlotsResult } from "./contracts";
+import { toSlot } from "./map";
+import { archiveAsk, clearSlot, setSlots, setTripPlaceStatus, upsertSlot, upsertTripPlaces } from "./mutations";
 import { getTrip, listTripCalls, listTripPlaceCards } from "./queries";
 
 // Server actions for the trip workspace: the board's +, "Not for", the ask
-// tab ×, the rail's drop and clear, the itinerary view's reorder and notes,
-// and Share. Each starts with requireUser() and validates its input with Zod.
-// They return a result instead of throwing so the client can roll back its
-// optimistic update and say what went wrong.
+// tab ×, the rail's drop and clear, the itinerary view's reorder and notes.
+// Each starts with requireUser() and validates its input with Zod. They
+// return a result instead of throwing so the client can roll back its
+// optimistic update and say what went wrong. Sharing has its own route
+// (/api/trips/[tripId]/share) behind the ShareButton.
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 const id = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const slotName = z.enum(["morning", "lunch", "afternoon", "dinner", "night", "stay"]);
+const position = z.number().int().min(0).max(20);
 const slotInput = z.object({
   day: z.number().int().min(1).max(60),
   slot: slotName,
-  position: z.number().int().min(0).max(20).optional(),
+  position: position.optional(),
   tripPlaceId: id.nullable().optional(),
   note: z.string().max(2000).optional(),
+  /** Show the note on the traveler view. Left out next to a note: the row's flag is kept. */
+  noteForTraveler: z.boolean().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
+const slotRef = z.object({ day: z.number().int().min(1).max(60), slot: slotName, position: position.optional() });
 
 async function run<T>(work: () => Promise<T>): Promise<ActionResult<T>> {
   try {
@@ -43,11 +51,39 @@ async function run<T>(work: () => Promise<T>): Promise<ActionResult<T>> {
   }
 }
 
-/** Puts a place in one slot (or writes a slot's note). */
+/** The trip's stored slot rows. The caller has checked the trip is in scope. */
+async function tripSlots(tripId: string): Promise<ItinerarySlot[]> {
+  const rows = await db.select().from(itinerarySlots).where(eq(itinerarySlots.tripId, tripId));
+  return rows.map(toSlot);
+}
+
+/**
+ * Puts a place in one slot (or writes a slot's note). A note written without
+ * the traveler flag keeps the stored row's flag, so an edit that did not say
+ * so never unpublishes a note the traveler sees.
+ */
 export async function saveSlotAction(tripId: string, input: z.input<typeof slotInput>): Promise<ActionResult<ItinerarySlot>> {
   return run(async () => {
     const user = await requireUser();
-    return upsertSlot(id.parse(tripId), slotInput.parse(input), user);
+    const trip = id.parse(tripId);
+    const slot = slotInput.parse(input);
+    if (slot.note !== undefined && slot.noteForTraveler === undefined) {
+      if (!(await getTrip(trip, user))) throw new NotFoundError("trip");
+      const [row] = await db
+        .select({ noteForTraveler: itinerarySlots.noteForTraveler })
+        .from(itinerarySlots)
+        .where(
+          and(
+            eq(itinerarySlots.tripId, trip),
+            eq(itinerarySlots.day, slot.day),
+            eq(itinerarySlots.slot, slot.slot),
+            eq(itinerarySlots.position, slot.position ?? 0),
+          ),
+        )
+        .limit(1);
+      slot.noteForTraveler = row?.noteForTraveler ?? false;
+    }
+    return upsertSlot(trip, slot, user);
   });
 }
 
@@ -59,14 +95,28 @@ export async function clearSlotAction(slotId: string): Promise<ActionResult<null
   });
 }
 
-/** Several slots at once in merge mode: the itinerary view's drag to reorder. */
-export async function mergeSlotsAction(
+/**
+ * Reorder within a day: swaps (place, note, traveler flag) between two slots
+ * exactly, from the stored rows, and writes the itinerary back in one replace
+ * so the swap lands whole or not at all. Returns every row (the replace gives
+ * them new ids).
+ */
+export async function swapSlotsAction(
   tripId: string,
-  inputs: z.input<typeof slotInput>[],
+  from: z.input<typeof slotRef>,
+  to: z.input<typeof slotRef>,
 ): Promise<ActionResult<SetSlotsResult>> {
   return run(async () => {
     const user = await requireUser();
-    return setSlots(id.parse(tripId), z.array(slotInput).max(40).parse(inputs), "merge", user);
+    const trip = id.parse(tripId);
+    const a = slotRef.parse(from);
+    const b = slotRef.parse(to);
+    if (a.day !== b.day) throw new InvalidInputError("A place moves within its own day.");
+    if (!(await getTrip(trip, user))) throw new NotFoundError("trip");
+    const rows = await tripSlots(trip);
+    const writes = swapWrites(rows, a, b);
+    if (writes.length === 0) return { applied: rows, rejected: [] };
+    return setSlots(trip, applySlotWrites(rows, writes), "replace", user);
   });
 }
 
@@ -152,16 +202,5 @@ export async function listTripCallsAction(tripId: string): Promise<ActionResult<
       source: row.source,
       createdAt: row.createdAt.toISOString(),
     }));
-  });
-}
-
-/** Creates the share link once (calling again keeps the same link). */
-export async function shareTripAction(tripId: string): Promise<ActionResult<{ token: string; url: string }>> {
-  return run(async () => {
-    const user = await requireUser();
-    const trip = await setShareToken(id.parse(tripId), user);
-    const token = trip.shareToken ?? "";
-    const base = env("APP_URL", "http://localhost:3000").replace(/\/+$/, "");
-    return { token, url: `${base}/s/${token}` };
   });
 }

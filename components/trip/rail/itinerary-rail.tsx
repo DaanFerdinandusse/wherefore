@@ -15,10 +15,11 @@ import { cn } from "@/lib/ui/cn";
 import { useTripStore } from "../store";
 import { carriesPlace, draggedPlace, TRIP_PLACE_TYPE } from "../workspace/dnd";
 import { CATEGORY_LABELS, dayLabel, firstName, SLOT_LABELS } from "../workspace/format";
-import { categoryForSlot, dateOfDay, dayCount, filledSlotCount, SLOT_ORDER, slotAt } from "../workspace/reducer";
+import { categoryForSlot, dateOfDay, dayCount, filledSlotCount, SLOT_ORDER, slotAt, slotRows } from "../workspace/reducer";
 import type { WorkspaceActions } from "../workspace/use-workspace-actions";
 
-// 02 right rail: the itinerary by day. Filled slots show the place; empty
+// 02 right rail: the itinerary by day. Filled slots show the place (every
+// position of a slot that holds more than one); empty
 // slots are dashed drop targets ("Afternoon · Drop a place here"). Days with
 // nothing in them fold to one line, except the next day to plan; every day
 // opens while a card is being dragged. Below the days: "Built from".
@@ -183,23 +184,26 @@ function DayBlock({
       </div>
       {expanded ? (
         <ul className="flex flex-col gap-2.5">
-          {SLOT_ORDER.map((name) => {
-            const slot = slotAt(slots, day, name);
-            const card = slot?.tripPlaceId ? places[slot.tripPlaceId] : undefined;
-            const drop = (tripPlaceId: string) => void actions.addToSlot(tripPlaceId, day, name);
-            if (slot && card) {
-              return (
+          {SLOT_ORDER.flatMap((name) => {
+            const drop = (tripPlaceId: string, position = 0) => void actions.addToSlot(tripPlaceId, day, name, position);
+            // Every position of the slot that holds a place; one dashed row when none does.
+            const filled = slotRows(slots, day, name).flatMap((slot) => {
+              const card = slot.tripPlaceId ? places[slot.tripPlaceId] : undefined;
+              return card ? [{ slot, card }] : [];
+            });
+            if (filled.length > 0) {
+              return filled.map(({ slot, card }) => (
                 <FilledSlotRow
-                  key={name}
+                  key={`${name}|${slot.position}`}
                   slot={slot}
                   card={card}
                   onOpen={() => select(card.tripPlaceId)}
-                  onClear={() => void actions.clearSlotAt(day, name)}
-                  onDropPlace={drop}
+                  onClear={() => void actions.clearSlotAt(day, name, slot.position)}
+                  onDropPlace={(tripPlaceId) => drop(tripPlaceId, slot.position)}
                 />
-              );
+              ));
             }
-            return (
+            return [
               <EmptySlotRow
                 key={name}
                 slot={name}
@@ -208,8 +212,8 @@ function DayBlock({
                   setView("board");
                   setTab(categoryForSlot(name));
                 }}
-              />
-            );
+              />,
+            ];
           })}
         </ul>
       ) : null}
@@ -256,12 +260,12 @@ export function ItineraryRail({ actions }: { actions: WorkspaceActions }) {
   const trip = useTripStore((s) => s.trip);
   const places = useTripStore((s) => s.places);
   const slots = useTripStore((s) => s.slots);
-  const extraDays = useTripStore((s) => s.extraDays);
+  const requestedDays = useTripStore((s) => s.requestedDays);
   const addDay = useTripStore((s) => s.addDay);
   const dragging = usePlaceDragging();
   const [toggled, setToggled] = useState<Record<number, boolean>>({});
 
-  const days = dayCount({ trip, slots, extraDays });
+  const days = dayCount({ trip, slots, requestedDays });
   const filled = filledSlotCount(slots);
   const byDay = useMemo(() => {
     const map = new Map<number, ItinerarySlot[]>();

@@ -76,7 +76,7 @@ export function DiscoverBoard({ actions, onRetrySeed }: { actions: WorkspaceActi
   const places = useTripStore((s) => s.places);
   const asks = useTripStore((s) => s.asks);
   const slots = useTripStore((s) => s.slots);
-  const extraDays = useTripStore((s) => s.extraDays);
+  const requestedDays = useTripStore((s) => s.requestedDays);
   const activeTab = useTripStore((s) => s.activeTab);
   const highlightedPlaceId = useTripStore((s) => s.highlightedPlaceId);
   const setTab = useTripStore((s) => s.setTab);
@@ -87,7 +87,7 @@ export function DiscoverBoard({ actions, onRetrySeed }: { actions: WorkspaceActi
   const counts = useMemo(() => tabCounts({ places }), [places]);
   const visible = useMemo(() => visiblePlaces({ places, activeTab }), [places, activeTab]);
   const askList = useMemo(() => liveAsks({ asks }), [asks]);
-  const days = dayCount({ trip, slots, extraDays });
+  const days = dayCount({ trip, slots, requestedDays });
   const picker = useMemo(
     () => ({
       days,
@@ -191,7 +191,7 @@ export function DiscoverBoard({ actions, onRetrySeed }: { actions: WorkspaceActi
                 arch={featured && !!card.yourPlace?.note}
                 highlighted={highlightedPlaceId === card.tripPlaceId}
                 fromAsk={!!activeAsk && card.source === "ask"}
-                nextSlot={card.status === "added" ? null : nextFreeSlot({ trip, slots, extraDays }, card.category)}
+                nextSlot={card.status === "added" ? null : nextFreeSlot({ trip, slots, requestedDays }, card.category)}
                 picker={picker}
                 priority={i < 2}
                 className={cn(featured ? "col-span-2 h-[340px]" : i === 1 ? "h-[340px]" : "h-[300px]")}

@@ -260,19 +260,21 @@ export function parseRanges(text: string): { open: number; close: number; closeL
 export type OpenState = { open: boolean; text: string };
 
 /**
- * The open state line from Google's openNow and the weekday table. Google
- * computes openNow in the place's own time; the closing time is read from the
- * place's local day, estimated from its longitude (the details carry no time
- * zone). Several ranges a day: the one that holds the estimated local time.
+ * The open state line: Google's own openNow ("Open now", "Closed now"). The
+ * closing time ("Open until 11 pm") is added only when the details carry the
+ * place's UTC offset, so the place's local day and time are known; it is
+ * never guessed. Several ranges a day: the one that holds the local time.
  */
 export function openState(
-  input: { openNow?: boolean; openingHours?: readonly string[]; lon?: number | null },
+  input: { openNow?: boolean; openingHours?: readonly string[]; utcOffsetMinutes?: number | null },
   now: Date = new Date(),
 ): OpenState | null {
   if (input.openNow === undefined) return null;
   if (!input.openNow) return { open: false, text: "Closed now" };
-  const offsetHours = typeof input.lon === "number" ? Math.round(input.lon / 15) : 0;
-  const local = new Date(now.getTime() + offsetHours * 3_600_000);
+  if (typeof input.utcOffsetMinutes !== "number" || !Number.isFinite(input.utcOffsetMinutes)) {
+    return { open: true, text: "Open now" };
+  }
+  const local = new Date(now.getTime() + input.utcOffsetMinutes * 60_000);
   const weekday = local.getUTCDay() === 0 ? 7 : local.getUTCDay();
   const minute = local.getUTCHours() * 60 + local.getUTCMinutes();
   const line = input.openingHours?.find((l) => l.trim().toLowerCase().startsWith(LONG_WEEKDAYS[weekday - 1]));

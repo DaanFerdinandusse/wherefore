@@ -133,14 +133,18 @@ describe("hours", () => {
     expect(parseRanges("9 am to 2 pm, 6:30 to 11:30 pm")).toHaveLength(2);
   });
 
-  it("open state from openNow and the local day", () => {
-    // 2026-11-12 is a Thursday; 20:00 UTC is 14:00 at longitude -90.
+  it("open state from openNow, the closing time only with the place's UTC offset", () => {
+    // 2026-11-12 is a Thursday; 20:00 UTC is 14:00 at UTC-6.
     const now = new Date("2026-11-12T20:00:00Z");
-    expect(openState({ openNow: true, openingHours: google, lon: -90 }, now)).toEqual({ open: true, text: "Open until 11 pm" });
-    expect(openState({ openNow: false, openingHours: google, lon: -90 }, now)).toEqual({ open: false, text: "Closed now" });
+    const offset = -360;
+    expect(openState({ openNow: true, openingHours: google, utcOffsetMinutes: offset }, now)).toEqual({ open: true, text: "Open until 11 pm" });
+    expect(openState({ openNow: false, openingHours: google, utcOffsetMinutes: offset }, now)).toEqual({ open: false, text: "Closed now" });
     expect(openState({ openingHours: google }, now)).toBeNull();
     // Wednesday 20:00 local: the evening range.
     const wed = new Date("2026-11-12T02:00:00Z");
-    expect(openState({ openNow: true, openingHours: google, lon: -90 }, wed)).toEqual({ open: true, text: "Open until 11:30 pm" });
+    expect(openState({ openNow: true, openingHours: google, utcOffsetMinutes: offset }, wed)).toEqual({ open: true, text: "Open until 11:30 pm" });
+    // No offset: Google's own state, no guessed closing time.
+    expect(openState({ openNow: true, openingHours: google }, now)).toEqual({ open: true, text: "Open now" });
+    expect(openState({ openNow: false, openingHours: google }, now)).toEqual({ open: false, text: "Closed now" });
   });
 });

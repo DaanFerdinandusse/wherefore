@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, Map as MapIcon } from "lucide-react";
 
+import { ShareButton } from "@/components/share";
 import { TripTopBar, type TripSwitcherItem, type TripView as TopBarView } from "@/components/shell/trip-top-bar";
-import { Button } from "@/components/ui/button";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { Toast } from "@/components/ui/toast";
 import type { ChatSnapshot, TripSnapshot } from "@/lib/contracts";
@@ -17,6 +17,7 @@ import { ItineraryView } from "../itinerary-view/itinerary-view";
 import { ItineraryRail } from "../rail/itinerary-rail";
 import { ChatDockSlot, PlaceProfileSlot, TripMapSlot } from "../slots";
 import { TripStoreProvider, useTripStore, useTripStoreApi } from "../store";
+import { TravelerView, travelerViewFromSnapshot } from "../traveler-view";
 
 import { datesLabel, firstName } from "./format";
 import { activeAskPlaceIds, boardPlaces, liveAsks } from "./reducer";
@@ -34,13 +35,17 @@ export type TripWorkspaceProps = {
   chat: ChatSnapshot;
   otherTrips: TripSwitcherItem[];
   userName: string;
+  /** The advisor's display name, for the traveler preview ("Prepared by"). */
+  advisorName: string | null;
   url: UrlState;
+  /** The live traveler link when the trip is shared. Follows router.refresh after Share or Stop sharing. */
+  shareUrl?: string;
 };
 
 export function TripWorkspace({ snapshot, url, ...rest }: TripWorkspaceProps) {
   return (
     <TripStoreProvider snapshot={snapshot} url={url}>
-      <WorkspaceShell {...rest} />
+      <WorkspaceShell {...rest} shareToken={snapshot.trip.shareToken ?? null} />
     </TripStoreProvider>
   );
 }
@@ -52,7 +57,14 @@ function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-function WorkspaceShell({ chat, otherTrips, userName }: Omit<TripWorkspaceProps, "snapshot" | "url">) {
+function WorkspaceShell({
+  chat,
+  otherTrips,
+  userName,
+  advisorName,
+  shareUrl,
+  shareToken,
+}: Omit<TripWorkspaceProps, "snapshot" | "url"> & { shareToken: string | null }) {
   const router = useRouter();
   const store = useTripStoreApi();
   const actions = useWorkspaceActions();
@@ -71,7 +83,12 @@ function WorkspaceShell({ chat, otherTrips, userName }: Omit<TripWorkspaceProps,
   const { setView, setHighlight, select, setCamera, applyPlaces, dismissToast } = store.getState();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [sharing, setSharing] = useState(false);
+
+  // The share token follows the server: ShareButton refreshes the route
+  // after it creates or stops a link, and the page passes the new token.
+  useEffect(() => {
+    if ((store.getState().trip.shareToken ?? null) !== shareToken) store.getState().setShareToken(shareToken);
+  }, [shareToken, store]);
   // The Discover tab returns to the last of board or map.
   const lastDiscover = useRef<"board" | "map">(view === "map" ? "map" : "board");
   useEffect(() => {
@@ -113,12 +130,6 @@ function WorkspaceShell({ chat, otherTrips, userName }: Omit<TripWorkspaceProps,
   const topBarView: TopBarView = view === "itinerary" ? "itinerary" : view === "traveler" ? "traveler" : "discover";
   const onViewChange = (next: TopBarView) => setView(next === "discover" ? lastDiscover.current : (next as TripView));
 
-  async function share() {
-    setSharing(true);
-    await actions.share();
-    setSharing(false);
-  }
-
   const toggle =
     view === "board" || view === "map" ? (
       <SegmentedToggle
@@ -157,8 +168,7 @@ function WorkspaceShell({ chat, otherTrips, userName }: Omit<TripWorkspaceProps,
         view={topBarView}
         onViewChange={onViewChange}
         onHowWeGotThis={() => setDrawerOpen(true)}
-        onShare={share}
-        sharing={sharing}
+        share={<ShareButton tripId={trip.id} shareUrl={shareUrl} />}
         userName={userName}
         onSignOut={async () => {
           await fetch("/api/auth/sign-out", { method: "POST" }).catch(() => undefined);
@@ -208,7 +218,7 @@ function WorkspaceShell({ chat, otherTrips, userName }: Omit<TripWorkspaceProps,
             {dock}
           </div>
         ) : (
-          <TravelerViewPanel shared={!!trip.shareToken} clientName={trip.clientName} onShare={share} sharing={sharing} />
+          <TravelerPreview advisorName={advisorName} shareUrl={shareUrl} />
         )}
       </main>
 
@@ -220,8 +230,12 @@ function WorkspaceShell({ chat, otherTrips, userName }: Omit<TripWorkspaceProps,
           slots={slots}
           open
           onClose={() => select(null)}
-          onAddToSlot={(id, day, slot) => actions.addToSlot(id, day, slot)}
-          onRemove={async (id) => {
+          onAddToSlot={async (id, day, slot) => {
+            // The toast says why; the throw keeps the sheet from reading it as done.
+            if (!(await actions.addToSlot(id, day, slot))) throw new Error("The itinerary did not update.");
+          }}
+          onRemove={async (id, replace) => {
+            if (replace) return actions.replacePlace(id);
             select(null);
             await actions.removePlace(id);
           }}
@@ -237,30 +251,35 @@ function WorkspaceShell({ chat, otherTrips, userName }: Omit<TripWorkspaceProps,
   );
 }
 
-/** The traveler view is another slice's component; until it lands, this panel holds its place. */
-function TravelerViewPanel({
-  shared,
-  clientName,
-  onShare,
-  sharing,
-}: {
-  shared: boolean;
-  clientName: string;
-  onShare: () => void;
-  sharing: boolean;
-}) {
+/**
+ * The "Traveler view" tab: what the shared page shows, rendered with the same
+ * projection over the live store (so it follows every edit), with the share
+ * control above it.
+ */
+function TravelerPreview({ advisorName, shareUrl }: { advisorName: string | null; shareUrl?: string }) {
+  const trip = useTripStore((s) => s.trip);
+  const travelers = useTripStore((s) => s.travelers);
+  const places = useTripStore((s) => s.places);
+  const slots = useTripStore((s) => s.slots);
+  const view = useMemo(
+    () => travelerViewFromSnapshot({ trip, travelers, places: Object.values(places), asks: [], slots }, advisorName),
+    [trip, travelers, places, slots, advisorName],
+  );
+  const client = firstName(trip.clientName);
   return (
-    <div className="flex flex-1 items-center justify-center p-10">
-      <div className="flex max-w-[520px] flex-col items-center gap-4 rounded-photo border border-dashed border-pill-outline px-10 py-14 text-center">
-        <h2 className="font-display text-empty text-ink">What {firstName(clientName)} will see</h2>
-        <p className="text-body text-text-2">
-          The traveler page shows the itinerary by day with your notes and why each place fits.{" "}
-          {shared ? "The link is live; Share itinerary copies it again." : "Share the itinerary to create the link."}
-        </p>
-        <Button onClick={onShare} loading={sharing}>
-          {shared ? "Copy the link" : "Share itinerary"}
-        </Button>
+    <div className="min-w-0 flex-1 overflow-y-auto bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rule px-7 py-4">
+        <div className="flex flex-col gap-0.5">
+          <h1 className="font-display text-card-sm leading-8 text-ink">What {client} will see</h1>
+          <p className="text-ui-sm text-text-muted">
+            {shareUrl
+              ? `The link is live: ${client} sees these days, the notes you mark for the traveler and why each place fits.`
+              : `Share the itinerary to send ${client} this page. Only notes you mark for the traveler show.`}
+          </p>
+        </div>
+        <ShareButton tripId={trip.id} shareUrl={shareUrl} />
       </div>
+      <TravelerView view={view} embedded />
     </div>
   );
 }

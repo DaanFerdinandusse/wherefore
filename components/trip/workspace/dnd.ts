@@ -1,6 +1,6 @@
 // Native drag and drop between the board and the itinerary: a board card
 // carries its trip place id, a slot card in the itinerary view carries its
-// day and slot. Custom types keep foreign drags (files, links) out.
+// day, slot and position. Custom types keep foreign drags (files, links) out.
 
 import type { DragEvent } from "react";
 
@@ -14,7 +14,9 @@ export function startPlaceDrag(event: DragEvent, tripPlaceId: string) {
   event.dataTransfer.effectAllowed = "copyMove";
 }
 
-export function startSlotDrag(event: DragEvent, from: { day: number; slot: SlotName }) {
+export type DraggedSlot = { day: number; slot: SlotName; position: number };
+
+export function startSlotDrag(event: DragEvent, from: DraggedSlot) {
   event.dataTransfer.setData(SLOT_TYPE, JSON.stringify(from));
   event.dataTransfer.effectAllowed = "move";
 }
@@ -31,11 +33,11 @@ export function draggedPlace(event: DragEvent): string | null {
   return event.dataTransfer.getData(TRIP_PLACE_TYPE) || null;
 }
 
-export function draggedSlot(event: DragEvent): { day: number; slot: SlotName } | null {
+export function draggedSlot(event: DragEvent): DraggedSlot | null {
   try {
-    const value = JSON.parse(event.dataTransfer.getData(SLOT_TYPE)) as { day?: unknown; slot?: unknown };
+    const value = JSON.parse(event.dataTransfer.getData(SLOT_TYPE)) as { day?: unknown; slot?: unknown; position?: unknown };
     if (typeof value.day !== "number" || typeof value.slot !== "string") return null;
-    return { day: value.day, slot: value.slot as SlotName };
+    return { day: value.day, slot: value.slot as SlotName, position: typeof value.position === "number" ? value.position : 0 };
   } catch {
     return null;
   }
