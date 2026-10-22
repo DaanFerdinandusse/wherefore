@@ -1,0 +1,1 @@
+ALTER TABLE "itinerary_slots" ADD COLUMN "note_for_traveler" boolean DEFAULT false NOT NULL;
