@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ImageProps } from "next/image";
 import type { ReactNode } from "react";
 
+import { imagePolicy } from "@/lib/images/source";
 import { cn } from "@/lib/ui/cn";
 
 import { FilmImage } from "./film-image";
@@ -12,6 +13,9 @@ import { FilmImage } from "./film-image";
 // your note). Three name sizes: lg 44 (featured), md 30, sm 26. The card
 // takes its size from `className` (for example h-[300px]); there is no default height. With `href`, the whole card opens the
 // place; badges and the action stay separately clickable above the link.
+// Provider photos load directly over the warm card background (imagePolicy in
+// lib/images/source.ts), so the card never shows an empty frame while the
+// slow origin answers, and a failed photo leaves the warm background.
 export type PhotoCardSize = "sm" | "md" | "lg";
 
 const nameClasses: Record<PhotoCardSize, string> = {
@@ -50,9 +54,11 @@ export function PhotoCard({
   /** Rows under the name: BecauseRow, YourNoteRow. */
   children?: ReactNode;
 }) {
+  const policy = imagePolicy(src);
   const inset = size === "lg" ? "top-[18px] left-[18px] right-[18px]" : "top-4 left-4 right-4";
   return (
     <article
+      data-image-source={policy.source}
       className={cn(
         "group relative isolate overflow-hidden rounded-photo bg-avatar shadow-card transition-shadow",
         highlighted && "glow-ring",
@@ -63,7 +69,13 @@ export function PhotoCard({
         src={src}
         alt={alt}
         priority={priority}
-        sizes={size === "lg" ? "(min-width: 1280px) 640px, 60vw" : "(min-width: 1280px) 340px, 33vw"}
+        sizes={
+          policy.unoptimized
+            ? undefined
+            : size === "lg"
+              ? "(min-width: 1280px) 640px, 60vw"
+              : "(min-width: 1280px) 340px, 33vw"
+        }
         className="transition-transform duration-300 group-hover:scale-[1.015]"
       />
       <div aria-hidden className="photo-shade absolute inset-0" />

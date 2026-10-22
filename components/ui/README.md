@@ -16,7 +16,7 @@ Primitives for Tastebrief, built from the Paper file "qloo", page "v2 Itinerary 
 | SegmentedToggle | segmented-toggle.tsx | One of a few views: `glass` (Board / Map), `outline` (Mine / Team), `quiet` (Board / Calendar / List) | `glass-control` `border-pill-outline` `bg-ink` |
 | Switch | switch.tsx | role="switch": `track` 40 x 24 and `pill` ("In my places") | `bg-ink` `border-pill-outline` |
 | Avatar | avatar.tsx | Photo or initials; round 26 to 48, tall stadium `profile`; `soft`, `ink`, `dashed` | `bg-avatar` `bg-ink` `border-nav-pill` `font-display` `text-initials` `text-micro` |
-| FilmImage | film-image.tsx | next/image with the warm `film` grade | `film` |
+| FilmImage | film-image.tsx | next/image with the warm `film` grade; how it loads comes from `imagePolicy` (below); a photo that fails is removed so the warm frame shows | `film` `bg-avatar` |
 | ArchPhoto | arch-photo.tsx | Arch-topped photo with a count caption | `arch-top-fluid` `film` `rounded-pill` |
 | MatchPill, StarGlyph | match-pill.tsx | Score on photos: md "94 match" (dark or light glass), sm map chip, xs tile number | `bg-match-pill` `bg-ink` `text-ui` `text-micro` |
 | ScoreDot | score-dot.tsx | 34px score disc for dense map pins, optional glow | `bg-surface` `border-pill-outline` `shadow-pin` `glow-ring` |
@@ -38,6 +38,8 @@ Primitives for Tastebrief, built from the Paper file "qloo", page "v2 Itinerary 
 | StarburstOrnament | starburst-ornament.tsx | Fine-line starburst (traveler view footer) | `text-ink` |
 | Toast, ToastAction | toast.tsx | Plain bottom-center confirmation with an optional Undo | `bg-ink` `text-glow` `shadow-menu` `rise-in` |
 | EmptyState | empty-state.tsx | Bodoni title, one line, an action, dashed frame | `font-display` `text-empty` `border-pill-outline` |
+
+Image loading: `imagePolicy(url)` in `lib/images/source.ts` decides it once for FilmImage, ArchPhoto and PhotoCard. Provider images (hosts under qloo.com) load directly: `unoptimized`, explicit width and height (420 x 525 unless the file name says otherwise), `loading="lazy"`, `decoding="async"` and the warm `bg-avatar` placeholder. The dev optimizer timed out on the slow provider origin and left empty frames. Our photo proxy (`/api/places/photo`) also loads directly, because it needs the viewer's session and the optimizer fetches without cookies; it sizes photos itself with `?w=`. Static files and Google avatar hosts stay on the optimizer. Pass `unoptimized`, `loading` or `decoding` to override.
 
 Shell pieces (`components/shell`): AppBar (+ SearchResultsPanel, UserMenu, Wordmark), AppBarContainer (wires the (app) layout), PageHeader, TripTopBar.
 
