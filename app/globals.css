@@ -38,7 +38,7 @@
   --font-display: var(--font-bodoni), "Bodoni Moda", Georgia, serif;
   --font-sans: var(--font-hanken), "Hanken Grotesk", system-ui, sans-serif;
 
-  --text-label: 11px;
+  --text-label: 12px;
   --text-label--line-height: 1.2;
   --text-label--letter-spacing: 0.16em;
   --text-label--font-weight: 500;
@@ -92,8 +92,8 @@
   --text-ui-sm--line-height: 17px;
   --text-meta: 12px;
   --text-meta--line-height: 16px;
-  --text-micro: 11px;
-  --text-micro--line-height: 14px;
+  --text-micro: 12px;
+  --text-micro--line-height: 16px;
   --text-action: 15px;
   --text-action--line-height: 20px;
   --text-empty: 30px;
