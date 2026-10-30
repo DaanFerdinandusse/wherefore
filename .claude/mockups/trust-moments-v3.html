@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pick Card Transform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..600;1,6..96,400..600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #e8e3d9; --surface: #f1ede6; --raised: #fbf9f5; --avatar: #ddd6ca;
+    --ink: #1c1a17; --text-2: #5e5850; --text-3: #4a453e;
+    --amber: #8a5a1e; --amber-deep: #6b4615; --dot: #c98a2e; --glow: #e2a85a; --why: #f5e6cc;
+    --track: rgb(22 19 15 / 0.05); --photo-chip: rgb(22 19 15 / 0.7);
+    --soft: 0 1px 3px rgb(22 19 15 / 0.06), 0 0 0 1px rgb(22 19 15 / 0.04);
+    --display: "Bodoni Moda", Georgia, serif; --sans: "Hanken Grotesk", system-ui, sans-serif;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--canvas); color: var(--ink); font: 15px/1.45 var(--sans); padding: 36px 16px 72px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; }
+  svg.i { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .page { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .intro { margin-bottom: 18px; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber); }
+  h1 { font: 400 44px/1.05 var(--display); letter-spacing: -0.02em; margin-top: 6px; }
+  .sub { color: var(--text-2); margin-top: 8px; }
+  .me { align-self: flex-end; background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 20px 20px 6px 20px; line-height: 21px; }
+
+  .results { display: flex; flex-direction: column; gap: 10px; }
+  .head { display: flex; align-items: center; gap: 10px; padding: 0 4px; min-height: 22px; }
+  .arc { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 2.4px solid rgb(28 26 23 / 0.12); border-top-color: var(--dot); animation: spin .9s linear infinite; }
+  .arc.done { animation: none; border: 0; background: var(--ink); display: flex; align-items: center; justify-content: center; color: #fff; font: 700 10px/1 var(--sans); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .title { font-weight: 600; font-size: 16px; line-height: 21px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .title.done { font-size: 15px; line-height: 20px; }
+  .title.swap { animation: lift .42s var(--ease); }
+  .detail { flex: 1 1 0; min-width: 0; font-size: 14px; line-height: 19px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @keyframes lift { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+  /* One element, three layouts: your tiles, the taller rows, your chips. */
+  #places { list-style: none; padding: 0; display: flex; }
+  .place { min-width: 0; will-change: transform; }
+  .item { display: flex; width: 100%; min-width: 0; cursor: pointer; }
+  .thumb { position: relative; display: block; overflow: hidden; background: var(--avatar); flex: none; transition: width .55s var(--ease), height .55s var(--ease), border-radius .55s var(--ease); }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: filter .45s var(--ease); }
+  .badge { position: absolute; top: 6px; left: 6px; background: var(--photo-chip); color: #fff; font-size: 12px; line-height: 14px; font-weight: 700; padding: 3px 7px; border-radius: 999px; transition: opacity .2s; }
+  .text { display: flex; flex-direction: column; min-width: 0; }
+  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line { display: none; }
+
+  #places[data-layout="tiles"] { gap: 8px; }
+  [data-layout="tiles"] .place { flex: 1 1 0; }
+  [data-layout="tiles"] .item { flex-direction: column; gap: 8px; }
+  [data-layout="tiles"] .thumb { width: 100%; height: 168px; border-radius: 14px; }
+  [data-layout="tiles"] .name { font-size: 14px; line-height: 18px; }
+  [data-layout="tiles"] .meta { font-size: 13px; line-height: 17px; }
+
+  #places[data-layout="rows"] { flex-direction: column; gap: 6px; }
+  [data-layout="rows"] .place { width: 100%; }
+  [data-layout="rows"] .item { align-items: center; gap: 12px; padding: 6px; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px rgb(28 26 23 / 0.06); transition: background .4s; }
+  [data-layout="rows"] .thumb { width: 64px; height: 52px; border-radius: 10px; }
+  [data-layout="rows"] .badge, [data-layout="chips"] .badge, [data-layout="rows"] .meta { display: none; }
+  [data-layout="rows"] .name { font-size: 15px; line-height: 20px; }
+  [data-layout="rows"] .line { display: block; font-size: 14px; line-height: 19px; color: var(--text-3); min-height: 19px; }
+  .line.wait { width: 56%; min-height: 0 !important; height: 10px; margin-top: 5px; border-radius: 999px; background: linear-gradient(90deg, var(--track), rgb(28 26 23 / 0.13), var(--track)); background-size: 200% 100%; animation: sheen 1.1s linear infinite; }
+  @keyframes sheen { to { background-position: -200% 0; } }
+  .line.said { animation: lift .4s var(--ease); }
+  .line strong, .say strong { font-weight: 600; color: var(--amber); }
+  [data-layout="rows"] .lead .item { background: var(--why); box-shadow: inset 0 0 0 1.5px var(--dot); }
+  [data-layout="rows"] .lead .line { color: var(--ink); }
+  [data-layout="rows"] .out .thumb { width: 44px; height: 36px; }
+  [data-layout="rows"] .out .name { font-size: 14px; font-weight: 500; line-height: 18px; }
+  [data-layout="rows"] .out .line { font-size: 13px; line-height: 17px; }
+  .out .thumb img { filter: grayscale(1) opacity(0.72); }
+  .out .name { color: var(--text-2); }
+  .out .line strong { color: var(--text-3); }
+
+  #places[data-layout="chips"] { gap: 6px; overflow-x: auto; padding: 4px; scrollbar-width: none; }
+  #places.moving { overflow: visible !important; }
+  [data-layout="chips"] .place { flex: 1 0 0; min-width: 128px; }
+  [data-layout="chips"] .item { align-items: center; gap: 8px; padding: 5px; border-radius: 14px; background: var(--raised); box-shadow: 0 0 0 1px rgb(28 26 23 / 0.06); transition: background .2s, box-shadow .2s; }
+  [data-layout="chips"] .item:hover { background: #fff; }
+  [data-layout="chips"] .thumb { width: 40px; height: 40px; border-radius: 10px; }
+  [data-layout="chips"] .name { font-size: 13px; line-height: 17px; }
+  [data-layout="chips"] .meta { font-size: 12px; line-height: 16px; }
+  [data-layout="chips"] .picked .meta, [data-layout="chips"] .backup .meta { color: var(--amber); font-weight: 600; }
+  [data-layout="chips"] .out:hover .thumb img, [data-layout="chips"] .selected .thumb img { filter: none; }
+  [data-layout="chips"] .selected .item { background: var(--why); box-shadow: 0 0 0 1.5px var(--dot); }
+  [data-layout="chips"] .selected .name { color: var(--ink); }
+
+  /* Your place card, unchanged but for the state pill and the one-liner. */
+  .reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .75s var(--ease), opacity .5s var(--ease) .1s; }
+  .reveal.open { grid-template-rows: 1fr; opacity: 1; }
+  .reveal > div { overflow: hidden; min-height: 0; }
+  .card { display: flex; flex-direction: column; gap: 14px; padding: 2px 1px 4px; }
+  .card.swap { animation: lift .36s var(--ease); }
+  .cardhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 0 4px; }
+  .named { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .named h3 { font: 600 22px/28px var(--sans); }
+  .state { flex: none; font-size: 12px; line-height: 22px; font-weight: 600; padding: 0 9px; border-radius: 999px; background: var(--dot); color: #fff; }
+  .state.backup { background: var(--why); color: var(--amber-deep); box-shadow: inset 0 0 0 1px rgb(201 138 46 / 0.5); }
+  .tabs { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--track); }
+  .tab { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 14px; line-height: 18px; font-weight: 500; color: var(--text-3); cursor: default; }
+  .tab.on { background: var(--raised); color: var(--ink); font-weight: 600; box-shadow: var(--soft); }
+  .tab.on svg { color: var(--amber); }
+  .say { padding: 0 4px; font-size: 17px; line-height: 25px; color: var(--ink); }
+  .say strong { color: var(--amber-deep); }
+  .photos { display: flex; gap: 6px; height: 200px; }
+  .shot { position: relative; overflow: hidden; background: var(--avatar); }
+  .shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .shot:first-child { width: 58%; flex: none; border-radius: 24px 8px 8px 24px; }
+  .shot:last-child { flex: 1; min-width: 0; border-radius: 8px 24px 24px 8px; }
+  .shot:only-child { width: 100%; border-radius: 24px; }
+  .photochips { position: absolute; left: 14px; bottom: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .photochip { display: inline-flex; align-items: center; gap: 6px; background: var(--photo-chip); color: #fff; font-size: 13px; line-height: 16px; font-weight: 600; padding: 6px 11px 6px 9px; border-radius: 999px; }
+  .panels { display: flex; gap: 10px; }
+  @media (max-width: 600px) { .panels { flex-direction: column; } }
+  .box { border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; flex-basis: 0; min-width: 0; }
+  .talk { flex-grow: 5; background: var(--raised); box-shadow: var(--soft); gap: 4px; }
+  .talk h4 { display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 18px; font-weight: 600; color: var(--text-3); padding-bottom: 6px; }
+  .talk h4 svg, .whyhead svg { color: var(--amber); }
+  .bar { display: flex; align-items: center; gap: 10px; height: 34px; }
+  .bar b { width: 150px; flex: none; font-weight: 600; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: lowercase; }
+  .bar .track { flex: 1; height: 8px; border-radius: 999px; background: var(--track); display: flex; }
+  .bar .track i { display: block; height: 8px; border-radius: 999px; background: var(--glow); }
+  .bar:nth-child(2) .track i { background: var(--dot); }
+  .bar span:last-child { width: 36px; text-align: right; font-size: 14px; font-weight: 500; color: var(--text-3); }
+  .why { flex-grow: 3; background: var(--why); gap: 11px; }
+  .whyhead { display: flex; align-items: center; justify-content: space-between; }
+  .whyhead h4 { display: flex; align-items: center; gap: 8px; font-size: 15px; line-height: 20px; font-weight: 600; }
+  .score { display: flex; align-items: baseline; gap: 5px; }
+  .score b { font: 400 40px/42px var(--display); letter-spacing: -0.03em; }
+  .score span { font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber); }
+  .driver { display: flex; align-items: center; gap: 10px; }
+  .driver img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex: none; }
+  .driver b { flex: 1; min-width: 0; font-weight: 600; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .driver .mini { width: 56px; height: 6px; flex: none; border-radius: 999px; background: rgb(28 26 23 / 0.08); }
+  .driver .mini i { display: block; height: 6px; border-radius: 999px; background: var(--amber); }
+  .driver span:last-child { width: 36px; flex: none; text-align: right; font-weight: 500; color: var(--amber); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
+  .tags li { background: rgb(255 255 255 / 0.65); border-radius: 999px; padding: 4px 10px; font-size: 13px; line-height: 17px; color: var(--text-3); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 999px; font-size: 14px; font-weight: 600; }
+  .btn.dark { background: var(--ink); color: #fff; }
+  .btn.ghost { border: 1px solid rgb(28 26 23 / 0.55); font-weight: 500; }
+
+  .replay { align-self: flex-start; background: var(--track); border-radius: 999px; font-size: 13px; line-height: 17px; font-weight: 600; padding: 7px 14px; cursor: pointer; color: var(--text-3); margin-top: 8px; }
+  .changes { margin-top: 26px; padding-top: 20px; border-top: 1px solid rgb(28 26 23 / 0.12); }
+  .changes ul { margin-top: 8px; padding-left: 18px; color: var(--text-3); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="intro">
+    <p class="eyebrow">Moment 3, third pass</p>
+    <h1>It thinks out loud, then it's your card again</h1>
+    <p class="sub">Your tiles, then taller rows while the agent explains itself, then your chips and your full card. Click any chip when it ends. Real Lisbon places and facts. The sentences are written by hand.</p>
+  </div>
+  <p class="me">Find Friday dinner for Ana</p>
+  <section class="results">
+    <div class="head">
+      <span class="arc" id="arc"></span>
+      <svg class="i" id="kind" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"></svg>
+      <p class="title" id="title"></p>
+      <p class="detail" id="detail"></p>
+    </div>
+    <ul id="places" data-layout="tiles"></ul>
+    <div class="reveal" id="reveal"><div><article class="card" id="card"></article></div></div>
+  </section>
+  <button class="replay" id="replay" type="button">Replay</button>
+  <aside class="changes">
+    <p class="eyebrow">What is new on your design</p>
+    <ul>
+      <li>A one-liner under the name, for whichever chip is selected.</li>
+      <li>A Picked or Backup label on the chip and the card.</li>
+      <li>Rejected chips go grey and sit at the back of the row. Hover or click brings the color back.</li>
+    </ul>
+  </aside>
+</main>
+
+<script>
+  const DATA = {"favorites": {"Via Carota": "https://images.qloo.com/i/3F659C60-D199-4E55-9B72-62DEEFB6AA11-420x-auto.jpg", "Lilia": "https://images.qloo.com/i/55E6BA87-F930-4AF0-AD01-D2A3AF0CF782-420x-auto.jpg", "Attaboy": "https://images.qloo.com/i/A9711D3C-43BD-4199-9C52-A89883F17DCD-420x-auto.jpg", "Devoción": "https://images.qloo.com/i/AF59EF83-C53B-45AB-A980-D5EEECB3A8F0-420x-auto.jpg"}, "places": {"quintal": {"hood": "Santo Amaro", "price": 3, "images": ["https://images.qloo.com/i/7830F8E0-90AF-4EAB-A273-4EAA4B44071C-2LWdSZ-420x-outside.jpg", "https://images.qloo.com/i/7830F8E0-90AF-4EAB-A273-4EAA4B44071C-420x-auto.jpg"], "keywords": [{"name": "sushi", "count": 93}, {"name": "cocktails", "count": 54}, {"name": "picanha", "count": 26}, {"name": "steak", "count": 26}, {"name": "bridge view", "count": 18}], "tags": ["Cozy", "Lively", "Stylish", "Trendy"], "drivers": [{"name": "Via Carota", "share": 27}, {"name": "Lilia", "share": 25}, {"name": "Attaboy", "share": 25}]}, "tapisco": {"hood": "Mercês", "price": 4, "images": ["https://images.qloo.com/i/4A73E875-40EE-44B4-A6AC-0754DDDB47D4-3UEZvg-420x-outside.jpg", "https://images.qloo.com/i/4A73E875-40EE-44B4-A6AC-0754DDDB47D4-420x-auto.jpg"], "keywords": [{"name": "octopus salad", "count": 49}, {"name": "bacalhau a bras", "count": 43}, {"name": "bar seating", "count": 41}, {"name": "tuna tartare", "count": 37}, {"name": "jamon iberico", "count": 24}], "tags": ["Intimate", "Lively", "Stylish", "Trendy"], "drivers": [{"name": "Via Carota", "share": 27}, {"name": "Attaboy", "share": 26}, {"name": "Devoción", "share": 24}]}, "folks": {"hood": "Chiado", "price": 2, "images": ["https://images.qloo.com/i/4E79E101-AF3D-4E90-AAC3-BB395FCD9D5D-0CpNeE-420x-outside.jpg", "https://images.qloo.com/i/4E79E101-AF3D-4E90-AAC3-BB395FCD9D5D-420x-auto.jpg"], "keywords": [{"name": "syrniki", "count": 137}, {"name": "turkish eggs", "count": 93}, {"name": "raspberry pancakes", "count": 71}, {"name": "specialty coffee", "count": 65}, {"name": "salmon benedict", "count": 45}], "tags": ["Cozy", "Chic", "Lively", "Stylish"], "drivers": [{"name": "Via Carota", "share": 27}, {"name": "Devoción", "share": 26}, {"name": "Lilia", "share": 24}]}, "danoi": {"hood": "Santos-o-Velho", "price": 2, "images": ["https://images.qloo.com/i/77F491C5-CC44-46D7-AFAC-291A761F051A-4zW7HK-420x-outside.jpg", "https://images.qloo.com/i/77F491C5-CC44-46D7-AFAC-291A761F051A-420x-auto.jpg"], "keywords": [{"name": "experience", "count": 36}, {"name": "music", "count": 15}, {"name": "cacio e pepe", "count": 9}, {"name": "lobster roll", "count": 9}, {"name": "tartare", "count": 9}], "tags": ["Italian", "Cozy", "Chic", "Intimate"], "drivers": [{"name": "Via Carota", "share": 27}, {"name": "Devoción", "share": 25}, {"name": "Lilia", "share": 24}]}, "taberna": {"hood": "Graça", "price": 3, "images": ["https://images.qloo.com/i/BF147A08-CE1E-4CB3-B659-8CA621A17410-0f9sv1-420x-outside.jpg", "https://images.qloo.com/i/BF147A08-CE1E-4CB3-B659-8CA621A17410-420x-auto.jpg"], "keywords": [{"name": "tasting menu", "count": 241}, {"name": "sardine nigiri", "count": 61}, {"name": "value for money", "count": 32}, {"name": "portuguese cuisine", "count": 30}, {"name": "creative food", "count": 22}], "tags": ["Cozy", "Intimate", "Lively", "Stylish"], "drivers": [{"name": "Devoción", "share": 27}, {"name": "Via Carota", "share": 26}, {"name": "Attaboy", "share": 25}]}, "mezze": {"hood": "Saldanha", "price": 2, "images": ["https://images.qloo.com/i/7262F08A-A8AF-4018-B930-909680EF5BEC-1Cz7Ru-420x-outside.jpg", "https://images.qloo.com/i/7262F08A-A8AF-4018-B930-909680EF5BEC-420x-auto.jpg"], "keywords": [{"name": "syrian", "count": 44}, {"name": "baba ganoush", "count": 23}, {"name": "well-cooked food", "count": 10}, {"name": "outdoor seating", "count": 8}, {"name": "tabbouleh", "count": 5}], "tags": ["Cozy", "Lively", "Authentic"], "drivers": [{"name": "Devoción", "share": 27}, {"name": "Via Carota", "share": 26}, {"name": "Attaboy", "share": 24}]}, "fabbrica": {"hood": "Sacramento", "price": 2, "images": ["https://images.qloo.com/i/E8B78BAD-9F44-4176-A015-C06E3FE26876-0pBzYu-420x-outside.jpg", "https://images.qloo.com/i/E8B78BAD-9F44-4176-A015-C06E3FE26876-420x-auto.jpg"], "keywords": [{"name": "fresh pasta", "count": 111}, {"name": "italian", "count": 73}, {"name": "tiramisu", "count": 48}, {"name": "homemade pasta", "count": 34}, {"name": "burrata", "count": 25}], "tags": ["Italian", "Cozy", "Intimate", "Lively"], "drivers": [{"name": "Devoción", "share": 27}, {"name": "Via Carota", "share": 27}, {"name": "Attaboy", "share": 23}]}, "osteria": {"hood": "Santos-o-Velho", "price": 2, "images": ["https://images.qloo.com/i/68ED350B-2A55-41D9-908E-09A4A59A5490-2wAUhY-420x-outside.jpg", "https://images.qloo.com/i/68ED350B-2A55-41D9-908E-09A4A59A5490-420x-auto.jpg"], "keywords": [{"name": "concept", "count": 29}, {"name": "meatballs", "count": 29}, {"name": "tavern", "count": 18}, {"name": "share", "count": 18}, {"name": "cash", "count": 15}], "tags": ["Italian", "Cozy", "Intimate", "Lively"], "drivers": [{"name": "Devoción", "share": 26}, {"name": "Via Carota", "share": 25}, {"name": "Attaboy", "share": 25}]}, "marzano": {"hood": "Sacramento", "price": 2, "images": ["https://images.qloo.com/i/A920503F-6A9E-4326-B363-5660440BE8D1-2kpxin-420x-outside.jpg", "https://images.qloo.com/i/A920503F-6A9E-4326-B363-5660440BE8D1-420x-auto.jpg"], "keywords": [{"name": "cocktails", "count": 96}, {"name": "gnocchi", "count": 36}, {"name": "brunch", "count": 35}, {"name": "eggs benedict", "count": 21}, {"name": "risotto", "count": 19}], "tags": ["Italian", "Cozy", "Chic", "Lively"], "drivers": [{"name": "Devoción", "share": 29}, {"name": "Via Carota", "share": 25}, {"name": "Attaboy", "share": 23}]}}};
+  const ICON = {
+    heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+    fork: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    talk: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  };
+  const icon = (name, size = 16) => `<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
+  document.getElementById("kind").innerHTML = ICON.fork;
+
+  const first = [
+    { id: "quintal", name: "Quintal das Docas", match: 94, good: "Cozy and stylish,", rest: " but reviews talk about sushi and steak." },
+    { id: "tapisco", name: "Tapisco", match: 85, good: "Lively room,", rest: " but the priciest here, and more tapas than Italian." },
+    { id: "folks", name: "The Folks Chiado", match: 77, good: "Cozy and chic,", rest: " but it's a brunch place." },
+    { id: "danoi", name: "Da Noi", match: 68, good: "Italian, cozy and chic.", rest: " This is Ana.", keep: true },
+    { id: "taberna", name: "A Taberna Do Mar", match: 60, good: "Cozy,", rest: " but mostly a tasting menu, and cash only." },
+  ];
+  const second = [
+    { id: "fabbrica", name: "Fabbrica di Pasta Fresca", good: "Italian and cozy,", rest: " loved for its fresh pasta, but not as chic.", keep: true },
+    { id: "osteria", name: "Osteria Cucina di Amici", good: "Italian and a bit loud,", rest: " but one of the best-known places here." },
+    { id: "marzano", name: "Caffè di Marzano Vermuteria", good: "Italian and chic,", rest: " but reviews mention brunch as much as dinner." },
+  ];
+  const all = [...first, ...second];
+  const byId = Object.fromEntries(all.map((p) => [p.id, p]));
+  byId.danoi.say = { good: "Italian, cozy and chic,", rest: " this is Ana. Get the cacio e pepe. It gets loud, which Ana won't mind." };
+  const FINAL = ["danoi", "fabbrica", "quintal", "tapisco", "folks", "taberna", "osteria", "marzano"];
+  const FINAL_MATCH = [94, 89, 84, 79, 75, 70, 65, 60];
+
+  const places = document.getElementById("places");
+  const title = document.getElementById("title");
+  const detail = document.getElementById("detail");
+  const arc = document.getElementById("arc");
+  const reveal = document.getElementById("reveal");
+  const card = document.getElementById("card");
+  const TERMS = "cozy, Italian, some life in the room";
+  let run = 0;
+  let selected = "danoi";
+
+  const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+  function tell(text, done = false) {
+    title.textContent = text;
+    title.className = `title swap${done ? " done" : ""}`;
+    void title.offsetWidth;
+  }
+  const rowOf = (id) => places.querySelector(`[data-id="${id}"]`);
+
+  function makePlace(place) {
+    const li = document.createElement("li");
+    li.className = "place";
+    li.dataset.id = place.id;
+    li.innerHTML = `<button class="item" type="button"><span class="thumb"><img src="${DATA.places[place.id].images[0]}" alt=""><span class="badge">${place.match ?? ""}</span></span><span class="text"><span class="name">${place.name}</span><span class="meta">${DATA.places[place.id].hood ?? ""}</span><span class="line wait"></span></span></button>`;
+    li.querySelector("button").addEventListener("click", () => choose(place.id));
+    return li;
+  }
+
+  // Slides every place from where it was to where the new layout puts it.
+  function flip(change, { stagger = 0, duration = 640 } = {}) {
+    const before = new Map([...places.children].map((li) => [li, li.getBoundingClientRect()]));
+    change();
+    places.classList.add("moving");
+    let last;
+    [...places.children].forEach((li, index) => {
+      const from = before.get(li);
+      if (!from) return;
+      const to = li.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      if (!dx && !dy) return;
+      last = li.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+        { duration, delay: index * stagger, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "backwards" },
+      );
+    });
+    const free = () => places.classList.remove("moving");
+    if (last) last.finished.then(free, free); else free();
+  }
+
+  function verdict(place) {
+    const li = rowOf(place.id);
+    const line = li.querySelector(".line");
+    line.className = "line said";
+    line.innerHTML = `<strong>${place.good}</strong>${place.rest}`;
+    return li;
+  }
+
+  function fillCard(id) {
+    const place = byId[id];
+    const facts = DATA.places[id];
+    const rank = FINAL.indexOf(id);
+    const state = rank === 0 ? '<span class="state">Picked</span>' : rank === 1 ? '<span class="state backup">Backup</span>' : "";
+    const said = place.say ?? place;
+    const most = Math.max(...facts.keywords.map((k) => k.count), 1);
+    const price = facts.price ? "€".repeat(facts.price) : "";
+    const shots = facts.images.slice(0, 1);
+    card.innerHTML = `
+      <div class="cardhead">
+        <div class="named"><h3>${place.name}</h3>${state}</div>
+        <div class="tabs"><span class="tab on">${icon("heart", 14)}For Ana</span><span class="tab">${icon("clock", 14)}Visit info</span><span class="tab">${icon("star", 14)}Reviews</span></div>
+      </div>
+      <p class="say"><strong>${said.good}</strong>${said.rest}</p>
+      <div class="photos">
+        ${shots.map((src, i) => `<div class="shot"><img src="${src}" alt="">${i === 0 ? `<div class="photochips"><span class="photochip">${icon("fork", 14)}Restaurant</span>${facts.hood ? `<span class="photochip">${icon("pin", 14)}${facts.hood}</span>` : ""}${price ? `<span class="photochip" style="padding-left:11px">${price}</span>` : ""}</div>` : ""}</div>`).join("")}
+      </div>
+      <div class="panels">
+        <section class="box talk"><h4>${icon("talk", 16)}People talk about</h4>${facts.keywords.map((k) => `<div class="bar"><b>${k.name}</b><span class="track"><i style="width:${Math.max(4, Math.round((k.count / most) * 100))}%"></i></span><span>${k.count}</span></div>`).join("")}</section>
+        <section class="box why">
+          <div class="whyhead"><h4>${icon("heart", 16)}Why Ana</h4><p class="score"><b>${FINAL_MATCH[rank]}</b><span>match</span></p></div>
+          ${facts.drivers.map((d) => `<div class="driver"><img src="${DATA.favorites[d.name]}" alt=""><b>${d.name}</b><span class="mini"><i style="width:${d.share}%"></i></span><span>${d.share}%</span></div>`).join("")}
+          <ul class="tags">${facts.tags.map((t) => `<li>${t}</li>`).join("")}</ul>
+        </section>
+      </div>
+      <div class="actions"><span class="btn dark">${icon("plus", 14)}Add to Friday dinner</span><span class="btn ghost">Not for Ana</span></div>`;
+    card.classList.remove("swap");
+    void card.offsetWidth;
+    card.classList.add("swap");
+  }
+
+  function choose(id) {
+    if (places.dataset.layout !== "chips") return;
+    selected = id;
+    for (const li of places.children) li.classList.toggle("selected", li.dataset.id === id);
+    fillCard(id);
+  }
+
+  function finishRows() {
+    FINAL.forEach((id, index) => {
+      const li = rowOf(id);
+      places.append(li);
+      li.classList.toggle("picked", index === 0);
+      li.classList.toggle("backup", index === 1);
+      li.classList.toggle("out", index > 1);
+      li.classList.remove("lead");
+      const word = index === 0 ? " · Picked" : index === 1 ? " · Backup" : "";
+      li.querySelector(".meta").textContent = `${FINAL_MATCH[index]}${word}`;
+    });
+    places.dataset.layout = "chips";
+    places.scrollLeft = 0;
+  }
+
+  function finish() {
+    arc.className = "arc done";
+    arc.textContent = "✓";
+    tell("Looked at 8 restaurants for Friday dinner", true);
+    detail.textContent = `${TERMS} · 2 searches`;
+    flip(finishRows, { stagger: 34, duration: 680 });
+    choose("danoi");
+  }
+
+  async function play() {
+    const me = ++run;
+    const live = () => me === run;
+    places.innerHTML = "";
+    places.dataset.layout = "tiles";
+    reveal.classList.remove("open");
+    card.innerHTML = "";
+    arc.className = "arc";
+    arc.textContent = "";
+    tell("Looking at 5 restaurants for Friday dinner");
+    detail.textContent = TERMS;
+    await sleep(700);
+    if (!live()) return;
+    for (const place of first) {
+      places.append(makePlace(place));
+      await sleep(150);
+      if (!live()) return;
+    }
+    await sleep(1300);
+    if (!live()) return;
+
+    tell("Reading what people say about each one");
+    flip(() => { places.dataset.layout = "rows"; }, { stagger: 40 });
+    await sleep(1000);
+    if (!live()) return;
+
+    for (const place of first) {
+      const li = verdict(place);
+      await sleep(620);
+      if (!live()) return;
+      if (place.keep) {
+        li.classList.add("lead");
+        flip(() => places.prepend(li));
+      } else {
+        flip(() => { li.classList.add("out"); places.append(li); });
+      }
+      await sleep(420);
+      if (!live()) return;
+    }
+
+    tell("Only one real fit. Looking for more Italian");
+    await sleep(1400);
+    if (!live()) return;
+    const lead = rowOf("danoi");
+    for (const place of [...second].reverse()) {
+      flip(() => lead.after(makePlace(place)));
+      await sleep(180);
+      if (!live()) return;
+    }
+    await sleep(400);
+    if (!live()) return;
+    tell("Weighing them against Da Noi");
+    await sleep(700);
+    if (!live()) return;
+
+    for (const place of second) {
+      const li = verdict(place);
+      await sleep(640);
+      if (!live()) return;
+      if (!place.keep) flip(() => { li.classList.add("out"); places.append(li); });
+      await sleep(420);
+      if (!live()) return;
+    }
+
+    await sleep(900);
+    if (!live()) return;
+    finish();
+    await sleep(420);
+    if (!live()) return;
+    reveal.classList.add("open");
+  }
+
+  // The end state at once, for reduced motion.
+  function settled() {
+    run += 1;
+    places.innerHTML = "";
+    for (const place of all) {
+      places.append(makePlace(place));
+      verdict(place);
+    }
+    arc.className = "arc done";
+    arc.textContent = "✓";
+    tell("Looked at 8 restaurants for Friday dinner", true);
+    detail.textContent = `${TERMS} · 2 searches`;
+    finishRows();
+    choose("danoi");
+    reveal.classList.add("open");
+  }
+  window.settled = settled;
+
+  document.getElementById("replay").addEventListener("click", play);
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) settled();
+  else play();
+</script>
+</body>
+</html>
