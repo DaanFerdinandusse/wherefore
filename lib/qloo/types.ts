@@ -46,7 +46,12 @@ export const placePropertiesSchema = z.looseObject({
   description: nullish(z.string()),
   short_description: nullish(z.string()),
   image: nullish(z.looseObject({ url: z.string() })),
-  images: nullish(z.array(z.looseObject({ url: z.string(), type: nullish(z.string()) }))),
+  // A list can hold a null: drop it so one bad photo does not fail the search.
+  images: nullish(
+    z
+      .array(z.looseObject({ url: z.string(), type: nullish(z.string()) }).nullable())
+      .transform((images) => images.filter((image) => image !== null)),
+  ),
   primary_genre: nullish(genreSchema),
   external: nullish(externalSchema),
 });

@@ -1,0 +1,1 @@
+ALTER TABLE "rising_places" ADD COLUMN "cover" jsonb;

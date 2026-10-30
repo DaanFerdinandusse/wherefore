@@ -1,29 +1,11 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type DragEvent, type ReactNode, type Ref } from "react";
-import {
-  BedDouble,
-  Bookmark,
-  Check,
-  ChevronUp,
-  Clock,
-  Coffee,
-  Heart,
-  Landmark,
-  MapPin,
-  MessageCircle,
-  Plus,
-  Quote,
-  Star,
-  Utensils,
-  Wine,
-  X,
-} from "lucide-react";
+import { useId, useMemo, useRef, useState } from "react";
+import { Bookmark, Check, ChevronUp, Heart, MapPin, MessageCircle, Plus, Quote, Utensils, X } from "lucide-react";
 
 import { FilmImage } from "@/components/ui/film-image";
 import { likeLine } from "@/lib/agent/taste-overlap";
 import type { Category, ItinerarySlot, PlaceVerdict, SlotName, SlotTarget, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
-import type { GoogleAttribution } from "@/lib/google/contracts";
 import { slotHolds } from "@/lib/trips/day-parts";
 import type { TripPlaceProfileDriver } from "@/lib/trips/profile-types";
 import { cn } from "@/lib/ui/cn";
@@ -35,10 +17,12 @@ import { PlaceChips } from "../place-chips";
 
 import { PhotoViewer } from "./photo-viewer";
 import { LoadingPhoto } from "./loading-photo";
-import { keywordBars, shortAuthor } from "./card-format";
+import { keywordBars } from "./card-format";
+import { FavoritePlaceSheet, type FavoriteRef } from "./favorite-place";
 import { MapsPhotosLink } from "./maps-photos-link";
+import { CardTabs, CATEGORY_ICON, GoogleCredit, PhotoChip, PhotoStrip, type CardTab } from "./place-card-parts";
 import { ReviewsPanel, VisitPanel } from "./place-card-panels";
-import { placePhotos, type PlacePhoto } from "./place-photos";
+import { placePhotos } from "./place-photos";
 import { firstName, namedDrivers, nextFreeSlot, priceSigns, tripDays, type SlotChoice } from "./profile-format";
 import { SlotPicker } from "./slot-picker";
 import { useGoogleDetails, useTripPlaceProfile } from "./use-profile-data";
@@ -73,17 +57,6 @@ export type PlaceCardProps = {
   onHover?: (tripPlaceId: string | null) => void;
 };
 
-type Tab = "for" | "visit" | "reviews";
-
-const CATEGORY_ICON: Record<Category, typeof Utensils> = {
-  eat: Utensils,
-  drink: Wine,
-  coffee: Coffee,
-  see: Landmark,
-  stay: BedDouble,
-  other: MapPin,
-};
-
 const CATEGORY_WORD: Record<Category, string> = {
   eat: "Restaurant",
   drink: "Bar",
@@ -106,7 +79,7 @@ export function PlaceCard({
   onHover,
 }: PlaceCardProps) {
   const client = firstName(trip.clientName);
-  const [tab, setTab] = useState<Tab>("for");
+  const [tab, setTab] = useState<CardTab>("for");
   const [gallery, setGallery] = useState<{ placeId: string; src: string } | null>(null);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const photosExpanded = expandedPlaceId === card.placeId;
@@ -163,7 +136,7 @@ export function PlaceCard({
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <CardTabs value={tab} onChange={setTab} client={client} />
+          <CardTabs value={tab} onChange={setTab} first={`For ${client}`} />
           {onClose ? (
             <button
               type="button"
@@ -193,8 +166,7 @@ export function PlaceCard({
           loading={photosLoading}
           name={card.name}
           tall={variant === "overlay"}
-          tripPlaceId={card.tripPlaceId}
-          category={card.category}
+          onDragStart={(event) => startPlaceDrag(event, card.tripPlaceId, card.category)}
           expanded={photosExpanded}
           galleryId={galleryId}
           moreTileRef={moreTileRef}
@@ -285,130 +257,6 @@ export function PlaceCard({
   );
 }
 
-function PhotoChip({ icon: Icon, children }: { icon?: typeof Utensils; children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-pill bg-photo-chip py-1.5 pr-2.75 pl-2.25 text-ui-sm leading-4 font-semibold text-white">
-      {Icon ? <Icon aria-hidden className="size-3.5" strokeWidth={2} /> : null}
-      {children}
-    </span>
-  );
-}
-
-function GoogleCredit({ attributions, top = false }: { attributions?: GoogleAttribution[]; top?: boolean }) {
-  const author = shortAuthor(attributions?.[0]?.displayName);
-  if (!attributions) return null;
-  return (
-    <span className={cn("absolute right-2 rounded-pill bg-photo-chip px-2 py-0.5 text-meta font-medium text-white", top ? "top-2" : "bottom-2")}>
-      Google{author ? ` · ${author}` : ""}
-    </span>
-  );
-}
-
-/** Photo frames reserve space while details load and open the selected image. */
-function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, category, onOpenGallery, expanded, galleryId, moreTileRef, onExpand }: {
-  photos: PlacePhoto[];
-  loading: boolean;
-  name: string;
-  tall: boolean;
-  chips: ReactNode;
-  tripPlaceId: string;
-  category: Category;
-  onOpenGallery: (src: string) => void;
-  expanded: boolean;
-  galleryId: string;
-  moreTileRef: Ref<HTMLButtonElement>;
-  onExpand: () => void;
-}) {
-  const slotCount = loading ? 3 : Math.min(photos.length, 3);
-  const onDragStart = (event: DragEvent) => startPlaceDrag(event, tripPlaceId, category);
-  const height = tall ? "h-62" : "h-50";
-
-  if (slotCount === 0) {
-    return (
-      <div draggable onDragStart={onDragStart} className={cn("relative flex items-end rounded-photo bg-avatar p-3.5", height)}>
-        <span className="absolute inset-0 flex items-center justify-center font-display text-card-md text-text-2">{name[0]}</span>
-        <div className="relative flex flex-wrap gap-1.5">{chips}</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn("flex shrink-0 gap-1.5", height)} draggable onDragStart={onDragStart} data-testid="place-card-photos">
-      {Array.from({ length: slotCount }, (_, index) => {
-        const photo = photos[index];
-        const hasMore = index === 2 && photos.length > 3 && !expanded;
-        return (
-          <button
-            key={index}
-            ref={index === 2 ? moreTileRef : undefined}
-            type="button"
-            disabled={!photo}
-            onClick={() => {
-              if (hasMore) onExpand();
-              else if (photo) onOpenGallery(photo.src);
-            }}
-            aria-label={hasMore ? `Open more photos of ${name}` : `View photo ${index + 1} of ${name}`}
-            aria-haspopup={hasMore ? undefined : "dialog"}
-            aria-expanded={hasMore ? false : undefined}
-            aria-controls={hasMore ? galleryId : undefined}
-            data-photo-toggle={hasMore ? true : undefined}
-            className={cn(
-              "relative overflow-hidden bg-avatar text-left focus-visible:outline-offset-[-4px]",
-              hasMore ? "cursor-pointer" : "enabled:cursor-zoom-in",
-              slotCount === 1 ? "w-full rounded-photo" : index === 0 ? "w-[52%] shrink-0 rounded-l-photo rounded-r-lg" :
-                index === slotCount - 1 ? "min-w-0 grow rounded-l-lg rounded-r-photo" : "w-[27.5%] shrink-0 rounded-lg",
-            )}
-          >
-            <LoadingPhoto key={photo?.src ?? "pending"} photo={photo} sizes={index === 0 ? "380px" : "200px"} />
-            {hasMore ? (
-              <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-ink/50 px-2 text-center text-white">
-                <span className="text-card-xs font-semibold">+{photos.length - 3}</span>
-                <span className="text-ui-sm font-semibold">Open more photos</span>
-              </span>
-            ) : null}
-            {/* The first tile's chips sit along the bottom, so its credit goes on top. */}
-            <GoogleCredit attributions={photo?.attributions} top={index === 0} />
-            {index === 0 ? <span className="absolute bottom-3.5 left-3.5 flex flex-wrap gap-1.5">{chips}</span> : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function CardTabs({ value, onChange, client }: { value: Tab; onChange: (tab: Tab) => void; client: string }) {
-  const tabs: { value: Tab; label: string; icon: typeof Heart }[] = [
-    { value: "for", label: `For ${client}`, icon: Heart },
-    { value: "visit", label: "Visit info", icon: Clock },
-    { value: "reviews", label: "Reviews", icon: Star },
-  ];
-  return (
-    <div role="tablist" aria-label="Place details" className="flex items-center gap-0.5 rounded-pill bg-track p-0.75">
-      {tabs.map((tab) => {
-        const selected = tab.value === value;
-        const Icon = tab.icon;
-        return (
-          <button
-            key={tab.value}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            data-testid={`place-card-tab-${tab.value}`}
-            onClick={() => onChange(tab.value)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-ui leading-4.5 transition-colors",
-              selected ? "bg-surface-raised font-semibold text-ink shadow-soft" : "font-medium text-text-3 hover:text-ink",
-            )}
-          >
-            <Icon aria-hidden className={cn("size-3.5", selected && tab.value === "for" && "text-amber")} strokeWidth={2.2} />
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /** "People talk about" bars and the Why box (J1, "For Ana"). */
 function ForPanel({
   card,
@@ -434,6 +282,7 @@ function ForPanel({
       : null;
   const hasWhy = card.score !== undefined || named.length > 0 || tags.length > 0 || quote;
   const dishes = bars.length === 0 ? (card.dishes ?? []).slice(0, 5) : [];
+  const [favorite, setFavorite] = useState<FavoriteRef | null>(null);
 
   if (bars.length === 0 && dishes.length === 0 && !hasWhy) {
     return <p className="px-1 text-ui text-text-2">No match details for {client} yet.</p>;
@@ -504,18 +353,36 @@ function ForPanel({
           {like ? <p className="text-body leading-5 text-ink" data-testid="place-card-like">{like}</p> : null}
           {named.map((driver) => {
             const photo = photos.get(driver.entityId);
+            const avatar = photo ? (
+              <span className="relative size-7.5 shrink-0 overflow-hidden rounded-pill bg-avatar">
+                <FilmImage src={photo} alt="" sizes="30px" unoptimized />
+              </span>
+            ) : (
+              <span aria-hidden className="flex size-7.5 shrink-0 items-center justify-center rounded-pill bg-avatar font-display text-ui text-text-2">
+                {driver.name[0]}
+              </span>
+            );
             return (
               <div key={driver.entityId} className="flex items-center gap-2.5">
-                {photo ? (
-                  <span className="relative size-7.5 shrink-0 overflow-hidden rounded-pill bg-avatar">
-                    <FilmImage src={photo} alt="" sizes="30px" unoptimized />
+                {driver.media ? (
+                  <span className="flex min-w-0 grow items-center gap-2.5">
+                    {avatar}
+                    <span className="min-w-0 truncate text-body leading-5 font-semibold text-ink">{driver.name}</span>
                   </span>
                 ) : (
-                  <span aria-hidden className="flex size-7.5 shrink-0 items-center justify-center rounded-pill bg-avatar font-display text-ui text-text-2">
-                    {driver.name[0]}
-                  </span>
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={() => setFavorite({ entityId: driver.entityId, name: driver.name })}
+                    data-testid="favorite-open"
+                    className="group flex min-w-0 grow cursor-pointer items-center gap-2.5 rounded-pill text-left"
+                  >
+                    {avatar}
+                    <span className="min-w-0 truncate text-body leading-5 font-semibold text-ink underline decoration-ink/30 underline-offset-2 group-hover:decoration-ink">
+                      {driver.name}
+                    </span>
+                  </button>
                 )}
-                <span className="min-w-0 grow truncate text-body leading-5 font-semibold text-ink">{driver.name}</span>
                 <span className="flex h-1.5 w-14 shrink-0 rounded-pill bg-ink/8" aria-hidden>
                   <span className="h-1.5 rounded-pill bg-amber" style={{ width: `${Math.max(4, driver.share)}%` }} />
                 </span>
@@ -543,6 +410,8 @@ function ForPanel({
           ) : null}
         </section>
       ) : null}
+
+      <FavoritePlaceSheet favorite={favorite} client={client} onClose={() => setFavorite(null)} />
     </div>
   );
 }

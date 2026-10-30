@@ -64,6 +64,34 @@
       "when": 1793382669661,
       "tag": "0008_trip_cover",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793395127215,
+      "tag": "0009_rising",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793396883193,
+      "tag": "0010_rising_cover",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793396884040,
+      "tag": "0011_rising_drop_cover_url",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793398010973,
+      "tag": "0012_drop_rising",
+      "breakpoints": true
     }
   ]
 }

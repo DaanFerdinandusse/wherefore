@@ -1,0 +1,1 @@
+ALTER TABLE "rising_places" DROP COLUMN "cover_url";

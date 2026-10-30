@@ -114,7 +114,8 @@ describe("search options in the instructions", () => {
     expect(text).toContain("does not tell you it has stars");
   });
 
-  it("asks for a less known pick when planning several slots", () => {
-    expect(text).toContain("at least one pick should be less known");
+  it("shows hidden gems unless the advisor asks for popular places", () => {
+    expect(text).toContain('Pass discovery "less_known" on every find_places');
+    expect(text).toContain('Pass discovery "popular" only when the advisor asks');
   });
 });

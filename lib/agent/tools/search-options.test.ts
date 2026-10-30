@@ -115,10 +115,10 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
         `call-${++call}`,
       ),
     );
-    expect(searchInput(0)).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "sunday", openSlot: "dinner" });
+    expect(searchInput(0)).toMatchObject({ popularityMax: 0.95, michelin: true, openDay: "sunday", openSlot: "dinner" });
     expect(output.openDay).toBe("sunday");
     const [ask] = await db.select({ query: tripAsks.query }).from(tripAsks).where(eq(tripAsks.id, output.askId!));
-    expect(ask?.query).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "sunday", openSlot: "dinner" });
+    expect(ask?.query).toMatchObject({ popularityMax: 0.95, michelin: true, openDay: "sunday", openSlot: "dinner" });
   });
 
   it("leaves out what is not the asked kind of place, and reads the scores of this search in order", async () => {
@@ -199,7 +199,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
         `call-${++call}`,
       ),
     );
-    expect(searchInput(1)).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "friday" });
+    expect(searchInput(1)).toMatchObject({ popularityMax: 0.95, michelin: true, openDay: "friday" });
     expect(output.loosened).toEqual(["popularity", "hours", "michelin", WIDENED_IN_CATEGORY]);
     expect(loosenedCopy(output.loosened, output.openDay)).toContain("Too few places are listed as open on Friday, so check the hours on these.");
   });
@@ -250,7 +250,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
     );
     mocks.findPlaces.mockResolvedValueOnce(found(["rerun-b"], ["hours"]));
     const removed = await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `call-${++call}`);
-    expect(searchInput(1)).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "friday" });
+    expect(searchInput(1)).toMatchObject({ popularityMax: 0.95, michelin: true, openDay: "friday" });
     expect(removed.replacement?.name).toBe("rerun-b");
     expect(removed.note).toBe("Too few places are listed as open on Friday, so check the hours of this one.");
   });

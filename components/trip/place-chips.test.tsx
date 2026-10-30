@@ -6,12 +6,12 @@ import { PlaceChips, placeChipLabels } from "./place-chips";
 describe("placeChipLabels", () => {
   it("shows Less known below the shared line and Michelin when the place has it", () => {
     expect(placeChipLabels({ popularity: 0.02, michelin: true })).toEqual(["Less known", "Michelin"]);
-    expect(placeChipLabels({ popularity: 0.59 })).toEqual(["Less known"]);
+    expect(placeChipLabels({ popularity: 0.94 })).toEqual(["Less known"]);
     expect(placeChipLabels({ popularity: 0.97, michelin: true })).toEqual(["Michelin"]);
   });
 
   it("shows nothing for a well known place or an unknown popularity", () => {
-    expect(placeChipLabels({ popularity: 0.6 })).toEqual([]);
+    expect(placeChipLabels({ popularity: 0.95 })).toEqual([]);
     expect(placeChipLabels({})).toEqual([]);
   });
 });

@@ -460,7 +460,7 @@ export type SlotReasons = {
   /** "Like Via Carota: Italian, warm, stylish", when a favorite shares enough of its taste. */
   like?: string;
   /** The favorites most behind the pick, biggest share first. */
-  favorites: { entityId: string; name: string; share: number; imageUrl?: string }[];
+  favorites: { entityId: string; name: string; share: number; imageUrl?: string; media?: boolean }[];
   /** What to order: the place's own specialty dishes, verbatim. */
   order: string[];
   /** "58 reviews mention martinis" */
@@ -490,9 +490,9 @@ export function slotReasons(
     .sort((a, b) => b.share - a.share)
     .filter((d) => d.share > 0)
     .slice(0, 3)
-    .map(({ entityId, name, share }) => {
+    .map(({ entityId, name, share, media }) => {
       const imageUrl = options.favoriteImages?.get(entityId);
-      return { entityId, name, share, ...(imageUrl ? { imageUrl } : {}) };
+      return { entityId, name, share, ...(imageUrl ? { imageUrl } : {}), ...(media ? { media } : {}) };
     });
   const order = (card.dishes ?? []).map((d) => d.trim()).filter(Boolean).slice(0, 3);
   const mentions = (card.keywords ?? [])

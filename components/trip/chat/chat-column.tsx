@@ -18,7 +18,6 @@ import { describeChatError } from "./chat-errors";
 import {
   composerPlaceholder,
   liveRecommendationId,
-  mainNeighborhood,
   picksByAsk,
   recommendationByPlace,
   type Recommendation,
@@ -28,6 +27,7 @@ import { Composer } from "./composer";
 import { isAtBottom } from "./dock-layout";
 import { Thread } from "./thread";
 import { useChatSession } from "./use-chat-session";
+import { useNextPrompt } from "./use-next-prompt";
 
 // The v3 chat column (Paper G1, S1 to S5, J1): the left half of the trip
 // workspace. The thread fills the column and scrolls, pinned to the bottom
@@ -142,15 +142,13 @@ export function ChatColumn({
   const byPlace = useMemo(() => recommendationByPlace(messages), [messages]);
   const chatPlaces = useMemo(() => new Map(extractChatPlaces(messages).map((p) => [p.tripPlaceId, p])), [messages]);
   const placeName = useCallback((id: string) => places[id]?.name ?? chatPlaces.get(id)?.name, [places, chatPlaces]);
-  const neighborhood = useMemo(() => mainNeighborhood(Object.values(places), slots), [places, slots]);
   const placeholder = composerPlaceholder({
     empty,
-    busy,
     clientName: trip.clientName,
     destination: trip.destination.name,
-    neighborhood,
     openingPlaceholder: opening?.placeholder,
   });
+  const nextPrompt = useNextPrompt(chatId, messages, !busy && !error && server.status !== "failed");
 
   const problem =
     describeChatError(error) ??
@@ -370,6 +368,7 @@ export function ChatColumn({
           busy={busy}
           stopping={stopping}
           placeholder={placeholder}
+          suggestion={nextPrompt}
           onSend={sendAndFollow}
           onStop={() => void stop()}
         />

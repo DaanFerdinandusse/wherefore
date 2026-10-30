@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { DetailsTier, GooglePlaceDetails } from "@/lib/google/contracts";
-import type { TripPlaceProfile } from "@/lib/trips/profile-types";
+import type { FavoritePlace, TripPlaceProfile } from "@/lib/trips/profile-types";
 
 // The sheet's two fetches. The profile (our own rows) loads when the sheet
 // opens; Google details load through /api/places/<placeId>/google, `basic`
@@ -41,6 +41,31 @@ export function useTripPlaceProfile(open: boolean, tripPlaceId: string, initial?
   const refresh = useCallback(() => setVersion((v) => v + 1), []);
   const profile = loaded?.key === tripPlaceId ? loaded.value : seeded;
   return { profile, failed: failed === tripPlaceId && !profile, refresh };
+}
+
+/** A favorite's place row. The card is keyed by entity id, so each favorite gets a fresh hook. */
+export function useFavoritePlace(entityId: string) {
+  const [value, setValue] = useState<FavoritePlace | null>(null);
+  const [problem, setProblem] = useState<"missing" | "failed" | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/api/places/by-entity/${encodeURIComponent(entityId)}`, { signal: controller.signal })
+      .then(async (response) => {
+        // An older match can name an artist without marking it: there is no place to show.
+        if (response.status === 404) return setProblem("missing");
+        if (!response.ok) throw new Error(String(response.status));
+        setValue((await response.json()) as FavoritePlace);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.warn("[place-profile] favorite did not load", error);
+        setProblem("failed");
+      });
+    return () => controller.abort();
+  }, [entityId]);
+
+  return { value, problem };
 }
 
 export function useGoogleDetails(placeId: string | null, hasGoogle: boolean, open: boolean, wantFull: boolean) {
