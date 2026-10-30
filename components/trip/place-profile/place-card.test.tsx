@@ -26,6 +26,13 @@ const trip = { clientName: "Ana Ruiz", destination: { name: "Lisbon" } } as Trip
 const actions = {} as PlaceCardActions;
 
 describe("the Why box", () => {
+  it("opens a favorite place from its name, but not an artist", () => {
+    const withArtist = { ...card, because: [...card.because, { entityId: "e-band", name: "Khruangbin", share: 12, media: true }] };
+    const html = renderToStaticMarkup(<PlaceCard card={withArtist} trip={trip} slots={[]} actions={actions} />);
+    expect(html.match(/data-testid="favorite-open"/g)).toHaveLength(2);
+    expect(html).toContain("Khruangbin");
+  });
+
   it("says which favorite the place is like", () => {
     const html = renderToStaticMarkup(<PlaceCard card={card} trip={trip} slots={[]} actions={actions} />);
     expect(html).toContain("Like Via Carota: Italian, warm, stylish");

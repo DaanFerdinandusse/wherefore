@@ -53,9 +53,14 @@ export function Sheet({
     <dialog
       ref={ref}
       aria-label={label}
-      onClose={onClose}
+      onClose={(event) => {
+        // A sheet can open over another: React would hand its close to the one below too.
+        event.stopPropagation();
+        onClose();
+      }}
       onCancel={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         onClose();
       }}
       onClick={(event) => {

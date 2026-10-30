@@ -6,9 +6,9 @@ import { inScope, isUuid, type ScopeInput } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
 import { askPlaces, places, tripAsks, tripPlaces, trips } from "@/lib/db/schema";
 import { getAdvisorPlaceForPlace, getPlacesByEntityIds } from "@/lib/places";
-import { favoriteDrivers } from "@/lib/qloo/normalize";
+import { categoryOf, favoriteDrivers } from "@/lib/qloo/normalize";
 
-import { buildProfilePlace, type TripPlaceProfile } from "./profile-types";
+import { buildProfilePlace, type FavoritePlace, type TripPlaceProfile } from "./profile-types";
 import { listTripPlaceCards } from "./queries";
 
 // Loads everything the place profile sheet shows beyond the card: the place
@@ -75,4 +75,10 @@ export async function loadTripPlaceProfile(tripPlaceId: string, scope: ScopeInpu
       };
     }),
   };
+}
+
+/** A client favorite by its entity id: the shared place row, so no scope. Null without a row. */
+export async function loadFavoritePlace(entityId: string): Promise<FavoritePlace | null> {
+  const [row] = await getPlacesByEntityIds([entityId]);
+  return row ? { place: buildProfilePlace(row), category: categoryOf(row) } : null;
 }

@@ -5,6 +5,8 @@ The place profile sheet (Paper 03 and 03b). `PlaceProfile` takes `PlaceProfilePr
 | File | What it holds |
 |---|---|
 | `place-profile.tsx` | The sheet: photos left, the scroll column right (header, why, your pick, about, hours and contact, reviews), actions pinned below, compact header once the title scrolls out. |
+| `place-card-parts.tsx` | The photo strip, chips and tabs the place card and the favorite card share. |
+| `favorite-place.tsx` | A favorite opened from "Why Ana" or the itinerary's "Fans of": photos, About, Visit info and Reviews, no actions, over the card that named it. Artists and films stay plain names. Data: `GET /api/places/by-entity/<entityId>`. |
 | `place-photos.ts` | `placePhotos`, used by the card and the sheet: Google's photos alone once loaded, the provider's until then or when Google has none. Tested in `place-photos.test.ts`. |
 | `photo-viewer.tsx` | Modal for the selected card photo, full-image view at up to 2400 px without the film grade, thumbnail strip, keyboard navigation and focus return. |
 | `profile-photos.tsx` | Arch photo, two small photos, "See all N photos" strip; Google photos carry "From Google" and the author. |

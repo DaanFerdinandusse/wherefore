@@ -7,7 +7,7 @@
 // advisor's saved place, the trip's asks). Google details are fetched by the
 // sheet itself and never pass through this shape.
 
-import type { PlaceImage, PlaceTag, TripPlaceCard } from "@/lib/contracts";
+import type { Category, PlaceImage, PlaceTag, TripPlaceCard } from "@/lib/contracts";
 
 /** One weekday of the provider's opening hours, already formatted ("1 to 11 pm"). */
 export type ProviderHoursRow = { weekday: number; text: string };
@@ -69,6 +69,12 @@ export type TripPlaceProfile = {
   asks: { id: string; label: string }[];
   /** Named drivers of `card.because`, in its order. "Other favorites" is not one. */
   drivers: TripPlaceProfileDriver[];
+};
+
+/** The response of GET /api/places/by-entity/<entityId>: a favorite, usually not on the trip. */
+export type FavoritePlace = {
+  place: TripPlaceProfilePlace;
+  category: Category;
 };
 
 /** What the builder reads from a `places` row. */

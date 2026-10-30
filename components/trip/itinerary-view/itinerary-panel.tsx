@@ -8,6 +8,7 @@ import { CoverCredit } from "@/components/ui/cover-credit";
 import type { TravelerFavorite } from "@/lib/contracts";
 import { cn } from "@/lib/ui/cn";
 
+import { FavoritePlaceSheet, type FavoriteRef } from "../place-profile/favorite-place";
 import { useTripStore } from "../store";
 import type { WorkspaceActions } from "../workspace/use-workspace-actions";
 
@@ -62,6 +63,7 @@ export function ItineraryPanel({ actions }: PanelProps) {
   const cover = usesCover(days);
   const first = openDay(days);
   const [toggled, setToggled] = useState<Record<number, boolean>>({});
+  const [openFavorite, setOpenFavorite] = useState<FavoriteRef | null>(null);
   // A day opens on its own while the chat searches for one of its slots or suggests a place for one.
   const busy = (day: DayView) => day.slots.some((s) => s.finding || s.suggestion);
   const isOpen = (day: DayView) => toggled[day.day] ?? (day.filled > 0 || (!cover && day.day === first) || busy(day));
@@ -86,18 +88,37 @@ export function ItineraryPanel({ actions }: PanelProps) {
             <>
               <p className="label-caps pt-2 text-text-3">Matched to {client}&rsquo;s favorites</p>
               <ul className="flex flex-wrap gap-2">
-                {favorites.map((f) => (
-                  <li
-                    key={f.entityId ?? f.name}
-                    className="flex items-center gap-[7px] rounded-pill border border-ink/14 py-1 pr-3 pl-1 text-ui-sm leading-[17px] font-medium text-ink"
-                  >
-                    <span className="relative size-6 shrink-0 overflow-hidden rounded-pill bg-avatar">
-                      {f.imageUrl ? <FilmImage src={f.imageUrl} alt="" sizes="24px" /> : null}
-                    </span>
-                    {f.name}
-                  </li>
-                ))}
+                {favorites.map((f) => {
+                  const { entityId, name } = f;
+                  const chip = "flex items-center gap-[7px] rounded-pill border border-ink/14 py-1 pr-3 pl-1 text-ui-sm leading-[17px] font-medium text-ink";
+                  const face = (
+                    <>
+                      <span className="relative size-6 shrink-0 overflow-hidden rounded-pill bg-avatar">
+                        {f.imageUrl ? <FilmImage src={f.imageUrl} alt="" sizes="24px" /> : null}
+                      </span>
+                      {name}
+                    </>
+                  );
+                  return entityId ? (
+                    <li key={entityId}>
+                      <button
+                        type="button"
+                        aria-haspopup="dialog"
+                        onClick={() => setOpenFavorite({ entityId, name })}
+                        data-testid="favorite-open"
+                        className={cn(chip, "cursor-pointer transition-colors hover:border-ink/40")}
+                      >
+                        {face}
+                      </button>
+                    </li>
+                  ) : (
+                    <li key={name} className={chip}>
+                      {face}
+                    </li>
+                  );
+                })}
               </ul>
+              <FavoritePlaceSheet favorite={openFavorite} client={client} onClose={() => setOpenFavorite(null)} />
             </>
           ) : null}
         </section>

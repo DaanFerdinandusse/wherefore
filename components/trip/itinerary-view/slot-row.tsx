@@ -9,6 +9,8 @@ import type { SlotName, TripPlaceCard } from "@/lib/contracts";
 import { isOpenSlot } from "@/lib/trips/day-parts";
 import { cn } from "@/lib/ui/cn";
 
+import { FavoritePlaceSheet, type FavoriteRef } from "../place-profile/favorite-place";
+import { firstName } from "../place-profile/profile-format";
 import { useTripStore } from "../store";
 import { startPlaceDrag, startSlotDrag } from "../workspace/dnd";
 import { SLOT_LABELS } from "../workspace/format";
@@ -56,8 +58,9 @@ function ReasonsHeading({ children }: { children: string }) {
 }
 
 /** The page under a row: why the place was recommended, then the way into the full card. */
-function ReasonsPage({ reasons, onViewDetails }: { reasons: SlotReasons; onViewDetails: () => void }) {
+function ReasonsPage({ reasons, client, onViewDetails }: { reasons: SlotReasons; client: string; onViewDetails: () => void }) {
   const { favorites, like, order, mentions, note } = reasons;
+  const [favorite, setFavorite] = useState<FavoriteRef | null>(null);
   return (
     <div className="mx-2 mb-2 flex flex-col gap-3 rounded-row bg-why px-3.5 py-3 @[440px]:ml-[114px]">
       <div className="flex items-center justify-between gap-3">
@@ -78,22 +81,40 @@ function ReasonsPage({ reasons, onViewDetails }: { reasons: SlotReasons; onViewD
         {favorites.length > 0 ? (
           <div className="flex min-w-0 flex-col gap-1.5">
             <ReasonsHeading>Fans of</ReasonsHeading>
-            {favorites.map((favorite) => (
-              <p key={favorite.entityId} className="flex items-center gap-2 text-ui-sm leading-[18px] text-ink">
-                {favorite.imageUrl ? (
-                  <span className="relative size-[18px] shrink-0 overflow-hidden rounded-pill bg-avatar">
-                    <FilmImage src={favorite.imageUrl} alt="" sizes="18px" />
-                  </span>
-                ) : (
-                  <Heart size={14} strokeWidth={2} aria-hidden className="shrink-0 text-amber-deep" />
-                )}
-                <span className="min-w-0 grow truncate">{favorite.name}</span>
-                <span aria-hidden className="flex h-1.5 w-9 shrink-0 rounded-pill bg-ink/8">
-                  <span className="h-1.5 rounded-pill bg-amber" style={{ width: `${Math.max(4, favorite.share)}%` }} />
+            {favorites.map((item) => {
+              const avatar = item.imageUrl ? (
+                <span className="relative size-[18px] shrink-0 overflow-hidden rounded-pill bg-avatar">
+                  <FilmImage src={item.imageUrl} alt="" sizes="18px" />
                 </span>
-                <span className="w-8 shrink-0 text-right font-medium text-amber-deep">{favorite.share}%</span>
-              </p>
-            ))}
+              ) : (
+                <Heart size={14} strokeWidth={2} aria-hidden className="shrink-0 text-amber-deep" />
+              );
+              return (
+                <div key={item.entityId} className="flex items-center gap-2 text-ui-sm leading-[18px] text-ink">
+                  {item.media ? (
+                    <span className="flex min-w-0 grow items-center gap-2">
+                      {avatar}
+                      <span className="min-w-0 truncate">{item.name}</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-haspopup="dialog"
+                      onClick={() => setFavorite({ entityId: item.entityId, name: item.name })}
+                      data-testid="favorite-open"
+                      className="group flex min-w-0 grow cursor-pointer items-center gap-2 text-left"
+                    >
+                      {avatar}
+                      <span className="min-w-0 truncate underline decoration-ink/30 underline-offset-2 group-hover:decoration-ink">{item.name}</span>
+                    </button>
+                  )}
+                  <span aria-hidden className="flex h-1.5 w-9 shrink-0 rounded-pill bg-ink/8">
+                    <span className="h-1.5 rounded-pill bg-amber" style={{ width: `${Math.max(4, item.share)}%` }} />
+                  </span>
+                  <span className="w-8 shrink-0 text-right font-medium text-amber-deep">{item.share}%</span>
+                </div>
+              );
+            })}
           </div>
         ) : null}
         {order.length > 0 ? (
@@ -123,6 +144,7 @@ function ReasonsPage({ reasons, onViewDetails }: { reasons: SlotReasons; onViewD
       >
         View full details
       </button>
+      <FavoritePlaceSheet favorite={favorite} client={client} onClose={() => setFavorite(null)} />
     </div>
   );
 }
@@ -250,7 +272,7 @@ function PlaceRow({ view, clientName, countryCode, favoriteImages, actions }: Pl
                 open ? "translate-y-0 opacity-100 duration-[400ms]" : "-translate-y-2 opacity-0 duration-[180ms]",
               )}
             >
-              <ReasonsPage reasons={reasons} onViewDetails={viewDetails} />
+              <ReasonsPage reasons={reasons} client={firstName(clientName)} onViewDetails={viewDetails} />
             </div>
           </div>
         </div>

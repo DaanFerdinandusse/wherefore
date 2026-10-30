@@ -303,6 +303,11 @@ describe("a place in a slot", () => {
     });
   });
 
+  it("keeps an artist marked, so its name opens no place", () => {
+    const reasons = slotReasons({ because: [{ entityId: "E9", name: "Khruangbin", share: 12, media: true }] }, "Ana Ruiz");
+    expect(reasons?.favorites).toEqual([{ entityId: "E9", name: "Khruangbin", share: 12, media: true }]);
+  });
+
   it("never quotes an agent note, falls back to the saved place note, and is empty without facts", () => {
     const base = { because: [] };
     expect(slotReasons({ ...base, score: 85 }, "Ana", { slotNote: { note: "Agent wrote this", noteSource: "agent" } })).toBeNull();

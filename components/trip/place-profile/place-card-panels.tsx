@@ -136,12 +136,13 @@ export function VisitPanel({
   trip,
   client,
 }: {
-  card: TripPlaceCard;
+  card: Pick<TripPlaceCard, "name" | "category" | "neighborhood" | "address">;
   place: TripPlaceProfilePlace | null;
   details: GooglePlaceDetails | null;
   loading: boolean;
   target?: SlotTarget;
-  trip: TripSnapshot["trip"];
+  /** Bolds the trip's days in the hours. A favorite off the trip has none. */
+  trip?: TripSnapshot["trip"];
   client: string;
 }) {
   const date = target?.date;
@@ -152,7 +153,7 @@ export function VisitPanel({
   const neighborhood = card.neighborhood ?? place?.neighborhood ?? null;
   const reservations = reservationLine(details?.reservable);
   const price = priceRangeLabel(details?.priceRange);
-  const days = tripDays(trip, []);
+  const days = trip ? tripDays(trip, []) : [];
   const week = details?.openingHours?.length ? googleHoursRows(details.openingHours, days) : [];
   const features = card.category === "stay" ? (place?.features ?? []) : [];
   const title = date ? `For ${shortDateLabel(date)}` : "Visit facts";
