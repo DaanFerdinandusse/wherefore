@@ -7,13 +7,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StarburstOrnament } from "@/components/ui/starburst-ornament";
 import { requirePageUser } from "@/lib/auth/server";
 import { countClientTrips, listClients, listClientTripCards } from "@/lib/clients";
-import { cn } from "@/lib/ui/cn";
 
 import { clientTripState, filterCounts, isClientFilter, plural, todayIso } from "../format";
-import { ClientRow } from "./client-row";
+import { ClientCard } from "./client-card";
 import { ClientsFilters } from "./clients-filters";
 import { ClientsSearch } from "./clients-search";
-import { COLUMNS } from "./columns";
 
 // B Clients: the advisor's clients, newest activity first. ?q= searches
 // (server side, fuzzy), ?show= filters by trip state, ?all=1 lifts the
@@ -117,16 +115,9 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
         </div>
       ) : (
         <section aria-label="Clients" className="flex flex-col gap-2 px-7">
-          <div aria-hidden className="flex items-center gap-6 px-5 pb-1 text-text-muted">
-            <span className={cn("label-caps shrink-0 leading-4", COLUMNS.client)}>Client</span>
-            <span className={cn("label-caps shrink-0 leading-4", COLUMNS.loves)}>Loves</span>
-            <span className={cn("label-caps shrink-0 leading-4", COLUMNS.nextTrip)}>Next trip</span>
-            <span className={cn("label-caps shrink-0 leading-4", COLUMNS.trips)}>Trips</span>
-            <span className={cn("label-caps shrink-0 leading-4", COLUMNS.activity)}>Last activity</span>
-          </div>
-          <ul className="flex flex-col gap-2">
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-4">
             {visible.map((client) => (
-              <ClientRow
+              <ClientCard
                 key={client.id}
                 client={client}
                 nextTrip={client.nextTrip ? (cardById.get(client.nextTrip.id) ?? null) : null}

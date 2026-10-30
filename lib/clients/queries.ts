@@ -62,6 +62,20 @@ function summaryFields(scope: ScopeInput) {
       limit 4
     ) x
   ), '[]'::json)`,
+    favoriteNames: sql<string[]>`coalesce((
+    select json_agg(x.name order by x.position)
+    from (
+      select f.position, coalesce(p.name, f.query) as name
+      from client_favorites f
+      left join places p on p.id = f.place_id
+      where f.client_id = ${outer.clientId}
+      order by f.position
+      limit 3
+    ) x
+  ), '[]'::json)`,
+    tasteTags: clients.tasteTags,
+    mediaFavorites: clients.mediaFavorites,
+    notesExcerpt: sql<string>`left(${clients.notes}, 240)`,
     nextTrip: sql<ClientSummary["nextTrip"]>`(
     select json_build_object('id', t.id, 'title', t.title, 'startDate', t.start_date)
     from trips t

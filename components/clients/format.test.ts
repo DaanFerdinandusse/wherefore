@@ -8,8 +8,23 @@ import {
   firstName,
   inDaysLabel,
   monthYear,
+  namesLine,
   tripDatesLabel,
 } from "./format";
+
+describe("namesLine", () => {
+  it("joins one, two and three names", () => {
+    expect(namesLine([])).toBe("");
+    expect(namesLine(["Via Carota"])).toBe("Via Carota");
+    expect(namesLine(["Via Carota", "Buna"])).toBe("Via Carota and Buna");
+    expect(namesLine(["Via Carota", "Buna", "Clamato"])).toBe("Via Carota, Buna and Clamato");
+  });
+
+  it("counts the names it does not show", () => {
+    expect(namesLine(["Via Carota", "Buna", "Clamato"], 6)).toBe("Via Carota, Buna, Clamato and 3 more");
+    expect(namesLine(["Via Carota"], 2)).toBe("Via Carota and 1 more");
+  });
+});
 
 const TODAY = "2026-10-21";
 

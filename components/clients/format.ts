@@ -95,6 +95,17 @@ export function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name.trim();
 }
 
+/**
+ * "Via Carota", "Via Carota and Buna", "Via Carota, Buna and Clamato",
+ * "Via Carota, Buna, Clamato and 3 more" when `total` is larger than the names.
+ */
+export function namesLine(names: readonly string[], total: number = names.length): string {
+  const more = Math.max(0, total - names.length);
+  if (more > 0) return `${names.join(", ")} and ${more} more`;
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 /** "1 trip", "3 trips". */
 export function plural(count: number, one: string, many: string = `${one}s`): string {
   return `${count} ${count === 1 ? one : many}`;

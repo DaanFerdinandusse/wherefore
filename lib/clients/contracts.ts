@@ -28,6 +28,12 @@ export type ClientSummary = {
   favoritesCount: number;
   /** First image of the first 4 favorites that have one, in favorite order. */
   favoriteImages: string[];
+  /** The first 3 favorites by name: the matched place's name, else what the advisor typed. */
+  favoriteNames: string[];
+  tasteTags: TasteTag[];
+  mediaFavorites: MediaFavorite[];
+  /** The start of the advisor's notes, at most 240 characters. */
+  notesExcerpt: string;
   /** The soonest trip that has not ended (or has no dates yet). */
   nextTrip: { id: string; title: string; startDate: string | null } | null;
   /** The later of the client's and their trips' last update. */
