@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { FatalError } from "workflow";
 import { z } from "zod";
 
-import type { Category, FindPlacesOutput, PlaceVerdict, SlotName, SlotTarget, ToolStep, TripPlaceCard, Weekday } from "@/lib/contracts";
+import type { Category, FindPlacesOutput, PlacePreview, PlaceVerdict, SlotName, SlotTarget, ToolStep, TripPlaceCard, Weekday } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { places, tripAsks } from "@/lib/db/schema";
 import { MAP_REGION_LABEL } from "@/lib/map/region-prompt";
@@ -22,6 +22,7 @@ import {
   QlooLocalityMismatchError,
   resolveLocality,
   WEEKDAY_NAMES,
+  type FindPlacesResult,
   type NormalizedPlace,
   type PlaceResult,
   type QlooCall,
@@ -31,7 +32,7 @@ import { placeFactsFromProperties, type AskFilters } from "@/lib/trips/map";
 import { agentModelRef, agentProviderOptions } from "@/lib/codex/provider";
 
 import { carryTags } from "../taste-overlap";
-import { dealScores, mergeVerdicts, verdictOrder, weighPlaces, type MoreSearch, type WeighBrief, type WeighPlace } from "../weigh";
+import { dealScores, mergeVerdicts, settleVerdicts, verdictOrder, weighPlaces, type MoreSearch, type WeighBrief, type WeighPlace } from "../weigh";
 import { assertTurn, finishAsk, guarded, TurnSupersededError, writeScores, type TurnRef } from "../writes";
 
 import {
@@ -50,7 +51,7 @@ import {
 } from "./labels";
 import { factsForModel } from "./model-output";
 import { hoursOf } from "./place-tools";
-import { pause } from "./run-tool";
+import { pause, withProgress } from "./run-tool";
 import { chooseSearchArea, searchedAreaText, widenedNote, type SearchAreaInput } from "./search-area";
 import {
   cardsInOrder,
@@ -115,9 +116,22 @@ export const MAX_TAKE = 8;
 const MAX_ADVISOR_EXTRAS = 2;
 /** How many new places a second search adds to the card. */
 const MORE_TAKE = 3;
-/** The beat between two lines, so the advisor can read each one as it lands. */
-const VERDICT_BEAT_MS = 420;
+/** A short beat between two lines, so a fast reply still lands one line at a time. */
+const VERDICT_BEAT_MS = 160;
 const READING_STATUS = "Reading what people say about each one";
+
+/** The places of a search step as rows to show while the search still runs. */
+function previewOf(places: readonly NormalizedPlace[], category: SearchCategory | undefined, take: number, excluded: ReadonlySet<string>): PlacePreview[] {
+  return places
+    .filter((place) => !excluded.has(place.entityId) && (!category || categoryOf(place) === category))
+    .slice(0, take)
+    .map((place) => ({
+      entityId: place.entityId,
+      name: place.name,
+      ...(place.images[0]?.url ? { imageUrl: place.images[0].url } : {}),
+      ...(place.neighborhood ? { neighborhood: place.neighborhood } : {}),
+    }));
+}
 /** A category search asks for a few more: results of another kind are left out here. */
 const CATEGORY_SPARE = 3;
 /** Tags beyond this add nothing: a few more words are no reason to fail a search. */
@@ -143,7 +157,7 @@ const GENERIC_NOUNS: Record<string, SearchCategory> = {
   hotel: "stay",
   hotels: "stay",
 };
-const FILLER = new Set(["places", "place", "spots", "spot", "options", "ideas", "good", "best", "some", "great"]);
+const FILLER = new Set(["places", "place", "spots", "spot", "option", "options", "ideas", "good", "best", "some", "great", "vibe", "vibes", "like", "a", "an", "the", "more"]);
 
 /** The category a slot implies when the ask names none: a meal is a restaurant, the stay a hotel. */
 export function slotCategory(slot: SlotName | undefined): SearchCategory | undefined {
@@ -420,7 +434,7 @@ export async function* findPlacesTool(
   // A region on the map is searched as given, in the destination or not.
   const region = input.near ? { lat: input.near.lat, lon: input.near.lon, radiusM: input.near.radius_m } : undefined;
   const searchedPlace = region ? "this region of the map" : ctx.destination.name;
-  const terms = searchTerms(askedTags, split.text);
+  const terms = searchTerms(askedTags);
   // "see" stays open: it is the nearest fit for a search that really wants a mall.
   const noShopping = askCategory !== undefined && askCategory !== "see";
   const basedOn = basedOnFavorites(ctx.signals.favoritesUsed.map((f) => f.clientName));
@@ -457,6 +471,7 @@ export async function* findPlacesTool(
   let searchedArea: string | undefined;
   let verdicts: PlaceVerdict[] = checkpoint.weigh?.verdicts ?? [];
   let searches = checkpoint.weigh?.searches ?? 1;
+  let preview: PlacePreview[] = [];
 
   const output = (phase: FindPlacesOutput["phase"], extra: Partial<FindPlacesOutput> = {}): FindPlacesOutput => ({
     phase,
@@ -486,6 +501,7 @@ export async function* findPlacesTool(
     ...(ctx.rules.length ? { groundRules: ctx.rules } : {}),
     ...(verdicts.length ? { verdicts } : {}),
     ...(searches > 1 ? { searches } : {}),
+    ...(preview.length && cards.length === 0 ? { preview } : {}),
     ...extra,
   });
   const failAsk = () => finishAsk(turn, ask.id, { status: "failed", elapsedMs: elapsed(), loosened: [], resultCount: 0 });
@@ -503,6 +519,7 @@ export async function* findPlacesTool(
     let ranked: RankedPlace[];
     let constraints: AskConstraints;
     let areaNote: string | undefined;
+    let logged: Promise<unknown> = Promise.resolve();
 
     if (checkpoint.search) {
       ranked = checkpoint.search.ranked;
@@ -556,20 +573,32 @@ export async function* findPlacesTool(
       let results: PlaceResult[];
       let reachedM = searchArea.radiusM;
       try {
-        const found = await findPlaces(
-          {
-            destination,
-            widen: searchArea.widen,
-            signals: ctx.signals.signals,
-            ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
-            ...(input.price_max ? { priceMax: input.price_max } : {}),
-            noShopping,
-            ...filters,
-            ...(ctx.excludeIds.length ? { excludeIds: ctx.excludeIds } : {}),
-            take: askCategory ? take + CATEGORY_SPARE : take,
-          },
-          { tripId: ctx.trip.id },
+        // The places show as soon as a search step has checked them; the rest of
+        // the steps, the writes and the cards catch up behind them.
+        const searching = withProgress<PlacePreview[], FindPlacesResult>((report) =>
+          findPlaces(
+            {
+              destination,
+              widen: searchArea.widen,
+              signals: ctx.signals.signals,
+              ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
+              ...(input.price_max ? { priceMax: input.price_max } : {}),
+              noShopping,
+              ...filters,
+              ...(ctx.excludeIds.length ? { excludeIds: ctx.excludeIds } : {}),
+              take: askCategory ? take + CATEGORY_SPARE : take,
+              onStage: (stage) => report(previewOf(stage, askCategory, take, excluded)),
+            },
+            { tripId: ctx.trip.id },
+          ),
         );
+        let step = await searching.next();
+        while (!step.done) {
+          preview = step.value;
+          if (preview.length > 0) yield output("searching");
+          step = await searching.next();
+        }
+        const found = step.value;
         calls.push(...found.calls);
         loosened = found.loosened;
         results = found.results.filter(notExcluded);
@@ -633,7 +662,8 @@ export async function* findPlacesTool(
           }
         }
       }
-      await logCalls(turn, ctx, calls, source, key("search"), loosened);
+      // Written next to the places, not before them: nobody waits on the log.
+      logged = logCalls(turn, ctx, calls, source, key("search"), loosened).catch((error: unknown) => error);
 
       // Category re-check: only the asked kind, unless nothing else came back
       // (the search has then said what it dropped). The category filter is loose
@@ -691,6 +721,10 @@ export async function* findPlacesTool(
       return output("done", { error: `No places matched in ${searchedPlace}. Try a broader ask.` });
     }
 
+    yield output("scoring", { status: READING_STATUS });
+    const logFailure = await logged;
+    if (logFailure) throw logFailure;
+
     // Score the advisor's places in the city; keep the ones that fit the ask.
     const cityName = ctx.destination.name;
     const client = firstName(ctx.clientName);
@@ -707,7 +741,7 @@ export async function* findPlacesTool(
         detail: `Your ${ctx.advisorPlaces.length} ${cityName} places, scored for ${client}`,
         total: ctx.advisorPlaces.length,
       };
-      yield output("scoring");
+      yield output("scoring", { status: READING_STATUS });
       const scoreStarted = Date.now();
       try {
         const { scores, calls: scoreCalls } = await scoreAdvisorPlaces(
@@ -759,22 +793,12 @@ export async function* findPlacesTool(
       }
     }
 
-    // Explain the picks.
+    // Explain the picks, next to the weighing rather than before it: both are
+    // model calls, and neither needs the other's answer.
     let explained = 0;
     let toExplain = cards.filter((c) => !c.reason).length;
-    if (checkpoint.explain) {
-      explained = checkpoint.explain.done;
-      toExplain = checkpoint.explain.total;
-    } else {
-      explainStep = {
-        ...explainStep,
-        state: "running",
-        detail: `Reading which of ${client}'s favorites drive each pick`,
-        done: 0,
-        total: toExplain,
-        note: `0 of ${toExplain}`,
-      };
-      yield output("explaining", { done: 0, total: toExplain });
+    let explainFailure: unknown;
+    const explaining = async () => {
       try {
         const { reasons, drivers } = await explainCards(turn, ctx, cards, abortSignal);
         explained = reasons.size;
@@ -788,18 +812,29 @@ export async function* findPlacesTool(
         checkpoint.explain = { done: explained, total: toExplain };
         await saveCheckpoint(checkpoint);
       } catch (error) {
-        if (abortSignal?.aborted || error instanceof TurnSupersededError) throw error;
-        console.error(`[find_places ${toolCallId}] explaining failed`, error);
+        if (abortSignal?.aborted || error instanceof TurnSupersededError) explainFailure = error;
+        else console.error(`[find_places ${toolCallId}] explaining failed`, error);
       }
+    };
+    let explainRun: Promise<void> = Promise.resolve();
+    if (checkpoint.explain) {
+      explained = checkpoint.explain.done;
+      toExplain = checkpoint.explain.total;
+    } else {
+      explainStep = {
+        ...explainStep,
+        state: "running",
+        detail: `Reading which of ${client}'s favorites drive each pick`,
+        done: 0,
+        total: toExplain,
+        note: `0 of ${toExplain}`,
+      };
+      yield output("explaining", { done: 0, total: toExplain, status: READING_STATUS });
+      explainRun = explaining();
     }
-    cards = await cardsInOrder(ctx, ranked.map((r) => r.tripPlaceId));
-    explainStep = {
-      ...explainStep,
-      state: "done",
-      detail: `Reading which of ${client}'s favorites drive each pick`,
-      done: explained,
-      total: toExplain,
-      note: `${explained} of ${toExplain}`,
+    const explainSettled = async () => {
+      await explainRun;
+      if (explainFailure) throw explainFailure;
     };
 
     // The agent weighs the candidates out loud. No taste to judge by, or nothing
@@ -817,19 +852,27 @@ export async function* findPlacesTool(
       const brief: Omit<WeighBrief, "maySearchAgain" | "current"> = {
         clientName: client,
         brief: [input.intent, ...(askedTags ?? [])].join(", "),
+        ...(target ? { forSlot: target.label } : {}),
         taste: ctx.tasteTags.slice(0, 12).map((t) => t.name),
         rules: ctx.rules,
         favorites: ctx.signals.favorites.map((f) => f.name),
       };
       try {
         yield output("weighing", { status: READING_STATUS });
-        const first = await weighPlaces(toWeigh(cards), { ...brief, maySearchAgain: true }, modelOptions);
-        // One line at a time, as a person would say them.
-        for (const verdict of first.verdicts) {
-          verdicts = [...verdicts, verdict];
+        // Each line shows the moment the model has written it.
+        const firstPass = weighPlaces(toWeigh(cards), { ...brief, maySearchAgain: true }, modelOptions);
+        let told = await firstPass.next();
+        while (!told.done) {
+          verdicts = [...verdicts, told.value];
           yield output("weighing", { status: READING_STATUS });
           await pause(VERDICT_BEAT_MS, abortSignal);
+          told = await firstPass.next();
         }
+        const first = told.value;
+        verdicts = settleVerdicts(verdicts, first.verdicts);
+        yield output("weighing", { status: READING_STATUS });
+        // Before anything else writes the ask's rows: the reasons carry their tags there.
+        await explainSettled();
 
         if (first.more) {
           const more: MoreSearch = first.more;
@@ -890,7 +933,8 @@ export async function* findPlacesTool(
               const leaderName = cards.find((c) => c.tripPlaceId === leader?.tripPlaceId)?.name;
               const status = leaderName ? `Weighing them against ${leaderName}` : READING_STATUS;
               yield output("weighing", { status });
-              const second = await weighPlaces(
+              const before = verdicts;
+              const secondPass = weighPlaces(
                 toWeigh(fresher),
                 {
                   ...brief,
@@ -899,13 +943,16 @@ export async function* findPlacesTool(
                 },
                 modelOptions,
               );
-              // Only a pick the model names over the place to beat replaces it.
-              const keepPick = !second.overtakes;
-              for (const verdict of second.verdicts) {
-                verdicts = mergeVerdicts(verdicts, [verdict], { keepPick });
+              let toldNext = await secondPass.next();
+              while (!toldNext.done) {
+                verdicts = mergeVerdicts(verdicts, [toldNext.value], { keepPick: true });
                 yield output("weighing", { status });
                 await pause(VERDICT_BEAT_MS, abortSignal);
+                toldNext = await secondPass.next();
               }
+              // Only a pick the model names over the place to beat replaces it.
+              const second = toldNext.value;
+              verdicts = mergeVerdicts(before, second.verdicts, { keepPick: !second.overtakes });
             }
           }
         }
@@ -925,8 +972,18 @@ export async function* findPlacesTool(
         // A failed second search keeps what the first pass said.
         console.error(`[find_places ${toolCallId}] weighing failed`, error);
       }
-      cards = await cardsInOrder(ctx, ranked.map((r) => r.tripPlaceId));
     }
+
+    await explainSettled();
+    cards = await cardsInOrder(ctx, ranked.map((r) => r.tripPlaceId));
+    explainStep = {
+      ...explainStep,
+      state: "done",
+      detail: `Reading which of ${client}'s favorites drive each pick`,
+      done: explained,
+      total: toExplain,
+      note: `${explained} of ${toExplain}`,
+    };
 
     const hoursUnknown = openDay ? await hoursUnknownOn(cards, openDay) : [];
     await assertTurn(turn);

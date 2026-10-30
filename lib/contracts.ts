@@ -79,6 +79,9 @@ export type PlaceVerdict = {
   catch: boolean;
 };
 
+/** A place a search found, before it is on the trip: enough for a row in the search card. */
+export type PlacePreview = { entityId: string; name: string; imageUrl?: string; neighborhood?: string };
+
 /** A word or dish reviews mention, with how many reviews mention it ("Tuna tostadas", 312). */
 export type PlaceKeyword = { name: string; count: number };
 
@@ -343,6 +346,8 @@ export type FindPlacesOutput = {
   groundRules?: string[];
   /** Cards with no hours on record for `openDay`: nothing says they are open that day. */
   hoursUnknown?: string[];
+  /** Places a search step has checked, before they are on the trip. Replaced by `places`. */
+  preview?: PlacePreview[];
   /** What the agent is doing right now, while it weighs ("Looking for more Italian"). */
   status?: string;
   /** The agent's lines so far. Places without one are still being read. */

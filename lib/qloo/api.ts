@@ -234,15 +234,19 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
   let reachedM = destination.radiusM;
   let localityLabel: string | undefined;
 
-  for (const step of steps) {
+  const ask = (step: (typeof steps)[number]) => client.get("/v2/insights", step.params, { schema, tripId: ctx?.tripId });
+  // The first step usually answers. When it comes back short, the steps left are
+  // asked at once and read in order, so a thin search costs one wait instead of
+  // one per circle. A step that turns out not to be needed is not used. A last
+  // resort circle stays a separate call: most searches never reach it.
+  const asked = new Map<number, ReturnType<typeof ask>>();
+
+  for (const [index, step] of steps.entries()) {
     if (step.below !== undefined && kept >= step.below) continue;
     if (step.drop) loosened.push(step.drop);
     reachedM = Math.max(reachedM, step.radiusM);
     const dropped = [...loosened];
-    const { data, call } = await client.get("/v2/insights", step.params, {
-      schema,
-      tripId: ctx?.tripId,
-    });
+    const { data, call } = await (asked.get(index) ?? ask(step));
     calls.push(call);
     localityLabel ??= data.query?.localities?.filter?.[0]?.disambiguation ?? undefined;
     const found: Candidate[] = [];
@@ -280,7 +284,16 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
     stage.sort((a, b) => (b.raw.query.affinity ?? 0) - (a.raw.query.affinity ?? 0));
     stages.push(stage);
     kept += stage.length;
+    if (stage.length > 0) input.onStage?.(stages.flat().slice(0, input.take).map((c) => c.place));
     if (kept >= enough) break;
+    if (index === 0) {
+      for (const [later, next] of steps.entries()) {
+        if (later <= index || next.below !== undefined) continue;
+        const pending = ask(next);
+        pending.catch(() => undefined);
+        asked.set(later, pending);
+      }
+    }
   }
 
   if (kept + noHours.length === 0 && far.size > 0) {
@@ -451,18 +464,12 @@ export const findTags: FindTags = async (text, ctx) => {
 /** Full rows by id, for re-hydration and the 30-day refresh. Sequential chunks. */
 export const getEntities: GetEntities = async (ids, ctx) => {
   const client = clientOf(ctx);
-  const calls: QlooCall[] = [];
-  const places = [];
-  for (const part of chunk([...new Set(ids)], ENTITY_CHUNK)) {
-    const { data, call } = await client.get(
-      "/entities",
-      { entity_ids: part },
-      { schema: entitiesResponseSchema, tripId: ctx?.tripId },
-    );
-    calls.push(call);
-    places.push(...data.results.map(normalizePlace));
-  }
-  return { places, calls };
+  const parts = await Promise.all(
+    chunk([...new Set(ids)], ENTITY_CHUNK).map((part) =>
+      client.get("/entities", { entity_ids: part }, { schema: entitiesResponseSchema, tripId: ctx?.tripId }),
+    ),
+  );
+  return { places: parts.flatMap(({ data }) => data.results.map(normalizePlace)), calls: parts.map(({ call }) => call) };
 };
 
 // --------------------------------------------------------------- destinations

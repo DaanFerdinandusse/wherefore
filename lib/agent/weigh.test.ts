@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { weighedPick } from "./tools/recommend-format";
-import { dealScores, defaultVerdicts, mergeVerdicts, parseMore, parseWeighReply, plainLine, validateVerdicts, verdictOrder, type WeighPlace } from "./weigh";
+import { dealScores, defaultVerdicts, mergeVerdicts, parseMore, parseWeighReply, plainLine, settleVerdicts, validateVerdicts, verdictOrder, verdictsSoFar, type WeighPlace } from "./weigh";
 
 const place = (id: string, sharedTags: string[] = ["Cozy", "Italian"], facts: Record<string, unknown> = {}): WeighPlace => ({
   tripPlaceId: id,
@@ -48,7 +48,7 @@ describe("validateVerdicts", () => {
   it("drops a claim about hours or prices no fact says", () => {
     const [verdict] = validateVerdicts([place("a")], [answer("a", "pick", "Cozy,", "and it closes at midnight.")], []);
     expect(verdict?.rest).toBe("");
-    expect(verdict?.good).toBe("Cozy,");
+    expect(verdict?.good).toBe("Cozy.");
   });
 
   it("keeps a claim that quotes the place's facts", () => {
@@ -180,5 +180,39 @@ describe("weighedPick", () => {
     expect(weighedPick({})).toBeUndefined();
     expect(weighedPick(null)).toBeUndefined();
     expect(weighedPick({ verdicts: "no" })).toBeUndefined();
+  });
+});
+
+describe("verdictsSoFar", () => {
+  const whole = '{"place_id":"a","stand":"pick","good":"Cozy,","rest":"this is \\"Ana\\". {really}","catch":false}';
+
+  it("reads the verdicts that are complete, and leaves the one still being written", () => {
+    const reply = `{"verdicts":[${whole},{"place_id":"b","stand":"out","good":"Co`;
+    expect(verdictsSoFar(reply).map((v) => v.place_id)).toEqual(["a"]);
+  });
+
+  it("is not fooled by braces and quotes inside a line", () => {
+    expect(verdictsSoFar(`{"verdicts":[${whole}]`)[0]?.rest).toBe('this is "Ana". {really}');
+  });
+
+  it("finds nothing before the array starts", () => {
+    expect(verdictsSoFar('{"verd')).toEqual([]);
+  });
+
+  it("stops at the end of the array", () => {
+    expect(verdictsSoFar(`{"verdicts":[${whole}],"search_again":{"why":"x","intent":"y"}}`)).toHaveLength(1);
+  });
+});
+
+describe("settleVerdicts", () => {
+  const verdict = (tripPlaceId: string, stand: "pick" | "backup" | "out") => ({ tripPlaceId, stand, good: "", rest: "", catch: false });
+
+  it("keeps the order things were said in, with the final stands", () => {
+    const settled = settleVerdicts([verdict("b", "pick"), verdict("a", "pick")], [verdict("a", "pick"), verdict("b", "backup")]);
+    expect(settled.map((v) => [v.tripPlaceId, v.stand])).toEqual([["b", "backup"], ["a", "pick"]]);
+  });
+
+  it("adds a place the model skipped", () => {
+    expect(settleVerdicts([verdict("a", "pick")], [verdict("a", "pick"), verdict("b", "out")]).map((v) => v.tripPlaceId)).toEqual(["a", "b"]);
   });
 });

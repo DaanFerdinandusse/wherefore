@@ -5,8 +5,8 @@ import type { DragEvent } from "react";
 
 import { startPlaceDrag } from "@/components/trip/workspace/dnd";
 import { FilmImage } from "@/components/ui/film-image";
-import type { Category, FindPlacesOutput, PlaceVerdict, TripPlaceCard } from "@/lib/contracts";
-import { categoryNoun, loosenedCopy, rowTitle } from "@/lib/agent/tools/labels";
+import type { Category, FindPlacesOutput, PlacePreview, PlaceVerdict, TripPlaceCard } from "@/lib/contracts";
+import { categoryNoun, rowTitle } from "@/lib/agent/tools/labels";
 import { cn } from "@/lib/ui/cn";
 
 import { toolErrorText } from "../chat-errors";
@@ -57,15 +57,6 @@ function ArcSpinner({ size = 18, light = false }: { size?: number; light?: boole
   );
 }
 
-/** "3 of 5" while the picks are being explained, from the tool's own step counts. */
-function progressFigure(output: FindPlacesOutput | undefined): string | undefined {
-  const explain = output?.steps?.find((s) => s.key === "explain");
-  if (explain?.state === "running" && explain.total) return `${explain.done ?? 0} of ${explain.total}`;
-  const score = output?.steps?.find((s) => s.key === "score");
-  if (score?.state === "running") return "Checking your places";
-  return undefined;
-}
-
 function dragHandler(place: TripPlaceCard) {
   return (event: DragEvent) => startPlaceDrag(event, place.tripPlaceId, place.category);
 }
@@ -91,7 +82,7 @@ function PlaceItem({ place, layout, verdict, picked, backup, selected, onPlacesH
   const out = verdict?.stand === "out";
   const line = matchLine(place, picked, backup);
   return (
-    <li data-flip-id={place.tripPlaceId} className={rows ? "w-full" : "min-w-[128px] grow basis-0"}>
+    <li data-flip-id={place.entityId} className={rows ? "w-full" : "min-w-[128px] grow basis-0"}>
       <button
         type="button"
         draggable
@@ -161,6 +152,23 @@ function PlaceItem({ place, layout, verdict, picked, backup, selected, onPlacesH
   );
 }
 
+/** A place the search has found and checked, before it is on the trip: not clickable yet. */
+function PreviewRow({ place }: { place: PlacePreview }) {
+  return (
+    <li data-flip-id={place.entityId} className="w-full" data-testid="place-preview">
+      <span className="rise-in flex w-full items-center gap-3 rounded-row bg-surface-raised p-1.5 ring-1 ring-ink/6">
+        <span className="relative h-13 w-16 shrink-0 overflow-hidden rounded-[10px] bg-avatar">
+          {place.imageUrl ? <FilmImage src={place.imageUrl} alt="" sizes="64px" unoptimized /> : null}
+        </span>
+        <span className="flex min-w-0 grow flex-col gap-px">
+          <span className="truncate text-body leading-5 font-semibold text-ink">{place.name}</span>
+          <span aria-hidden className="skeleton-sheen mt-1 block h-2.5 w-[56%] rounded-pill" />
+        </span>
+      </span>
+    </li>
+  );
+}
+
 function SkeletonRow({ index }: { index: number }) {
   return (
     <li aria-hidden className="flex w-full items-center gap-3 rounded-row bg-surface-raised p-1.5 ring-1 ring-ink/6" data-testid="place-tile-skeleton">
@@ -177,6 +185,7 @@ export function SearchRow({ state, preliminary, input, output, errorText, onRetr
   const failed = state === "output-error" || Boolean(output?.error && output.phase === "done" && output.places.length === 0);
   const running = !failed && (state !== "output-available" || preliminary);
   const verdicts = output?.verdicts;
+  const preview = output?.preview ?? [];
   const places = placesByVerdict(output?.places ?? [], verdicts);
   const pickId = pickedId ?? verdicts?.find((v) => v.stand === "pick")?.tripPlaceId;
   const backupId = verdicts?.find((v) => v.stand === "backup")?.tripPlaceId;
@@ -188,11 +197,10 @@ export function SearchRow({ state, preliminary, input, output, errorText, onRetr
     : (output?.title ?? rowTitle({ phase: running ? "pending" : "done", count: places.length, category, dayHint: input?.day_hint }));
   const terms = output?.terms?.join(", ") ?? output?.details;
   const searches = output?.searches ? `${output.searches} searches` : undefined;
-  const detail = [terms, running ? undefined : searches].filter(Boolean).join(" · ");
-  const figure = running ? progressFigure(output) : undefined;
+  // While the agent talks, what it is doing is the whole header.
+  const detail = running && output?.status ? "" : [terms, running ? undefined : searches].filter(Boolean).join(" · ");
   const layout = running ? "rows" : "chips";
-  const listRef = useFlip<HTMLUListElement>(`${layout}|${places.map((p) => p.tripPlaceId).join(",")}|${(verdicts ?? []).map((v) => v.stand).join(",")}`);
-  const notes = [...loosenedCopy(output?.loosened ?? [], output?.openDay), ...(!running && output?.progress ? [output.progress] : [])];
+  const listRef = useFlip<HTMLUListElement>(`${layout}|${places.map((p) => p.entityId).join(",")}|${preview.length}|${(verdicts ?? []).map((v) => v.stand).join(",")}`);
 
   return (
     <div
@@ -214,11 +222,10 @@ export function SearchRow({ state, preliminary, input, output, errorText, onRetr
           </span>
         )}
         <Icon aria-hidden className="size-4 shrink-0 text-ink" strokeWidth={2} />
-        <p className={cn("min-w-0 truncate font-semibold text-ink", running ? "text-body-lg leading-5.25" : "text-body leading-5")} data-testid="tool-card-title">
+        <p className={cn("max-w-full shrink-0 truncate font-semibold text-ink", running ? "text-body-lg leading-5.25" : "text-body leading-5")} data-testid="tool-card-title">
           {(running && output?.status) || title}
         </p>
-        {detail ? <p className="min-w-0 grow truncate text-ui leading-4.75 text-text-2">{detail}</p> : <span className="grow" />}
-        {figure ? <p className="shrink-0 text-ui font-medium text-amber">{figure}</p> : null}
+        {detail ? <p className="min-w-0 flex-[1_1_0] truncate text-ui leading-4.75 text-text-2">{detail}</p> : <span className="grow" />}
       </div>
 
       {failed ? (
@@ -232,9 +239,10 @@ export function SearchRow({ state, preliminary, input, output, errorText, onRetr
           data-testid={running ? "search-tiles" : "search-chips"}
           onMouseLeave={() => handlers.onPlacesHover?.(null)}
         >
+          {places.length === 0 ? preview.map((place) => <PreviewRow key={place.entityId} place={place} />) : null}
           {places.map((place) => (
             <PlaceItem
-              key={place.tripPlaceId}
+              key={place.entityId}
               place={place}
               layout={layout}
               verdict={verdicts?.find((v) => v.tripPlaceId === place.tripPlaceId)}
@@ -244,19 +252,10 @@ export function SearchRow({ state, preliminary, input, output, errorText, onRetr
               {...handlers}
             />
           ))}
-          {running
-            ? Array.from({ length: Math.max(0, Math.min(take, 8) - places.length) }, (_, i) => <SkeletonRow key={`skeleton-${i}`} index={i} />)
+          {/* Placeholders only until the first place is in: after that, the card shows what was found. */}
+          {running && places.length === 0 && preview.length === 0
+            ? Array.from({ length: Math.min(take, 8) }, (_, i) => <SkeletonRow key={`skeleton-${i}`} index={i} />)
             : null}
-        </ul>
-      ) : null}
-
-      {notes.length > 0 && !failed ? (
-        <ul className="flex flex-col gap-0.5 px-1">
-          {notes.map((note) => (
-            <li key={note} className="text-meta text-text-2">
-              {note}
-            </li>
-          ))}
         </ul>
       ) : null}
     </div>

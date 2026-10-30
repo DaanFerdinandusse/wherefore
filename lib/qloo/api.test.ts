@@ -9,6 +9,7 @@ import { findPlaces, findTags, scoreEntities, tastePortrait } from "./api";
 import { memoryCacheStore } from "./cache";
 import { createQlooClient } from "./client";
 import { MAX_EXCLUDED, MAX_SIGNALS } from "../agent/tools/signals";
+import type { QlooCall } from "./contracts";
 import { QlooLocalityMismatchError } from "./errors";
 import { CATEGORY_FILTER_TAGS, closedOn, isCategoryTagFilter, isUnpricedTagFilter, openDuring } from "./normalize";
 
@@ -92,7 +93,9 @@ describe("findPlaces", () => {
   });
 
   describe("wider circles", () => {
-    const radii = (urls: URL[]) => urls.map((u) => u.searchParams.get("filter.location.radius"));
+    /** The search steps the result was built from, in order. Steps left over from asking ahead are not among them. */
+    const steps = (calls: readonly QlooCall[]) => calls.filter((c) => c.endpoint === "/v2/insights");
+    const radii = (calls: readonly QlooCall[]) => steps(calls).map((c) => String(c.params["filter.location.radius"]));
     const small = { ...lisbon, radiusM: 2_500 };
     const tags = ["urn:tag:category:place:wine_bar"];
     const widen = [{ radiusM: 5_000 }, { radiusM: 8_000 }, { radiusM: 25_000, below: 3 }];
@@ -105,17 +108,17 @@ describe("findPlaces", () => {
     };
 
     it("stops at the first circle with enough places", async () => {
-      const { client, urls } = clientFor(byRadius({ 2500: 5 }));
+      const { client } = clientFor(byRadius({ 2500: 5 }));
       const out = await findPlaces({ destination: small, widen, signals, tags, take: 5 }, { client });
-      expect(radii(urls)).toEqual(["2500"]);
+      expect(radii(out.calls)).toEqual(["2500"]);
       expect(out.radiusM).toBe(2_500);
       expect(out.loosened).toEqual([]);
     });
 
     it("goes wider before it drops a filter, closest places first", async () => {
-      const { client, urls } = clientFor(byRadius({ 2500: 2, 5000: 5 }));
+      const { client } = clientFor(byRadius({ 2500: 2, 5000: 5 }));
       const out = await findPlaces({ destination: small, widen, signals, tags, take: 5 }, { client });
-      expect(radii(urls)).toEqual(["2500", "5000"]);
+      expect(radii(out.calls)).toEqual(["2500", "5000"]);
       expect(out.radiusM).toBe(5_000);
       expect(out.loosened).toEqual([]);
       expect(out.results.map((r) => r.place.entityId)).toEqual(["exact0", "exact1", "exact2", "exact3", "exact4"]);
@@ -124,16 +127,17 @@ describe("findPlaces", () => {
     it("leaves the last resort circle out while a few exact matches exist, and drops the tags close by", async () => {
       const { client, urls } = clientFor(byRadius({ 2500: 1, 5000: 2, 8000: 3 }));
       const out = await findPlaces({ destination: small, widen, signals, tags, take: 5 }, { client });
-      expect(radii(urls)).toEqual(["2500", "5000", "8000", "8000"]);
-      expect(urls[3].searchParams.has("filter.tags")).toBe(false);
+      expect(radii(out.calls)).toEqual(["2500", "5000", "8000", "8000"]);
+      expect(steps(out.calls)[3]?.params).not.toHaveProperty("filter.tags");
+      expect(urls.some((u) => u.searchParams.get("filter.location.radius") === "25000")).toBe(false);
       expect(out.radiusM).toBe(8_000);
       expect(out.loosened).toEqual(["tags"]);
     });
 
     it("searches the last resort circle when almost nothing matches", async () => {
-      const { client, urls } = clientFor(byRadius({ 25000: 5 }));
+      const { client } = clientFor(byRadius({ 25000: 5 }));
       const out = await findPlaces({ destination: small, widen, signals, tags, take: 5 }, { client });
-      expect(radii(urls)).toEqual(["2500", "5000", "8000", "25000"]);
+      expect(radii(out.calls)).toEqual(["2500", "5000", "8000", "25000"]);
       expect(out.radiusM).toBe(25_000);
       expect(out.loosened).toEqual([]);
     });
@@ -203,7 +207,7 @@ describe("findPlaces", () => {
   });
 
   it("stops loosening as soon as there are enough", async () => {
-    const { client, urls } = clientFor((url) =>
+    const { client } = clientFor((url) =>
       url.searchParams.has("filter.tags")
         ? { results: { entities: entities(1, "strict") } }
         : { results: { entities: entities(6, "loose") } },
@@ -213,7 +217,7 @@ describe("findPlaces", () => {
       { client },
     );
     expect(out.loosened).toEqual(["tags"]);
-    expect(urls).toHaveLength(2);
+    expect(out.calls.filter((c) => c.endpoint === "/v2/insights")).toHaveLength(2);
   });
 
   it("does not apply a price cap to a see or stay ask, and does not report it as loosened", async () => {
@@ -293,7 +297,7 @@ describe("findPlaces", () => {
   });
 
   it("tries every wider circle with all its filters before it drops one", async () => {
-    const { client, urls } = clientFor(() => ({ results: { entities: [] } }));
+    const { client } = clientFor(() => ({ results: { entities: [] } }));
     const out = await findPlaces(
       {
         destination: { ...lisbon, radiusM: 1000 },
@@ -306,11 +310,13 @@ describe("findPlaces", () => {
       },
       { client },
     );
-    const asked = urls.map((url) => {
-      const q = url.searchParams;
-      return [q.get("filter.location.radius"), q.has("filter.tags"), q.has("filter.popularity.max"), q.has("filter.external.exists")];
-    });
-    expect(asked).toEqual([
+    const used = out.calls.filter((c) => c.endpoint === "/v2/insights").map(({ params }) => [
+      String(params["filter.location.radius"]),
+      "filter.tags" in params,
+      "filter.popularity.max" in params,
+      "filter.external.exists" in params,
+    ]);
+    expect(used).toEqual([
       ["1000", true, true, true],
       ["2500", true, true, true],
       ["8500", true, true, true],
@@ -343,7 +349,7 @@ describe("findPlaces", () => {
   });
 
   it("finds restaurants without the Michelin filter before it gives up on restaurants", async () => {
-    const { client, urls } = clientFor((url) =>
+    const { client } = clientFor((url) =>
       url.searchParams.has("filter.external.exists") || !url.searchParams.has("filter.tags")
         ? { results: { entities: [] } }
         : { results: { entities: entities(6, "restaurant") } },
@@ -353,7 +359,7 @@ describe("findPlaces", () => {
       { client },
     );
     expect(out.loosened).toEqual(["michelin"]);
-    expect(urls).toHaveLength(2);
+    expect(out.calls.filter((c) => c.endpoint === "/v2/insights")).toHaveLength(2);
     expect(out.results).toHaveLength(5);
   });
 
@@ -467,7 +473,7 @@ describe("findPlaces", () => {
     });
 
     it("falls back on the search's own hours when the lookup fails", async () => {
-      const { client } = clientFor((url) => (url.pathname === "/entities" ? { oops: true } : search(["shut", "open"], { monday: closedDay })), true);
+      const { client, urls } = clientFor((url) => (url.pathname === "/entities" ? { oops: true } : search(["shut", "open"], { monday: closedDay })), true);
       const out = await findPlaces({ destination: lisbon, signals, openDay: "monday", take: 5 }, { client });
       expect(out.results).toEqual([]);
     });

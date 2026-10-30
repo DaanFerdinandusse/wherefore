@@ -154,6 +154,8 @@ export type FindPlacesInput = {
   openSlot?: SlotName;
   take: number;
   page?: number;
+  /** Called after each search step that kept places, with everything kept so far, so they can show before the search ends. */
+  onStage?: (places: NormalizedPlace[]) => void;
 };
 
 export type FindPlacesResult = WithCalls<{

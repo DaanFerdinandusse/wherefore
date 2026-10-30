@@ -297,9 +297,9 @@ export function rowTitle(input: {
   return `${input.phase === "done" ? "Looked" : "Looking"} at ${input.count} ${noun}${when}`;
 }
 
-/** The advisor's words as row chips: tags first, else the intent without its category noun. Lower case, at most 4. */
-export function searchTerms(tags: readonly string[] | undefined, intentText: string): string[] {
-  const raw = tags && tags.length > 0 ? tags : intentText ? intentText.split(/,|\band\b/) : [];
+/** The advisor's words as row chips, from the tags the agent read out of the ask. Never scraps of the sentence. Lower case, at most 4. */
+export function searchTerms(tags: readonly string[] | undefined): string[] {
+  const raw = tags ?? [];
   const out: string[] = [];
   for (const term of raw) {
     const clean = squash(term).toLowerCase();

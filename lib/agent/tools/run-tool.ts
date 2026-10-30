@@ -30,6 +30,43 @@ export async function runToolGenerator<TOutput>(
   }
 }
 
+/**
+ * Runs `work` and yields what it reports as it goes, the latest report only,
+ * then returns its result. For a tool that shows partial results while one
+ * long call is still running.
+ */
+export async function* withProgress<TProgress, TResult>(
+  work: (report: (progress: TProgress) => void) => Promise<TResult>,
+): AsyncGenerator<TProgress, TResult> {
+  let latest: { progress: TProgress } | undefined;
+  let finished = false;
+  let wake: (() => void) | undefined;
+  const nudge = () => wake?.();
+  const running = work((progress) => {
+    latest = { progress };
+    nudge();
+  });
+  const settle = () => {
+    finished = true;
+    nudge();
+  };
+  running.then(settle, settle);
+  while (!finished || latest) {
+    if (!latest) {
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+      });
+      wake = undefined;
+    }
+    if (latest) {
+      const { progress } = latest;
+      latest = undefined;
+      yield progress;
+    }
+  }
+  return running;
+}
+
 /** Waits `ms`, or rejects early when the signal aborts. */
 export function pause(ms: number, abortSignal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

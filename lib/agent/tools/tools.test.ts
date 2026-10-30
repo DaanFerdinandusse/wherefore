@@ -575,9 +575,9 @@ describe("slots and search rows", () => {
   });
 
   it("keeps the advisor's words as short lower case terms", () => {
-    expect(searchTerms(["Seafood", "lively", "seafood"], "ignored")).toEqual(["seafood", "lively"]);
-    expect(searchTerms(undefined, "seafood and lively")).toEqual(["seafood", "lively"]);
-    expect(searchTerms([], "")).toEqual([]);
+    expect(searchTerms(["Seafood", "lively", "seafood"])).toEqual(["seafood", "lively"]);
+    expect(searchTerms(undefined)).toEqual([]);
+    expect(searchTerms([])).toEqual([]);
   });
 });
 
