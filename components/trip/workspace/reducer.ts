@@ -89,7 +89,7 @@ export function initialState(
     places: {},
     asks: {},
     slots: [],
-    view: client.view ?? "board",
+    view: client.view === "board" || !client.view ? "itinerary" : client.view,
     activeTab: client.activeTab ?? "all",
     highlightedPlaceId: null,
     selectedPlaceId: client.selectedPlaceId ?? null,
@@ -205,6 +205,7 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
           elapsedMs: meta.elapsedMs ?? current?.elapsedMs,
           toolCallId: meta.toolCallId,
           loosened: meta.loosened ?? current?.loosened ?? [],
+          ...((meta.target ?? current?.target) ? { target: meta.target ?? current?.target } : {}),
         };
         asks = { ...state.asks, [ask.id]: ask };
         // A new ask opens its tab, as in F7: the board shows what is arriving.
@@ -227,7 +228,7 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
       return { ...state, selectedPlaceId: event.tripPlaceId };
 
     case "view":
-      return { ...state, view: event.view };
+      return { ...state, view: event.view === "board" ? "itinerary" : event.view };
 
     case "tab": {
       const askId = askIdOf(event.tab);

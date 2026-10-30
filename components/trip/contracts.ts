@@ -6,6 +6,11 @@
 
 import type { Ask, ChatSnapshot, ItinerarySlot, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
 
+/**
+ * The right-hand panel: "itinerary" (the default), "map", or "traveler" (the
+ * traveler preview). "board" is the retired Discover board; it reads as
+ * "itinerary" so old links still open.
+ */
 export type TripView = "board" | "map" | "itinerary" | "traveler";
 export type BoardTab = "all" | "eat" | "drink" | "coffee" | "see" | "stay" | `ask:${string}`;
 
@@ -66,6 +71,8 @@ export type PlacesMeta = {
   count?: number;
   elapsedMs?: number;
   loosened?: string[];
+  /** The itinerary slot the search is for, when the advisor named one. */
+  target?: Ask["target"];
 };
 
 /** The glass chat dock. Owned by the chat runtime. */

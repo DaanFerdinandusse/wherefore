@@ -12,6 +12,12 @@ import { Tabs } from "@/components/ui/tabs";
 import { UserMenu } from "./user-menu";
 import { Wordmark } from "./wordmark";
 
+import type { TripSwitcherItem } from "@/components/trip/workspace/trip-switcher";
+
+// RETIRED from the trip workspace (v3): the workspace draws the menu button,
+// the trip switcher pill and the panel header instead. Kept only for the
+// design gallery (/design). The switcher item type lives with the switcher.
+//
 // The top bar inside a trip: wordmark, the trip switcher (client and city,
 // dates, opens a menu of other trips), the Discover / Itinerary / Traveler
 // view tabs in the middle, then "How we got this", "Share itinerary" and the
@@ -19,15 +25,7 @@ import { Wordmark } from "./wordmark";
 // the bar fits at 1024.
 export type TripView = "discover" | "itinerary" | "traveler";
 
-export type TripSwitcherItem = {
-  id: string;
-  title: string;
-  subtitle: string;
-  href: string;
-  imageSrc?: ImageProps["src"];
-  /** A trip made by the dev fixtures: listed last, under "Dev" (development only). */
-  dev?: boolean;
-};
+export type { TripSwitcherItem };
 
 const VIEWS: { value: TripView; label: string }[] = [
   { value: "discover", label: "Discover" },

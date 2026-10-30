@@ -31,6 +31,11 @@
   --color-glow-halo: rgb(233 176 96 / 0.6);
   --color-green: #5b6650;
 
+  /* v3 trip panel: the "Why Ana" box, its dark amber text, the bullet dots */
+  --color-why: #f5e6cc;
+  --color-amber-deep: #6b4615;
+  --color-amber-dot: #c98a2e;
+
   /* Glass dock */
   --color-glass: rgb(241 237 230 / 0.6);
 

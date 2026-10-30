@@ -124,11 +124,30 @@ describe("places from the chat", () => {
 
 describe("ask tabs", () => {
   it("creates the ask on its first frame and opens its tab", () => {
-    let state = initialState(snapshot({ places: [card("a"), card("c", { category: "see" })] }));
+    let state = initialState(snapshot({ places: [card("a"), card("c", { category: "see" })] }), { view: "map" });
     state = reduce(state, { type: "places", places: [card("b")], meta: { askId: ASK, toolCallId: "t", phase: "searching" } });
     expect(state.activeTab).toBe(`ask:${ASK}`);
     expect(visiblePlaces(state).map((p) => p.tripPlaceId)).toEqual(["b"]);
     expect(activeAskPlaceIds(state)).toEqual(["b"]);
+  });
+
+  it("keeps the slot an ask is for, from the stream or the snapshot", () => {
+    let state = initialState(snapshot());
+    const meta = { askId: ASK, toolCallId: "t" };
+    state = reduce(state, {
+      type: "places",
+      places: [card("b")],
+      meta: { ...meta, phase: "searching", target: { day: 1, slot: "dinner" } },
+    });
+    expect(state.asks[ASK].target).toEqual({ day: 1, slot: "dinner" });
+    state = reduce(state, { type: "places", places: [card("b")], meta: { ...meta, phase: "done" } });
+    expect(state.asks[ASK].target).toEqual({ day: 1, slot: "dinner" });
+    expect(state.asks[ASK].status).toBe("done");
+  });
+
+  it("opens the itinerary by default, and reads the retired board as the itinerary", () => {
+    expect(initialState(snapshot()).view).toBe("itinerary");
+    expect(initialState(snapshot(), { view: "board" }).view).toBe("itinerary");
   });
 
   it("does not steal the itinerary view", () => {
@@ -285,8 +304,9 @@ describe("url state", () => {
     const params = new URLSearchParams(`view=map&tab=${ASK}&place=${ASK}&x=1`);
     const state = readUrlState(params);
     expect(state).toEqual({ view: "map", activeTab: `ask:${ASK}`, selectedPlaceId: ASK, camera: null });
-    expect(writeUrlState("?x=1", { view: "board", activeTab: "eat", selectedPlaceId: null })).toBe("?x=1&tab=eat");
-    expect(readUrlState(new URLSearchParams("view=nope&tab=nope")).view).toBe("board");
+    expect(writeUrlState("?x=1", { view: "itinerary", activeTab: "eat", selectedPlaceId: null })).toBe("?x=1&tab=eat");
+    expect(readUrlState(new URLSearchParams("view=nope&tab=nope")).view).toBe("itinerary");
+    expect(readUrlState(new URLSearchParams("view=board")).view).toBe("itinerary");
   });
 
   it("round-trips the map camera and drops a bad one", () => {
@@ -298,7 +318,7 @@ describe("url state", () => {
   });
 
   it("pushes view and place changes, replaces tab and camera changes", () => {
-    const base = { view: "board" as const, activeTab: "all" as const, selectedPlaceId: null, camera: null };
+    const base = { view: "itinerary" as const, activeTab: "all" as const, selectedPlaceId: null, camera: null };
     expect(historyMode(base, { ...base, view: "map" })).toBe("pushState");
     expect(historyMode(base, { ...base, selectedPlaceId: ASK })).toBe("pushState");
     expect(historyMode(base, { ...base, activeTab: "eat" })).toBe("replaceState");
