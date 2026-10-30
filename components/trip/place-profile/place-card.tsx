@@ -82,6 +82,7 @@ export function PlaceCard({
   const [tab, setTab] = useState<CardTab>("for");
   const [gallery, setGallery] = useState<{ placeId: string; src: string } | null>(null);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
+  const [openedPhotosId, setOpenedPhotosId] = useState<string | null>(null);
   const photosExpanded = expandedPlaceId === card.placeId;
   const galleryId = useId();
   const moreTileRef = useRef<HTMLButtonElement>(null);
@@ -97,14 +98,15 @@ export function PlaceCard({
   const { profile, failed: profileFailed } = useTripPlaceProfile(true, card.tripPlaceId);
   const place = profile?.place ?? null;
   const wantFull = tab !== "for";
-  const { details, full, fullLoading, basicLoading } = useGoogleDetails(card.placeId, Boolean(place?.googlePlaceId), true, wantFull);
+  // Google starts with the profile, not after it. A place without a listing answers 404.
+  const { details, full, fullLoading, basicLoading } = useGoogleDetails(card.placeId, !profile || Boolean(place?.googlePlaceId), true, wantFull);
   const profileLoading = !profile && !profileFailed;
 
   const photos = useMemo(
-    () => placePhotos(card.name, place?.images, card.imageUrl, details?.photos),
+    () => placePhotos(card.name, place?.images, card.imageUrl, details?.photos, "card"),
     [place, card.imageUrl, card.name, details],
   );
-  const photosLoading = profileLoading || basicLoading;
+  const photosLoading = basicLoading || (profileLoading && !details?.photos.length);
   const morePhotos = photosLoading ? [] : photos.slice(3);
 
   const neighborhood = card.neighborhood ?? place?.neighborhood ?? undefined;
@@ -160,17 +162,22 @@ export function PlaceCard({
 
       <div>
         <PhotoStrip
-          // The frames stay empty until Google answers, so a tile does not
-          // show a provider image and then swap to a different photo.
+          // Google's photos are the ones the card shows. Until they arrive the
+          // frames hold the chip's photo, blurred, so a tile never swaps one
+          // sharp photo for a different one and never sits empty.
           photos={photosLoading ? [] : photos}
           loading={photosLoading}
+          previewSrc={card.imageUrl}
           name={card.name}
           tall={variant === "overlay"}
           onDragStart={(event) => startPlaceDrag(event, card.tripPlaceId, card.category)}
           expanded={photosExpanded}
           galleryId={galleryId}
           moreTileRef={moreTileRef}
-          onExpand={() => setExpandedPlaceId(card.placeId)}
+          onExpand={() => {
+            setExpandedPlaceId(card.placeId);
+            setOpenedPhotosId(card.placeId);
+          }}
           onOpenGallery={(src) => setGallery({ placeId: card.placeId, src })}
           chips={
             <>
@@ -190,6 +197,7 @@ export function PlaceCard({
 
         {morePhotos.length > 0 ? (
           // Stays mounted so closing can play; inert keeps a closed grid out of reach.
+          // Its photos wait for the first open: a closed grid is laid out, so lazy would load them all.
           <div key={card.placeId} id={galleryId} className="place-photos-reveal" data-expanded={photosExpanded} inert={!photosExpanded}>
             <div className="place-photos-clip">
               <div role="region" aria-label={`More photos of ${card.name}`} className="grid grid-cols-3 gap-1.5 pt-1.5" data-testid="place-card-gallery">
@@ -202,7 +210,7 @@ export function PlaceCard({
                     onClick={() => setGallery({ placeId: card.placeId, src: photo.src })}
                     className="relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-lg bg-avatar focus-visible:outline-offset-[-4px]"
                   >
-                    <LoadingPhoto photo={photo} sizes="240px" />
+                    {openedPhotosId === card.placeId ? <LoadingPhoto photo={photo} sizes="240px" /> : null}
                     <GoogleCredit attributions={photo.attributions} />
                   </button>
                 ))}

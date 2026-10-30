@@ -17,6 +17,9 @@ export const MAX_PHOTO_WIDTH = 2400;
 export const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
 /** Short side of a tile photo: covers the profile's 580 x 520 arch on a 2x screen. */
 export const TILE_SHORT_SIDE_PX = 1000;
+/** A tile in the chat card on a 2x screen: 380 wide, 250 tall in the overlay. */
+export const CARD_TILE_WIDTH_PX = 760;
+export const CARD_TILE_HEIGHT_PX = 500;
 /** Long side of a photo in the viewer. */
 export const FULL_LONG_SIDE_PX = 2400;
 
@@ -44,6 +47,12 @@ type PhotoSize = { widthPx?: number; heightPx?: number };
 export function tilePhotoWidth({ widthPx, heightPx }: PhotoSize): number {
   if (!widthPx || !heightPx) return DEFAULT_PHOTO_WIDTH;
   return clampPhotoWidth(Math.min(widthPx, TILE_SHORT_SIDE_PX * Math.max(1, widthPx / heightPx)));
+}
+
+/** Width that covers a card tile, never above the original. */
+export function cardPhotoWidth({ widthPx, heightPx }: PhotoSize): number {
+  if (!widthPx || !heightPx) return CARD_TILE_WIDTH_PX;
+  return clampPhotoWidth(Math.min(widthPx, Math.max(CARD_TILE_WIDTH_PX, (CARD_TILE_HEIGHT_PX * widthPx) / heightPx)));
 }
 
 /** Width that gives a viewer photo its long side, never above the original. */

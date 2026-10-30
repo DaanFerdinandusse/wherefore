@@ -9,14 +9,15 @@ import type { PlacePhoto } from "./place-photos";
 /**
  * Keep the reserved photo frame visible until the image loads or fails.
  * `contain` is the viewer: the whole photo, without the film grade. `previewSrc`
- * is a smaller copy to show underneath while the photo loads.
+ * is a smaller copy to show underneath while the photo loads. `backed` means
+ * the frame already shows something behind this, so it needs no skeleton.
  */
-export function LoadingPhoto({ photo, sizes, contain = false, previewSrc }: { photo?: PlacePhoto; sizes: string; contain?: boolean; previewSrc?: string }) {
+export function LoadingPhoto({ photo, sizes, contain = false, previewSrc, backed = false }: { photo?: PlacePhoto; sizes: string; contain?: boolean; previewSrc?: string; backed?: boolean }) {
   const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
 
   return (
     <>
-      {status === "loading" && !previewSrc ? (
+      {status === "loading" && !previewSrc && !backed ? (
         <span role="status" className="absolute inset-0 skeleton-sheen motion-safe:animate-pulse">
           <span className="sr-only">Loading photo</span>
         </span>
@@ -33,7 +34,7 @@ export function LoadingPhoto({ photo, sizes, contain = false, previewSrc }: { ph
           unoptimized
           onLoad={() => setStatus("loaded")}
           onError={() => setStatus("failed")}
-          className={cn(status === "loaded" ? "opacity-100" : "opacity-0", contain && "object-contain! filter-none!")}
+          className={cn("transition-opacity duration-300 motion-reduce:transition-none", status === "loaded" ? "opacity-100" : "opacity-0", contain && "object-contain! filter-none!")}
         />
       ) : null}
     </>

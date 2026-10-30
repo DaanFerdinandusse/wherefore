@@ -10,6 +10,7 @@ export {
   MAX_PHOTO_BYTES,
   MAX_PHOTO_WIDTH,
   PHOTO_PROXY_PATH,
+  cardPhotoWidth,
   clampPhotoWidth,
   fetchPhoto,
   fullPhotoWidth,

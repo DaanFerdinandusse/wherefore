@@ -3,7 +3,7 @@
 import Image, { type ImageProps } from "next/image";
 import { useState } from "react";
 
-import { imagePolicy, unsplashLoader } from "@/lib/images/source";
+import { imagePolicy, nextImage, unsplashLoader } from "@/lib/images/source";
 import { cn } from "@/lib/ui/cn";
 
 // next/image with the warm film grade of the designs (the `film` utility).
@@ -14,8 +14,10 @@ import { cn } from "@/lib/ui/cn";
 // images and our photo proxy load directly (unoptimized, explicit size, lazy,
 // async, warm placeholder background); Unsplash covers ask its CDN for each
 // width; everything else uses the optimizer.
-// A photo that fails to load is removed, so the frame's warm background shows
-// instead of a broken image. Explicit `unoptimized`, `loading` or `decoding`
+// A provider image asks for the photo that answers fast (fastProviderImage) and
+// falls back to the url it was given. A photo that fails both ways is removed,
+// so the frame's warm background shows instead of a broken image, and only
+// then does `onError` fire. Explicit `unoptimized`, `loading` or `decoding`
 // props win over the policy.
 export function FilmImage({
   className,
@@ -33,10 +35,11 @@ export function FilmImage({
   onError,
   ...props
 }: ImageProps) {
-  const [failedSrc, setFailedSrc] = useState<ImageProps["src"] | null>(null);
-  if (failedSrc !== null && failedSrc === src) return null;
+  const [failed, setFailed] = useState<readonly ImageProps["src"][]>([]);
+  const shown = nextImage(src, failed);
+  if (shown === undefined) return null;
 
-  const policy = imagePolicy(src);
+  const policy = imagePolicy(shown);
   const direct = unoptimized ?? policy.unoptimized;
   const useFill = fill ?? (width === undefined && height === undefined);
   // Direct images keep an explicit intrinsic size even when they fill the
@@ -45,7 +48,7 @@ export function FilmImage({
 
   return (
     <Image
-      src={src}
+      src={shown}
       alt={alt}
       fill={(useFill && !sized) || undefined}
       width={sized ? policy.width : useFill ? undefined : width}
@@ -59,8 +62,8 @@ export function FilmImage({
       decoding={decoding ?? (direct ? policy.decoding : undefined)}
       data-image-source={policy.source}
       onError={(event) => {
-        setFailedSrc(src);
-        onError?.(event);
+        setFailed((tried) => [...tried, shown]);
+        if (shown === src) onError?.(event);
       }}
       className={cn(
         "film object-cover",

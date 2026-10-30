@@ -1,6 +1,44 @@
 import { describe, expect, it } from "vitest";
 
-import { imagePolicy, isProviderHost, providerImageAt, unsplashLoader } from "./source";
+import { fastProviderImage, imagePolicy, nextImage, isProviderHost, providerImageAt, unsplashLoader } from "./source";
+
+describe("fastProviderImage", () => {
+  it("asks for the -auto photo of the same provider id", () => {
+    expect(fastProviderImage("https://images.qloo.com/i/0D59A7D9-021F-436A-880F-7CDFCD2DD2DA-23nQYW-420x-outside.jpg")).toBe(
+      "https://images.qloo.com/i/0D59A7D9-021F-436A-880F-7CDFCD2DD2DA-420x-auto.jpg",
+    );
+  });
+
+  it("keeps the width of a resized file", () => {
+    expect(fastProviderImage("https://images.qloo.com/i/ABC-23nQYW-1200x-outside.jpg")).toBe("https://images.qloo.com/i/ABC-1200x-auto.jpg");
+  });
+
+  it("leaves an -auto file, other hosts and relative urls alone", () => {
+    for (const url of [
+      "https://images.qloo.com/i/ABC-420x-auto.jpg",
+      "https://images.test/i/ABC-23nQYW-420x-outside.jpg",
+      "/api/places/photo?name=places/abc/photos/def&w=760",
+    ]) {
+      expect(fastProviderImage(url)).toBe(url);
+    }
+  });
+});
+
+describe("nextImage", () => {
+  const outside = "https://images.qloo.com/i/ABC-23nQYW-420x-outside.jpg";
+  const auto = "https://images.qloo.com/i/ABC-420x-auto.jpg";
+
+  it("tries the fast photo, then the url it was given, then gives up", () => {
+    expect(nextImage(outside, [])).toBe(auto);
+    expect(nextImage(outside, [auto])).toBe(outside);
+    expect(nextImage(outside, [auto, outside])).toBeUndefined();
+  });
+
+  it("gives any other source one try", () => {
+    expect(nextImage("/api/places/photo?name=a", [])).toBe("/api/places/photo?name=a");
+    expect(nextImage("/api/places/photo?name=a", ["/api/places/photo?name=a"])).toBeUndefined();
+  });
+});
 
 describe("unsplashLoader", () => {
   it("asks the CDN for the width, in the browser's best format", () => {

@@ -74,6 +74,28 @@ export function providerImageAt(url: string, width: number): string {
   return url.replace(/-\d{2,4}x-(?=[a-z]+\.[a-z]+$)/i, `-${width}x-`);
 }
 
+/**
+ * The provider keeps two photos of a place, and its first request for each
+ * decides how long a tile stays empty. Timed on real places: "-outside" took 10
+ * to 26 s for 5 of 14 uncached files, "-auto" for 1 of 22, and a smaller size
+ * did not help. "-auto" is a different photo of the same place, named from
+ * the same id, so a tile asks for it first. Any other url comes back as it is.
+ */
+export function fastProviderImage(url: string): string {
+  try {
+    if (!isProviderHost(new URL(url).hostname)) return url;
+  } catch {
+    return url;
+  }
+  return url.replace(/-[A-Za-z0-9]{6}-(\d{2,4}x)-outside(\.[a-z]+)$/i, "-$1-auto$2");
+}
+
+/** The photo to try next: the fast copy, then the url given, then none. */
+export function nextImage<Src>(src: Src, failed: readonly Src[]): Src | undefined {
+  const fast = typeof src === "string" ? (fastProviderImage(src) as Src) : src;
+  return [fast, src].find((candidate) => !failed.includes(candidate));
+}
+
 const UNSPLASH_HOST = "images.unsplash.com";
 
 /** The photo at the width the page asks for. `fm` would override `auto=format`. */

@@ -20,9 +20,20 @@ export const getOptionalUser = cache(async (): Promise<AuthUser> => {
   return user;
 });
 
-/** The shared hackathon owner for route handlers and server actions. */
+// The owner's advisors row only has to exist once. Writing it per request put a
+// write on one shared row in front of every route, and a card opens ten photos.
+let advisorReady: Promise<unknown> | undefined;
+
+/** The shared hackathon owner for route handlers and server actions. Pages use
+ *  requirePageUser: its write is what keeps a page out of the prerender. */
 export async function requireUser(): Promise<AuthUser> {
-  return getOptionalUser();
+  const user = sharedUser();
+  advisorReady ??= ensureAdvisor(user).catch((error: unknown) => {
+    advisorReady = undefined;
+    throw error;
+  });
+  await advisorReady;
+  return user;
 }
 
 /** The same shared owner for server components, without a login redirect. */

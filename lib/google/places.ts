@@ -9,7 +9,7 @@ import "server-only";
 import { PLACES_API_BASE, googleServerKey } from "./config";
 import type { DetailsTier, GoogleAttribution, GooglePlaceDetails, PlaceDetails } from "./contracts";
 import { GoogleApiError, GoogleInputError, GoogleSchemaError } from "./errors";
-import { fullPhotoWidth, photoProxyUrl, tilePhotoWidth } from "./photos";
+import { cardPhotoWidth, fullPhotoWidth, photoProxyUrl, tilePhotoWidth } from "./photos";
 import { type RawPlaceDetails, placeDetailsSchema } from "./types";
 
 export const BASIC_FIELDS = [
@@ -173,6 +173,7 @@ export function normalizeDetails(raw: RawPlaceDetails, tier: DetailsTier): Googl
     photos: (raw.photos ?? []).map((photo) => ({
       name: photo.name,
       url: photoProxyUrl(photo.name, tilePhotoWidth(photo)),
+      cardUrl: photoProxyUrl(photo.name, cardPhotoWidth(photo)),
       fullUrl: photoProxyUrl(photo.name, fullPhotoWidth(photo)),
       widthPx: photo.widthPx,
       heightPx: photo.heightPx,

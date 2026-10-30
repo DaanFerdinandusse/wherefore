@@ -10,6 +10,7 @@ import { sharePhotoPath, withGooglePhotos } from "../traveler-photos";
 const photo = (id: string, author?: { displayName?: string; uri?: string }): GooglePhoto => ({
   name: `places/x/photos/${id}`,
   url: `/api/places/photo?name=${id}&w=1000`,
+  cardUrl: `/api/places/photo?name=${id}&w=760`,
   fullUrl: `/api/places/photo?name=${id}&w=2400`,
   attributions: author ? [author] : [],
 });

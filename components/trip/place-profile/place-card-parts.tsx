@@ -3,6 +3,7 @@
 import type { DragEvent, ReactNode, Ref } from "react";
 import { BedDouble, Clock, Coffee, Heart, Landmark, MapPin, Star, Utensils, Wine } from "lucide-react";
 
+import { FilmImage } from "@/components/ui/film-image";
 import type { Category } from "@/lib/contracts";
 import type { GoogleAttribution } from "@/lib/google/contracts";
 import { cn } from "@/lib/ui/cn";
@@ -45,9 +46,11 @@ export function GoogleCredit({ attributions, top = false }: { attributions?: Goo
 }
 
 /** Photo frames reserve space while details load and open the selected image. */
-export function PhotoStrip({ photos, loading, name, tall, chips, onDragStart, onOpenGallery, expanded = false, galleryId, moreTileRef, onExpand }: {
+export function PhotoStrip({ photos, loading, previewSrc, name, tall, chips, onDragStart, onOpenGallery, expanded = false, galleryId, moreTileRef, onExpand }: {
   photos: PlacePhoto[];
   loading: boolean;
+  /** The place's small photo, usually in the browser already: blurred behind each tile until Google's arrives. */
+  previewSrc?: string;
   name: string;
   tall: boolean;
   chips: ReactNode;
@@ -99,7 +102,13 @@ export function PhotoStrip({ photos, loading, name, tall, chips, onDragStart, on
                 index === slotCount - 1 ? "min-w-0 grow rounded-l-lg rounded-r-photo" : "w-[27.5%] shrink-0 rounded-lg",
             )}
           >
-            <LoadingPhoto key={photo?.src ?? "pending"} photo={photo} sizes={index === 0 ? "380px" : "200px"} />
+            {/* Outside LoadingPhoto, which remounts per photo: the blur holds still while the sharp photo fades in over it. */}
+            {previewSrc ? (
+              <span aria-hidden className="absolute inset-0 scale-110 blur-lg">
+                <FilmImage src={previewSrc} alt="" sizes="200px" unoptimized loading="eager" />
+              </span>
+            ) : null}
+            <LoadingPhoto key={photo?.src ?? "pending"} photo={photo} sizes={index === 0 ? "380px" : "200px"} backed={Boolean(previewSrc)} />
             {hasMore ? (
               <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-ink/50 px-2 text-center text-white">
                 <span className="text-card-xs font-semibold">+{photos.length - 3}</span>

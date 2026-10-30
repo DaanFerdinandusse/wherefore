@@ -18,10 +18,12 @@ export function placePhotos(
   provider: { url: string }[] | undefined,
   fallbackUrl: string | undefined,
   google: GooglePhoto[] | undefined,
+  /** "card" is the chat card's smaller tiles, a third of the bytes of the profile's arch. */
+  size: "card" | "profile" = "profile",
 ): PlacePhoto[] {
   if (google?.length) {
     return google.map((photo, i) => ({
-      src: photo.url,
+      src: size === "card" ? photo.cardUrl : photo.url,
       fullSrc: photo.fullUrl,
       alt: `${name}, photo ${i + 1}`,
       attributions: photo.attributions,

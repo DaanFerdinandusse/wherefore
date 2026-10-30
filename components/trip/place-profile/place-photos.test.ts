@@ -5,8 +5,8 @@ import type { GooglePhoto } from "@/lib/google/contracts";
 import { placePhotos } from "./place-photos";
 
 const google: GooglePhoto[] = [
-  { name: "one", url: "/tile-1", fullUrl: "/full-1", attributions: [{ displayName: "A Visitor" }] },
-  { name: "two", url: "/tile-2", fullUrl: "/full-2", attributions: [] },
+  { name: "one", url: "/tile-1", cardUrl: "/card-1", fullUrl: "/full-1", attributions: [{ displayName: "A Visitor" }] },
+  { name: "two", url: "/tile-2", cardUrl: "/card-2", fullUrl: "/full-2", attributions: [] },
 ];
 const provider = [{ url: "https://images.test/a.jpg" }, { url: "https://images.test/b.jpg" }];
 
@@ -16,6 +16,10 @@ describe("placePhotos", () => {
       { src: "/tile-1", fullSrc: "/full-1", alt: "Brutos, photo 1", attributions: [{ displayName: "A Visitor" }] },
       { src: "/tile-2", fullSrc: "/full-2", alt: "Brutos, photo 2", attributions: [] },
     ]);
+  });
+
+  it("gives the chat card its smaller copies, and keeps the full size for the viewer", () => {
+    expect(placePhotos("Brutos", provider, undefined, google, "card")[0]).toMatchObject({ src: "/card-1", fullSrc: "/full-1" });
   });
 
   it("uses the provider's images while Google loads or when it has none", () => {

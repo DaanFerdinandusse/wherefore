@@ -5,7 +5,7 @@ vi.mock("server-only", () => ({}));
 import fullFixture from "./__fixtures__/place-details-full.json";
 import { GoogleApiError, GoogleInputError, GoogleNotConfiguredError, GooglePhotoTooLargeError } from "./errors";
 import { googleErrorResponse } from "./http";
-import { MAX_PHOTO_BYTES, fetchPhoto, fullPhotoWidth, isPhotoName, limitBytes, photoPlaceId, photoProxyUrl, tilePhotoWidth } from "./photos";
+import { MAX_PHOTO_BYTES, cardPhotoWidth, fetchPhoto, fullPhotoWidth, isPhotoName, limitBytes, photoPlaceId, photoProxyUrl, tilePhotoWidth } from "./photos";
 import { createPlaceDetails, fieldMask, priceRangeOf } from "./places";
 
 const PLACE_ID = "ChIJh32rQULLHg0RkgF8wCakjIk";
@@ -79,6 +79,7 @@ describe("placeDetails", () => {
     expect(place.photos[0]).toMatchObject({
       name: PHOTO,
       url: photoProxyUrl(PHOTO, 1333),
+      cardUrl: photoProxyUrl(PHOTO, 760),
       fullUrl: photoProxyUrl(PHOTO, 2400),
       attributions: [{ displayName: "A Visitor", uri: "https://maps.google.com/maps/contrib/100000000000000000001" }],
     });
@@ -169,6 +170,14 @@ describe("photos", () => {
   it("gives a tile photo its short side, so a landscape photo fills a tall frame", () => {
     expect(tilePhotoWidth({ widthPx: 4624, heightPx: 2608 })).toBe(1773);
     expect(tilePhotoWidth({ widthPx: 3024, heightPx: 4032 })).toBe(1000);
+  });
+
+  it("sizes a card photo to cover its tile, a fraction of the arch's width", () => {
+    expect(cardPhotoWidth({ widthPx: 4000, heightPx: 3000 })).toBe(760);
+    expect(cardPhotoWidth({ widthPx: 3024, heightPx: 4032 })).toBe(760);
+    expect(cardPhotoWidth({ widthPx: 4000, heightPx: 1000 })).toBe(2000);
+    expect(cardPhotoWidth({ widthPx: 600, heightPx: 400 })).toBe(600);
+    expect(cardPhotoWidth({})).toBe(760);
   });
 
   it("gives a viewer photo its long side", () => {

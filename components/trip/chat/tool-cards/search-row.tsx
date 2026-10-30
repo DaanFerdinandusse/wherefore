@@ -25,7 +25,8 @@ import { VerdictLine } from "../../verdict-line";
 // restaurants ...": the pick is marked "92 · Picked", the next best "87 ·
 // Backup". The same list element holds both layouts, so each place slides from
 // its row into its chip. Rows and chips switch the inline place card, highlight
-// their pin on hover and drag into an itinerary slot.
+// their pin on hover and drag into an itinerary slot. Their photos load eagerly:
+// a row replaces its preview, and a lazy image would start the wait over.
 
 const CATEGORY_ICON: Record<Category, typeof Utensils> = {
   eat: Utensils,
@@ -123,7 +124,7 @@ function PlaceItem({ place, layout, verdict, picked, backup, selected, onPlacesH
           )}
         >
           {place.imageUrl ? (
-            <FilmImage src={place.imageUrl} alt="" sizes="64px" unoptimized />
+            <FilmImage src={place.imageUrl} alt="" sizes="64px" unoptimized loading="eager" />
           ) : (
             <span aria-hidden className="absolute inset-0 flex items-center justify-center font-display text-lg leading-5 text-text-2">
               {place.name[0]}
@@ -158,7 +159,7 @@ function PreviewRow({ place }: { place: PlacePreview }) {
     <li data-flip-id={place.entityId} className="w-full" data-testid="place-preview">
       <span className="rise-in flex w-full items-center gap-3 rounded-row bg-surface-raised p-1.5 ring-1 ring-ink/6">
         <span className="relative h-13 w-16 shrink-0 overflow-hidden rounded-[10px] bg-avatar">
-          {place.imageUrl ? <FilmImage src={place.imageUrl} alt="" sizes="64px" unoptimized /> : null}
+          {place.imageUrl ? <FilmImage src={place.imageUrl} alt="" sizes="64px" unoptimized loading="eager" /> : null}
         </span>
         <span className="flex min-w-0 grow flex-col gap-px">
           <span className="truncate text-body leading-5 font-semibold text-ink">{place.name}</span>

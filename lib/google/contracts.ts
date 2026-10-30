@@ -11,6 +11,8 @@ export type GooglePhoto = {
   name: string;
   /** Same-origin proxy URL sized for tiles and thumbnails, ready for an <img>. */
   url: string;
+  /** Same-origin proxy URL sized for the chat card's smaller tiles. */
+  cardUrl: string;
   /** Same-origin proxy URL sized for the full-screen viewer. */
   fullUrl: string;
   widthPx?: number;

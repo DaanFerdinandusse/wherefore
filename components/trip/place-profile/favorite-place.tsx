@@ -59,7 +59,7 @@ function FavoriteCard({ favorite, client, onClose }: { favorite: FavoriteRef; cl
   const place = value?.place ?? null;
   const category = value?.category ?? "other";
   const { details, full, fullLoading, basicLoading } = useGoogleDetails(place?.id ?? null, Boolean(place?.googlePlaceId), true, tab !== "for");
-  const photos = useMemo(() => placePhotos(name, place?.images, undefined, details?.photos), [name, place, details]);
+  const photos = useMemo(() => placePhotos(name, place?.images, undefined, details?.photos, "card"), [name, place, details]);
   const placeLoading = !place && !problem;
   const photosLoading = placeLoading || basicLoading;
   const where = [place?.neighborhood, place?.city].filter(Boolean).join(", ");
@@ -94,6 +94,7 @@ function FavoriteCard({ favorite, client, onClose }: { favorite: FavoriteRef; cl
             <PhotoStrip
               photos={photosLoading ? [] : photos}
               loading={photosLoading}
+              previewSrc={place?.images[0]?.url}
               name={name}
               tall
               onOpenGallery={setGallerySrc}
