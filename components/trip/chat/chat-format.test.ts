@@ -4,7 +4,7 @@ import type { AppUIMessage, TripPlaceCard } from "@/lib/contracts";
 
 import { toolErrorText } from "./chat-errors";
 import { placesMetaOf, toolPlaceEvents } from "./chat-places";
-import { composerPlaceholder, liveRecommendationId, mainNeighborhood, picksByAsk, recommendationByPlace } from "./chat-format";
+import { composerPlaceholder, liveRecommendationId, mainNeighborhood, picksByAsk, placesByMatch, recommendationByPlace } from "./chat-format";
 
 const card = (id: string, extra: Partial<TripPlaceCard> = {}): TripPlaceCard => ({
   tripPlaceId: id,
@@ -18,6 +18,20 @@ const card = (id: string, extra: Partial<TripPlaceCard> = {}): TripPlaceCard => 
   source: "ask",
   askIds: ["ask-1"],
   ...extra,
+});
+
+describe("search result order", () => {
+  it("orders by the displayed match without mutating tool output or changing ties", () => {
+    const places = [card("contramar", { score: 77, yourPlace: { advisorPlaceId: "advisor-1", note: "" } }), card("malix", { score: 69 }), card("forte", { score: 77 }), card("cicatriz", { score: 69 }), card("maizajo", { score: 60 })];
+    expect(placesByMatch(places).map((place) => place.tripPlaceId)).toEqual(["contramar", "forte", "malix", "cicatriz", "maizajo"]);
+    expect(places[1].tripPlaceId).toBe("malix");
+  });
+
+  it("keeps unscored streaming results after scored results, including zero", () => {
+    const places = [card("pending-1"), card("zero", { score: 0 }), card("pending-2"), card("match", { score: 77 })];
+    expect(placesByMatch(places).map((place) => place.tripPlaceId)).toEqual(["match", "zero", "pending-1", "pending-2"]);
+    expect(placesByMatch([])).toEqual([]);
+  });
 });
 
 function recommend(toolCallId: string, tripPlaceId: string, askId = "ask-1"): AppUIMessage {

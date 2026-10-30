@@ -12,6 +12,11 @@ import { readRecommendOutput } from "./chat-places";
 
 export type Recommendation = RecommendPlaceOutput & { card: TripPlaceCard; toolCallId: string };
 
+/** Highest visible match first, preserving result order for ties and unscored places. */
+export function placesByMatch(places: readonly TripPlaceCard[]): TripPlaceCard[] {
+  return [...places].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+}
+
 /** Every recommend_place result in transcript order. */
 export function recommendationsOf(messages: readonly AppUIMessage[]): Recommendation[] {
   const out: Recommendation[] = [];

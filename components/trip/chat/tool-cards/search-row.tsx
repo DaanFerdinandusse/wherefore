@@ -10,6 +10,7 @@ import { CATEGORY_NAME, categoryNoun, loosenedCopy, rowTitle } from "@/lib/agent
 import { cn } from "@/lib/ui/cn";
 
 import { toolErrorText } from "../chat-errors";
+import { placesByMatch } from "../chat-format";
 
 import { ErrorRow, type PlaceHandlers } from "./parts";
 
@@ -166,7 +167,7 @@ function Chip({ place, picked, onPlacesHover, onPlaceClick }: { place: TripPlace
 export function SearchRow({ state, preliminary, input, output, errorText, onRetry, pickedId, ...handlers }: Props) {
   const failed = state === "output-error" || Boolean(output?.error && output.phase === "done" && output.places.length === 0);
   const running = !failed && (state !== "output-available" || preliminary);
-  const places = output?.places ?? [];
+  const places = placesByMatch(output?.places ?? []);
   const take = output?.take ?? input?.take ?? 5;
   const category = input?.category;
   const Icon = (category && CATEGORY_ICON[category]) || MapPin;
@@ -219,7 +220,7 @@ export function SearchRow({ state, preliminary, input, output, errorText, onRetr
           ))}
         </ul>
       ) : places.length > 0 ? (
-        <ul className="flex gap-1.5 overflow-x-auto pb-0.5" data-testid="search-chips" onMouseLeave={() => handlers.onPlacesHover?.(null)}>
+        <ul className="flex gap-1.5 overflow-x-auto p-1" data-testid="search-chips" onMouseLeave={() => handlers.onPlacesHover?.(null)}>
           {places.map((place) => (
             <Chip key={place.tripPlaceId} place={place} picked={place.tripPlaceId === pickedId} {...handlers} />
           ))}
