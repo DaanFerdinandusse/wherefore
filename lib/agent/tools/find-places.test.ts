@@ -71,10 +71,10 @@ describe("a named kind of place", () => {
     expect(splitIntent("restaurants")).toEqual({ text: "", category: "eat" });
   });
 
-  it("is strict for places to see, never for food, drink or shops", () => {
+  it("holds for places to see and for shops, never for food or drink", () => {
     expect(namedKinds([MUSEUM], "see")).toEqual([MUSEUM]);
-    expect(namedKinds(["urn:tag:genre:place:clothing_store"], undefined)).toEqual([]);
-    expect(namedKinds(["urn:tag:genre:place:restaurant:seafood"], "eat")).toEqual([]);
+    expect(namedKinds(["urn:tag:genre:place:clothing_store"], undefined)).toEqual(["urn:tag:genre:place:clothing_store"]);
+    expect(namedKinds(["urn:tag:genre:place:seafood"], "eat")).toEqual([]);
     expect(namedKinds(["urn:tag:cuisine:qloo:italian"], "see")).toEqual([]);
   });
 
@@ -88,6 +88,22 @@ describe("a named kind of place", () => {
 
   it("trusts the place's genre over a loose tag: a restaurant called Museu is a restaurant", () => {
     expect(isNamedKind(place("urn:tag:genre:place:restaurant", [MUSEUM]), [MUSEUM])).toBe(false);
+  });
+
+  it("does not take a restaurant with an art gallery for an art gallery", () => {
+    expect(namedKinds(["urn:tag:genre:place:art_gallery", "urn:tag:genre:place:restaurant:art_gallery"], "see")).toEqual(["urn:tag:genre:place:art_gallery"]);
+  });
+
+  it("goes by the tag for a shop, whose genre is often something else", () => {
+    const CLOTHING = "urn:tag:genre:place:clothing_store";
+    expect(isNamedKind(place("urn:tag:genre:place:gift_shop", [CLOTHING]), [CLOTHING], { byTag: true })).toBe(true);
+    expect(isNamedKind(place("urn:tag:genre:place:restaurant"), [CLOTHING], { byTag: true })).toBe(false);
+  });
+
+  it("keeps the advisor's own places to the same rule for a shop", () => {
+    const CLOTHING = "urn:tag:genre:place:clothing_store";
+    const restaurant = { ...place("urn:tag:genre:place:restaurant"), priceLevel: null, lat: null, lon: null };
+    expect(meetsAskConstraints(restaurant, { tagIds: [], kinds: [CLOTHING], kindsByTag: true })).toBe(false);
   });
 
   it("reads the tags only when a place has no genre", () => {

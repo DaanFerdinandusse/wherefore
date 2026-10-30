@@ -230,3 +230,7 @@ The verdicts live on the ask (`query.verdicts`), so a line follows its place int
 ## Speed
 
 What the advisor waits on before seeing places: find_places streams a place as soon as a search step has checked it (`preview`, from `findPlaces`' `onStage`), before it is on the trip. When the first step comes back short, `findPlaces` asks the other steps at once and reads them in order, and `/entities` chunks go out together. Call logs are written next to the places, not before them. Explaining and weighing are model calls that do not need each other, so they run side by side.
+
+## A named kind of place
+
+A kind the ask names holds through every step: find_places searches on the kind alone (`namedKinds`), findPlaces drops anything else (`keep`), the second search stays on it, and the advisor's own places meet it too (`isNamedKind`). It is never filled from a wider category, so three museums stay three museums. Places to see are judged by their genre, because tags are loose. Shops are judged by tag, because their genres are not reliable. Food, drink, coffee and hotels are left out: their category already holds.

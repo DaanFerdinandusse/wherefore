@@ -261,31 +261,38 @@ function steps(search: ToolStep, score: ToolStep, explain: ToolStep): ToolStep[]
   return [search, score, explain];
 }
 
+/** A kind of place of its own: not "restaurant with an art gallery", which a search for galleries also finds. */
+const PLAIN_KIND = /^urn:tag:(genre|category):place:[a-z0-9_]+$/;
+
 /**
  * The kinds of place an ask names, from its resolved tags. A museum search wants
- * museums, not whatever else counts as a place to see: that category spans
- * museums, markets and gardens. Everywhere else the category already holds, and
- * a tag such as "seafood" narrows a search without being a kind of its own.
+ * museums, not whatever else counts as a place to see, and a clothing store
+ * search wants clothing stores. Food, drink, coffee and hotels stay out of this:
+ * there the category already holds, and a tag such as "seafood" narrows a search
+ * without being a kind of its own.
  */
 export function namedKinds(tagIds: readonly string[], category: SearchCategory | undefined): string[] {
-  return category === "see" ? tagIds.filter(isKindTag) : [];
+  return category === "see" || category === undefined ? tagIds.filter((id) => PLAIN_KIND.test(id)) : [];
 }
 
 const leafOf = (tagId: string) => tagId.slice(tagId.lastIndexOf(":") + 1);
 
 /**
- * Is the place that kind? Its own genre decides: upstream tags are loose, so a
- * restaurant called Museu can carry the museum tag. Only a place with no genre
- * is read by its tags. An art museum is a museum, and the other way round.
+ * Is the place that kind? For a place to see, its own genre decides: upstream
+ * tags are loose, so a restaurant called Museu can carry the museum tag. An art
+ * museum is a museum, and the other way round. Shops are filed less cleanly (a
+ * fashion boutique can be a gift shop), so `byTag` lets the tag alone count.
  */
-export function isNamedKind(place: Pick<NormalizedPlace, "tags"> & Partial<Pick<NormalizedPlace, "primaryType" | "types">>, kinds: readonly string[]): boolean {
+export function isNamedKind(
+  place: Pick<NormalizedPlace, "tags"> & Partial<Pick<NormalizedPlace, "primaryType" | "types">>,
+  kinds: readonly string[],
+  { byTag = false }: { byTag?: boolean } = {},
+): boolean {
   if (kinds.length === 0) return true;
-  const leaves = kinds.map(leafOf);
-  if (place.primaryType) {
-    const genre = leafOf(place.primaryType);
-    return leaves.some((leaf) => genre.includes(leaf) || leaf.includes(genre));
-  }
-  return place.tags.some((t) => kinds.includes(t.tagId)) || (place.types ?? []).some((t) => kinds.includes(t));
+  const tagged = place.tags.some((t) => kinds.includes(t.tagId)) || (place.types ?? []).some((t) => kinds.includes(t));
+  if (byTag || !place.primaryType) return tagged;
+  const genre = leafOf(place.primaryType);
+  return kinds.map(leafOf).some((leaf) => genre.includes(leaf) || leaf.includes(genre));
 }
 
 /** The ask's filters, as advisor places admitted into the ask must meet them too. */
@@ -294,6 +301,8 @@ export type AskConstraints = {
   tagIds: string[];
   /** The kinds of place the ask names. These are never dropped. */
   kinds?: string[];
+  /** The kinds hold by tag, not by the place's genre. */
+  kindsByTag?: boolean;
   priceMax?: number;
   area?: { lat: number; lon: number; radiusM: number };
   popularityMax?: number;
@@ -313,6 +322,7 @@ export type AskConstraints = {
 export function askConstraints(input: AskFilters & {
   tagIds: string[];
   kinds?: string[];
+  kindsByTag?: boolean;
   loosened: readonly string[];
   priceMax?: number;
   area?: AskConstraints["area"];
@@ -321,7 +331,7 @@ export function askConstraints(input: AskFilters & {
   const priceHeld = !input.loosened.includes("price") && !input.loosened.includes("price_not_applicable");
   return {
     tagIds: tagsHeld ? input.tagIds : [],
-    ...(input.kinds?.length ? { kinds: input.kinds } : {}),
+    ...(input.kinds?.length ? { kinds: input.kinds, ...(input.kindsByTag ? { kindsByTag: true } : {}) } : {}),
     ...(input.priceMax && priceHeld ? { priceMax: input.priceMax } : {}),
     ...(input.area ? { area: input.area } : {}),
     ...(input.popularityMax !== undefined && !input.loosened.includes("popularity") ? { popularityMax: input.popularityMax } : {}),
@@ -341,7 +351,7 @@ export function meetsAskConstraints(
   constraints: AskConstraints,
 ): boolean {
   if (constraints.tagIds.length > 0 && !place.tags.some((t) => constraints.tagIds.includes(t.tagId))) return false;
-  if (!isNamedKind(place, constraints.kinds ?? [])) return false;
+  if (!isNamedKind(place, constraints.kinds ?? [], { byTag: constraints.kindsByTag })) return false;
   if (constraints.priceMax && place.priceLevel != null && place.priceLevel > constraints.priceMax) return false;
   const { popularity, michelin } = placeFactsFromProperties(place.properties);
   if (constraints.popularityMax !== undefined && popularity !== undefined && popularity >= constraints.popularityMax) return false;
@@ -398,6 +408,7 @@ const checkpointSchema = z.object({
       constraints: z.object({
         tagIds: z.array(z.string()),
         kinds: z.array(z.string()).optional(),
+        kindsByTag: z.boolean().optional(),
         priceMax: z.number().optional(),
         area: z.object({ lat: z.number(), lon: z.number(), radiusM: z.number() }).optional(),
         popularityMax: z.number().optional(),
@@ -632,7 +643,7 @@ export async function* findPlacesTool(
               ...filters,
               ...(ctx.excludeIds.length ? { excludeIds: ctx.excludeIds } : {}),
               take: askCategory ? take + CATEGORY_SPARE : take,
-              ...(kinds.length ? { keep: (place: NormalizedPlace) => isNamedKind(place, kinds) } : {}),
+              ...(kinds.length ? { keep: (place: NormalizedPlace) => isNamedKind(place, kinds, { byTag: askCategory !== "see" }) } : {}),
               onStage: (stage) => report(previewOf(stage, askCategory, take, excluded)),
             },
             { tripId: ctx.trip.id },
@@ -741,6 +752,7 @@ export async function* findPlacesTool(
       constraints = askConstraints({
         tagIds: resolved.ids,
         kinds,
+        kindsByTag: askCategory !== "see",
         loosened,
         priceMax: input.price_max,
         area: { lat: searchArea.lat, lon: searchArea.lon, radiusM: reachedM },
@@ -927,6 +939,7 @@ export async function* findPlacesTool(
           const more: MoreSearch = first.more;
           yield output("weighing", { status: more.why });
           const area = constraints.area;
+          const namedKind = constraints.kinds ?? [];
           const calls: QlooCall[] = [];
           const wanted = more.tags.length ? more.tags : [more.intent];
           const resolved = await resolveTags(wanted, askCategory, ctx, calls);
@@ -935,14 +948,22 @@ export async function* findPlacesTool(
             {
               destination: area ? { ...ctx.destination, lat: area.lat, lon: area.lon, radiusM: area.radiusM } : ctx.destination,
               signals: ctx.signals.signals,
-              ...(resolved.ids.length ? { tags: resolved.ids, tagsOperator: "union" as const } : askCategory ? { tags: CATEGORY_FILTER_TAGS[askCategory], tagsOperator: "union" as const } : {}),
+              // The kind the advisor named holds here too: the agent's next idea
+              // narrows the search, it does not change what was asked for.
+              ...(namedKind.length
+                ? { tags: namedKind, tagsOperator: "union" as const }
+                : resolved.ids.length
+                  ? { tags: resolved.ids, tagsOperator: "union" as const }
+                  : askCategory
+                    ? { tags: CATEGORY_FILTER_TAGS[askCategory], tagsOperator: "union" as const }
+                    : {}),
               ...(input.price_max ? { priceMax: input.price_max } : {}),
               noShopping,
               ...filters,
               ...(more.lessKnown ? { popularityMax: LESS_KNOWN_POPULARITY_MAX } : {}),
               excludeIds: searchExclusions(seen, ctx.excludeIds),
               take: MORE_TAKE + CATEGORY_SPARE,
-              ...(constraints.kinds?.length ? { keep: (place: NormalizedPlace) => isNamedKind(place, constraints.kinds ?? []) } : {}),
+              ...(namedKind.length ? { keep: (place: NormalizedPlace) => isNamedKind(place, namedKind, { byTag: constraints.kindsByTag }) } : {}),
             },
             { tripId: ctx.trip.id },
           );
