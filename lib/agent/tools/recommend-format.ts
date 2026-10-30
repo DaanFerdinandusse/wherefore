@@ -57,3 +57,13 @@ export function targetOfQuery(query: Record<string, unknown> | null | undefined)
   if (typeof slot !== "string" || !(SLOTS as readonly string[]).includes(slot)) return null;
   return { day, slot: slot as SlotName };
 }
+
+/** The place an ask's weighing picked, if it weighed any. */
+export function weighedPick(query: Record<string, unknown> | null | undefined): string | undefined {
+  const verdicts = query?.verdicts;
+  if (!Array.isArray(verdicts)) return undefined;
+  for (const verdict of verdicts as { stand?: unknown; tripPlaceId?: unknown }[]) {
+    if (verdict?.stand === "pick" && typeof verdict.tripPlaceId === "string") return verdict.tripPlaceId;
+  }
+  return undefined;
+}

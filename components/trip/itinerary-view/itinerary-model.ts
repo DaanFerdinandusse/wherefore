@@ -6,7 +6,7 @@
 // A template with no fact behind it returns nothing and the UI hides that
 // element. Never model prose, never demo data.
 
-import type { Ask, Category, ItinerarySlot, SlotName, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
+import type { Ask, Category, ItinerarySlot, PlaceVerdict, SlotName, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
 import { likeLine } from "@/lib/agent/taste-overlap";
 import { favoriteDrivers } from "@/lib/qloo/normalize";
 import { addPosition, DAY_PARTS, isOpenSlot, nextPosition, slotHolds, type DayPart } from "@/lib/trips/day-parts";
@@ -94,6 +94,8 @@ export type SlotView = {
   row?: ItinerarySlot;
   /** The place in the slot. */
   card?: TripPlaceCard;
+  /** The agent's line on that place. */
+  verdict?: PlaceVerdict;
   /** A search running in the chat for this slot ("Finding dinner in the chat"). */
   finding?: Ask;
   /** A place the chat suggested for this open slot. */
@@ -135,6 +137,13 @@ export function findingBySlot(asks: Ask[], slots: ItinerarySlot[]): Map<string, 
   return out;
 }
 
+/** The agent's latest line on a place, from whichever search weighed it. */
+export function verdictOf(asks: Record<string, Pick<Ask, "verdicts">>, tripPlaceId: string): PlaceVerdict | undefined {
+  let found: PlaceVerdict | undefined;
+  for (const ask of Object.values(asks)) found = ask.verdicts?.find((v) => v.tripPlaceId === tripPlaceId) ?? found;
+  return found;
+}
+
 const byScore = (a: TripPlaceCard, b: TripPlaceCard) => (b.score ?? -1) - (a.score ?? -1);
 
 /**
@@ -158,7 +167,11 @@ export function suggestionsBySlot(state: ModelState): Map<string, TripPlaceCard>
       (s) => s.day === day && s.slot === slot && s.tripPlaceId && state.places[s.tripPlaceId]?.askIds.includes(ask.id),
     );
     if (answered) continue;
-    const candidates = places.filter((p) => p.status === "suggested" && p.askIds.includes(ask.id) && slotHolds(slot, p.category));
+    // A place the agent turned down is not a suggestion: after its pick comes its backup.
+    const stands = new Map(ask.verdicts?.map((v) => [v.tripPlaceId, v.stand]));
+    const candidates = places.filter(
+      (p) => p.status === "suggested" && p.askIds.includes(ask.id) && slotHolds(slot, p.category) && stands.get(p.tripPlaceId) !== "out",
+    );
     const best = candidates.find((p) => p.tripPlaceId === ask.pickTripPlaceId) ?? candidates.sort(byScore)[0];
     if (best) {
       out.set(key, best);
@@ -211,7 +224,11 @@ export function buildDays(state: ModelState): DayView[] {
       if (Number(keyDay) === day && !views.has(key)) views.set(key, { day, slot: slot as SlotName, position: Number(position) });
     }
     for (const [key, view] of views) {
-      if (view.card) continue;
+      if (view.card) {
+        const verdict = verdictOf(state.asks, view.card.tripPlaceId);
+        if (verdict) view.verdict = verdict;
+        continue;
+      }
       const ask = finding.get(key);
       const suggestion = suggestions.get(key);
       if (ask) view.finding = ask;
@@ -237,6 +254,59 @@ export function buildDays(state: ModelState): DayView[] {
     });
   }
   return days;
+}
+
+const DAY_NOUN: Record<Category, string> = { eat: "", drink: "drinks", coffee: "coffee", see: "a sight", stay: "", other: "a stop" };
+const MEALS = new Set<SlotName>(["breakfast", "lunch", "dinner"]);
+const VOWEL = /^[aeiou]/i;
+
+const CUISINE = /^(italian|french|japanese|mexican|spanish|portuguese|thai|greek|indian|chinese|korean|peruvian|mediterranean)$/i;
+
+/** "Italian" stays capitalized, "Cozy" reads as "cozy". */
+function tasteWord(tag: string): string {
+  return CUISINE.test(tag) ? tag : tag.toLowerCase();
+}
+
+/** One place as the words of a day: "a loud Italian dinner", "cozy coffee". `used` keeps a day from repeating a word. */
+function dayPhrase(card: TripPlaceCard, slot: SlotName, used: Set<string>): string | null {
+  if (card.category === "stay") return null;
+  const tags = card.sharedTags.map((t) => t.name.trim()).filter(Boolean);
+  const taste = [...tags.filter((t) => CUISINE.test(t)), ...tags.filter((t) => !CUISINE.test(t))].find((t) => !used.has(t));
+  if (taste) used.add(taste);
+  if (card.category === "eat" || MEALS.has(slot)) {
+    const meal = MEALS.has(slot) ? slot : "meal";
+    if (!taste) return `a good ${meal}`;
+    return `${VOWEL.test(taste) ? "an" : "a"} ${tasteWord(taste)} ${meal}`;
+  }
+  const noun = DAY_NOUN[card.category];
+  return taste ? `${tasteWord(taste)} ${noun.replace(/^a /, "")}` : noun;
+}
+
+/** "A cozy breakfast, an Italian dinner, then chic drinks." Null below two places: that is no day yet. */
+export function daySentence(day: Pick<DayView, "slots">): string | null {
+  const used = new Set<string>();
+  const phrases = day.slots.flatMap((s) => {
+    const phrase = s.card ? dayPhrase(s.card, s.slot, used) : null;
+    return phrase ? [phrase] : [];
+  });
+  if (phrases.length < 2) return null;
+  const last = phrases.at(-1)!;
+  const body = phrases.length === 2 ? `${phrases[0]}, then ${last}` : `${phrases.slice(0, -1).join(", ")}, then ${last}`;
+  return `${body[0]!.toUpperCase()}${body.slice(1)}.`;
+}
+
+/** The taste the added places deliver, most delivered first: the client's words on top of the itinerary. */
+export function tasteWords(days: readonly Pick<DayView, "slots">[], limit = 5): string[] {
+  const counts = new Map<string, number>();
+  for (const day of days) {
+    for (const slot of day.slots) {
+      for (const tag of slot.card?.sharedTags ?? []) {
+        const name = tag.name.trim();
+        if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+    }
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([name]) => name);
 }
 
 /** The cover carries the facts once two slots hold a place; before that, the brief (S1) does. */

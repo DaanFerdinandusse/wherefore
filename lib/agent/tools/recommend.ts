@@ -10,7 +10,7 @@ import { updateAsk } from "@/lib/trips";
 import { guarded, type TurnRef } from "../writes";
 
 import { slotTarget } from "./labels";
-import { matchClientNote, targetOfQuery } from "./recommend-format";
+import { matchClientNote, targetOfQuery, weighedPick } from "./recommend-format";
 import { cardsInOrder, resolveTripPlaceIds } from "./search-core";
 import { firstName, loadToolTrip } from "./trip-data";
 
@@ -35,11 +35,11 @@ export async function recommendPlaceTool(input: RecommendPlaceInput, turn: TurnR
   if (!row) return { clientFirstName, error: "That place is not on this trip. Use an id from a search result." };
   if (row.status === "removed") return { clientFirstName, error: "That place was taken off the trip. Pick another one." };
 
-  const [card] = await cardsInOrder(ctx, [row.id]);
-  if (!card) return { clientFirstName, error: "That place could not be read back. Search again." };
+  const [named] = await cardsInOrder(ctx, [row.id]);
+  if (!named) return { clientFirstName, error: "That place could not be read back. Search again." };
 
   // The ask: the one named, if the place is in it; else the place's latest ask.
-  const askId = input.ask_id && card.askIds.includes(input.ask_id) ? input.ask_id : card.askIds.at(-1);
+  const askId = input.ask_id && named.askIds.includes(input.ask_id) ? input.ask_id : named.askIds.at(-1);
   const [ask] = askId
     ? await db
         .select({ id: tripAsks.id, query: tripAsks.query, target: tripAsks.target })
@@ -47,6 +47,12 @@ export async function recommendPlaceTool(input: RecommendPlaceInput, turn: TurnR
         .where(and(eq(tripAsks.id, askId), eq(tripAsks.tripId, turn.tripId)))
         .limit(1)
     : [];
+
+  // The search already weighed its places out loud: that pick stands, so the card
+  // never calls the agent's choice a backup.
+  const weighed = weighedPick(ask?.query);
+  const [card] = weighed && weighed !== named.tripPlaceId ? await cardsInOrder(ctx, [weighed]) : [named];
+  if (!card) return { clientFirstName, error: "That place could not be read back. Search again." };
 
   const rawTarget = input.target ?? ask?.target ?? targetOfQuery(ask?.query) ?? undefined;
   const target = rawTarget

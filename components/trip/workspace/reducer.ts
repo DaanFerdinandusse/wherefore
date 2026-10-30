@@ -210,6 +210,7 @@ export function reduce(state: WorkspaceState, event: WorkspaceEvent): WorkspaceS
           toolCallId: meta.toolCallId,
           loosened: meta.loosened ?? current?.loosened ?? [],
           pickTripPlaceId: meta.pickTripPlaceId ?? current?.pickTripPlaceId,
+          ...((meta.verdicts ?? current?.verdicts) ? { verdicts: meta.verdicts ?? current?.verdicts } : {}),
           ...((meta.target ?? current?.target) ? { target: meta.target ?? current?.target } : {}),
         };
         asks = { ...state.asks, [ask.id]: ask };

@@ -15,3 +15,7 @@ The activity row fades in over 200ms and out over 140ms, retaining its last labe
 Search chips switch the card inline within their own search. Browsing does not change the recommended pick or itinerary. Place selection from the itinerary or map opens a native modal, keeping the transcript and composer mounted underneath. Escape, the close action, and the backdrop dismiss the modal.
 
 The map's Search this region reaches the chat through the store (`askChat`). `ChatColumn` sends it like a typed message as soon as no reply is running, and says so in a toast when it has to wait. The marker line with the coordinates stays in the stored text, so a retry keeps it, and the bubble leaves it out (`withoutRegionMarker`).
+
+## The live pick
+
+While find_places runs, its places are vertical rows with room for the agent's line (`tool-cards/search-row.tsx`): rejected places grey out and sink to the back, and a second search adds rows to the same list. When the tool finishes, the same list element folds into the chip row and each place slides into its chip (`tool-cards/use-flip.ts`). The pick's card then opens beneath it, with the line under the name and a Picked or Backup pill. Clicking any chip, a rejected one too, shows that place's line. `chat-column.tsx` scrolls the search to the top when a pick lands, so the chips and the card read together.

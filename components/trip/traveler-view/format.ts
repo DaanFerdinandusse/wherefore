@@ -8,6 +8,7 @@ import type {
   TripCover,
 } from "@/lib/contracts";
 import { providerImageAt } from "@/lib/images/source";
+import { isFeelWord } from "@/lib/trips/taste-words";
 import { ADVISOR_DRIVER_NAME, OTHER_FAVORITES_NAME, TRIP_PICKS_DRIVER_NAME } from "@/lib/qloo/normalize";
 
 // Pure helpers for the traveler view. Every sentence the page says about a
@@ -450,6 +451,25 @@ export function heroIntro(view: Pick<SharedTripView, "days" | "advisorName" | "f
   if (names.length > 0) return `${counts}, matched to what you already love: ${joinNames(names)}.`;
   const advisor = view.advisorName?.trim();
   return advisor ? `${counts}, picked for you by ${advisor}.` : `${counts}, picked for you.`;
+}
+
+/**
+ * The advisor's first line to the traveler, from the taste the places share:
+ * "I know how much you love cozy, intimate places. So I built your Lisboa
+ * around them." Null when the places share no taste to speak of.
+ */
+export function tasteLetter(view: Pick<SharedTripView, "days" | "destinationName">): string | null {
+  const counts = new Map<string, number>();
+  for (const day of view.days) {
+    for (const slot of day.slots) {
+      for (const tag of slot.place?.sharedTags ?? []) {
+        if (isFeelWord(tag)) counts.set(tag.toLowerCase(), (counts.get(tag.toLowerCase()) ?? 0) + 1);
+      }
+    }
+  }
+  const words = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([word]) => word);
+  if (words.length < 2) return null;
+  return `I know how much you love ${words.join(", ")} places. So I built your ${view.destinationName} around them.`;
 }
 
 /**

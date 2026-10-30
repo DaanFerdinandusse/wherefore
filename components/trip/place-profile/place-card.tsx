@@ -22,12 +22,13 @@ import {
 
 import { FilmImage } from "@/components/ui/film-image";
 import { likeLine } from "@/lib/agent/taste-overlap";
-import type { Category, ItinerarySlot, SlotName, SlotTarget, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
+import type { Category, ItinerarySlot, PlaceVerdict, SlotName, SlotTarget, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
 import type { GoogleAttribution } from "@/lib/google/contracts";
 import { slotHolds } from "@/lib/trips/day-parts";
 import type { TripPlaceProfileDriver } from "@/lib/trips/profile-types";
 import { cn } from "@/lib/ui/cn";
 
+import { VerdictLine } from "../verdict-line";
 import { startPlaceDrag } from "../workspace/dnd";
 
 import { PlaceChips } from "../place-chips";
@@ -64,6 +65,8 @@ export type PlaceCardProps = {
   target?: SlotTarget;
   /** A sentence of the advisor's notes on the client that names something the place is known for. */
   clientNote?: { text: string; matches: string[] };
+  /** The agent's line on this place, when it weighed it. */
+  verdict?: PlaceVerdict;
   variant?: "thread" | "overlay";
   onClose?: () => void;
   actions: PlaceCardActions;
@@ -96,6 +99,7 @@ export function PlaceCard({
   slots,
   target,
   clientNote,
+  verdict,
   variant = "thread",
   onClose,
   actions,
@@ -146,7 +150,18 @@ export function PlaceCard({
       className={cn("@container rise-in flex flex-col gap-3.5", removed && "opacity-60")}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
-        <h3 className="min-w-0 text-card-xs font-semibold text-ink">{card.name}</h3>
+        <div className="flex min-w-0 items-center gap-2.25">
+          <h3 className="min-w-0 text-card-xs font-semibold text-ink">{card.name}</h3>
+          {verdict?.stand === "pick" ? (
+            <span className="shrink-0 rounded-pill bg-amber-dot px-2.25 text-meta leading-5.5 font-semibold text-white" data-testid="place-card-stand">
+              Picked
+            </span>
+          ) : verdict?.stand === "backup" ? (
+            <span className="shrink-0 rounded-pill bg-why px-2.25 text-meta leading-5.5 font-semibold text-amber-deep ring-1 ring-amber-dot/50 ring-inset" data-testid="place-card-stand">
+              Backup
+            </span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-2">
           <CardTabs value={tab} onChange={setTab} client={client} />
           {onClose ? (
@@ -163,6 +178,12 @@ export function PlaceCard({
           ) : null}
         </div>
       </div>
+
+      {verdict ? (
+        <p className="px-1 text-chat text-ink" data-testid="place-card-verdict">
+          <VerdictLine verdict={verdict} />
+        </p>
+      ) : null}
 
       <div>
         <PhotoStrip

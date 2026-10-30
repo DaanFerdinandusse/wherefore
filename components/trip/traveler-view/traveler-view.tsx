@@ -12,6 +12,7 @@ import {
   dayTitle,
   favoriteImage,
   favoritesBehind,
+  tasteLetter,
   heroImage,
   heroIntro,
   nightsOf,
@@ -47,7 +48,7 @@ function Wordmark() {
 
 function Hero({ view, image }: { view: SharedTripView; image: ReturnType<typeof heroImage> }) {
   const dates = dateRangeLabel(view.startDate, view.endDate);
-  const intro = heroIntro(view);
+  const intro = tasteLetter(view) ?? heroIntro(view);
   const advisor = view.advisorName?.trim();
 
   return (

@@ -65,6 +65,20 @@ export type TripCover = {
   creditUrl: string;
 };
 
+/**
+ * The agent's word on one candidate of a search: where it stands and one honest
+ * line, "Italian, cozy and chic." or "Cozy, but it's a brunch place." `good` is
+ * the part that suits the client and shows highlighted; `rest` follows it.
+ */
+export type PlaceVerdict = {
+  tripPlaceId: string;
+  stand: "pick" | "backup" | "out";
+  good: string;
+  rest: string;
+  /** The line names a real drawback. */
+  catch: boolean;
+};
+
 /** A word or dish reviews mention, with how many reviews mention it ("Tuna tostadas", 312). */
 export type PlaceKeyword = { name: string; count: number };
 
@@ -149,6 +163,8 @@ export type Ask = {
   target?: { day: number; slot: SlotName };
   /** The recommended place from this search. */
   pickTripPlaceId?: string;
+  /** The agent's line on each place it weighed, so the line follows a place into the itinerary. */
+  verdicts?: PlaceVerdict[];
 };
 
 export type ItinerarySlot = {
@@ -259,7 +275,7 @@ export type TripSnapshot = {
 };
 
 // Tool phases streamed as preliminary outputs while a tool runs.
-export type ToolPhase = "searching" | "scoring" | "explaining" | "done";
+export type ToolPhase = "searching" | "scoring" | "explaining" | "weighing" | "done";
 
 /** One line under the search card's tiles ("Score your places", "Explain picks"). */
 export type ToolStepState = "pending" | "running" | "done" | "skipped" | "failed";
@@ -327,6 +343,12 @@ export type FindPlacesOutput = {
   groundRules?: string[];
   /** Cards with no hours on record for `openDay`: nothing says they are open that day. */
   hoursUnknown?: string[];
+  /** What the agent is doing right now, while it weighs ("Looking for more Italian"). */
+  status?: string;
+  /** The agent's lines so far. Places without one are still being read. */
+  verdicts?: PlaceVerdict[];
+  /** How many searches this result set took, when more than one. */
+  searches?: number;
 };
 
 /** An itinerary slot a search or a recommendation is for. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { composeOpening, dateRange, dayName, daysBetween, joinNames, numberWord, type OpeningFacts } from "./opening";
+import { composeOpening, tasteSentence, dateRange, dayName, daysBetween, joinNames, numberWord, type OpeningFacts } from "./opening";
 
 const lisbon: OpeningFacts = {
   clientName: "Ana Ruiz",
@@ -82,5 +82,47 @@ describe("opening helpers", () => {
     expect(daysBetween("2027-05-14", "2027-05-18")).toBe(5);
     expect(dayName(3, "2027-05-14")).toBe("Sun 16 May");
     expect(dayName(3)).toBe("Day 3");
+  });
+});
+
+describe("tasteSentence", () => {
+  const taste = [
+    { name: "European", type: "urn:tag:cuisine:qloo" },
+    { name: "Cozy", type: "urn:tag:ambience:qloo" },
+    { name: "Intimate", type: "urn:tag:ambience:qloo" },
+    { name: "Lively", type: "urn:tag:ambience:qloo" },
+    { name: "Italian", type: "urn:tag:cuisine:qloo" },
+    { name: "Speakeasy", type: "urn:tag:ambience:qloo" },
+  ];
+
+  it("talks about the person in taste words, never in places", () => {
+    expect(tasteSentence("Ana", taste)).toBe("Ana loves cozy, intimate, lively places. Italian for dinner, a speakeasy after.");
+  });
+
+  it("says nothing without enough taste to speak of", () => {
+    expect(tasteSentence("Ana", [{ name: "Cozy" }])).toBeNull();
+    expect(tasteSentence("Ana", undefined)).toBeNull();
+  });
+
+  it("opens the chat with it", () => {
+    const opening = composeOpening({ ...lisbon, taste });
+    expect(opening.paragraphs[0]).toBe("Ana loves cozy, intimate, lively places. Italian for dinner, a speakeasy after.");
+    expect(opening.paragraphs[1]).toContain("What should this trip be about?");
+  });
+
+  it("keeps the plain opening for a client with no taste yet", () => {
+    expect(composeOpening({ ...lisbon, taste: [] }).paragraphs[0]).toContain("I will match every pick");
+  });
+});
+
+describe("tasteSentence on a planned trip", () => {
+  it("still talks about the person first", () => {
+    const opening = composeOpening({
+      ...lisbon,
+      filled: [{ day: 1, slot: "dinner" }],
+      taste: [{ name: "Cozy" }, { name: "Intimate" }],
+    });
+    expect(opening.paragraphs[0]).toBe("Ana loves cozy, intimate places.");
+    expect(opening.paragraphs[1]).toContain("in the itinerary so far");
   });
 });

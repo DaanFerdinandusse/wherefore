@@ -54,5 +54,6 @@ export async function loadChatOpening(chatId: string, user: AuthUser): Promise<C
     advisorPlacesInCity: ctx.advisorPlaces.length,
     filled,
     dayCount,
+    taste: ctx.tasteTags,
   });
 }

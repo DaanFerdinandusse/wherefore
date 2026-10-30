@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { FatalError } from "workflow";
 import { z } from "zod";
 
-import type { Category, FindPlacesOutput, SlotName, SlotTarget, ToolStep, TripPlaceCard, Weekday } from "@/lib/contracts";
+import type { Category, FindPlacesOutput, PlaceVerdict, SlotName, SlotTarget, ToolStep, TripPlaceCard, Weekday } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { places, tripAsks } from "@/lib/db/schema";
 import { MAP_REGION_LABEL } from "@/lib/map/region-prompt";
@@ -28,8 +28,11 @@ import {
 } from "@/lib/qloo";
 import { placeFactsFromProperties, type AskFilters } from "@/lib/trips/map";
 
+import { agentModelRef, agentProviderOptions } from "@/lib/codex/provider";
+
 import { carryTags } from "../taste-overlap";
-import { assertTurn, finishAsk, guarded, TurnSupersededError, type TurnRef } from "../writes";
+import { dealScores, mergeVerdicts, verdictOrder, weighPlaces, type MoreSearch, type WeighBrief, type WeighPlace } from "../weigh";
+import { assertTurn, finishAsk, guarded, TurnSupersededError, writeScores, type TurnRef } from "../writes";
 
 import {
   askLabel,
@@ -45,7 +48,9 @@ import {
   WIDENED_IN_CATEGORY,
   type SearchCategory,
 } from "./labels";
+import { factsForModel } from "./model-output";
 import { hoursOf } from "./place-tools";
+import { pause } from "./run-tool";
 import { chooseSearchArea, searchedAreaText, widenedNote, type SearchAreaInput } from "./search-area";
 import {
   cardsInOrder,
@@ -69,7 +74,11 @@ import { firstName, loadPlacedPoints, loadToolTrip, logCalls, type ToolTrip } fr
 //   scoring    the advisor's places in the city scored, the ones that fit
 //              the ask (category, tags, price cap, area, less known, Michelin,
 //              open day) kept and marked "Your place";
-//   explaining one grounded sentence per place (lib/agent/explain.ts).
+//   explaining one grounded sentence per place (lib/agent/explain.ts);
+//   weighing   the agent says one honest line per place, one at a time, and
+//              names a pick and a backup (lib/agent/weigh.ts). When too few
+//              fit it may run one more search into the same card and weigh
+//              the new places against its pick.
 // Each phase is checkpointed on the ask, so a retried step resumes.
 // A locality mismatch comes back as a clear error output, never an empty tab.
 
@@ -104,6 +113,11 @@ export const MIN_TAKE = 3;
 export const MAX_TAKE = 8;
 /** At most this many of the advisor's own places join a small search beyond its results. */
 const MAX_ADVISOR_EXTRAS = 2;
+/** How many new places a second search adds to the card. */
+const MORE_TAKE = 3;
+/** The beat between two lines, so the advisor can read each one as it lands. */
+const VERDICT_BEAT_MS = 420;
+const READING_STATUS = "Reading what people say about each one";
 /** A category search asks for a few more: results of another kind are left out here. */
 const CATEGORY_SPARE = 3;
 /** Tags beyond this add nothing: a few more words are no reason to fail a search. */
@@ -339,6 +353,20 @@ const checkpointSchema = z.object({
     .optional(),
   score: z.object({ ranked: z.array(rankedSchema), step: stepSchema }).optional(),
   explain: z.object({ done: z.number(), total: z.number() }).optional(),
+  weigh: z
+    .object({
+      searches: z.number(),
+      verdicts: z.array(
+        z.object({
+          tripPlaceId: z.string(),
+          stand: z.enum(["pick", "backup", "out"]),
+          good: z.string(),
+          rest: z.string(),
+          catch: z.boolean(),
+        }),
+      ),
+    })
+    .optional(),
 });
 export type AskCheckpoint = z.infer<typeof checkpointSchema>;
 
@@ -427,6 +455,8 @@ export async function* findPlacesTool(
   let loosened: string[] = [];
   let details = searchDetails({ destination: ctx.destination.name, basedOn });
   let searchedArea: string | undefined;
+  let verdicts: PlaceVerdict[] = checkpoint.weigh?.verdicts ?? [];
+  let searches = checkpoint.weigh?.searches ?? 1;
 
   const output = (phase: FindPlacesOutput["phase"], extra: Partial<FindPlacesOutput> = {}): FindPlacesOutput => ({
     phase,
@@ -454,6 +484,8 @@ export async function* findPlacesTool(
     ...(searchedArea ? { searchedArea } : {}),
     ...(openDay ? { openDay } : {}),
     ...(ctx.rules.length ? { groundRules: ctx.rules } : {}),
+    ...(verdicts.length ? { verdicts } : {}),
+    ...(searches > 1 ? { searches } : {}),
     ...extra,
   });
   const failAsk = () => finishAsk(turn, ask.id, { status: "failed", elapsedMs: elapsed(), loosened: [], resultCount: 0 });
@@ -769,6 +801,132 @@ export async function* findPlacesTool(
       total: toExplain,
       note: `${explained} of ${toExplain}`,
     };
+
+    // The agent weighs the candidates out loud. No taste to judge by, or nothing
+    // to choose between: the search keeps its own order and the agent picks.
+    if (!checkpoint.weigh && cards.length > 1 && ctx.signals.signals.length > 0) {
+      const modelOptions = { modelRef: agentModelRef(), providerOptions: agentProviderOptions(turn.chatId), abortSignal };
+      const toWeigh = (list: TripPlaceCard[]): WeighPlace[] =>
+        list.map((c) => ({
+          tripPlaceId: c.tripPlaceId,
+          name: c.name,
+          category: c.category,
+          sharedTags: c.sharedTags.map((t) => t.name),
+          facts: factsForModel(c),
+        }));
+      const brief: Omit<WeighBrief, "maySearchAgain" | "current"> = {
+        clientName: client,
+        brief: [input.intent, ...(askedTags ?? [])].join(", "),
+        taste: ctx.tasteTags.slice(0, 12).map((t) => t.name),
+        rules: ctx.rules,
+        favorites: ctx.signals.favorites.map((f) => f.name),
+      };
+      try {
+        yield output("weighing", { status: READING_STATUS });
+        const first = await weighPlaces(toWeigh(cards), { ...brief, maySearchAgain: true }, modelOptions);
+        // One line at a time, as a person would say them.
+        for (const verdict of first.verdicts) {
+          verdicts = [...verdicts, verdict];
+          yield output("weighing", { status: READING_STATUS });
+          await pause(VERDICT_BEAT_MS, abortSignal);
+        }
+
+        if (first.more) {
+          const more: MoreSearch = first.more;
+          yield output("weighing", { status: more.why });
+          const area = constraints.area;
+          const calls: QlooCall[] = [];
+          const wanted = more.tags.length ? more.tags : [more.intent];
+          const resolved = await resolveTags(wanted, askCategory, ctx, calls);
+          const seen = ranked.map((r) => r.entityId);
+          const found = await findPlaces(
+            {
+              destination: area ? { ...ctx.destination, lat: area.lat, lon: area.lon, radiusM: area.radiusM } : ctx.destination,
+              signals: ctx.signals.signals,
+              ...(resolved.ids.length ? { tags: resolved.ids, tagsOperator: "union" as const } : askCategory ? { tags: CATEGORY_FILTER_TAGS[askCategory], tagsOperator: "union" as const } : {}),
+              ...(input.price_max ? { priceMax: input.price_max } : {}),
+              noShopping,
+              ...filters,
+              ...(more.lessKnown ? { popularityMax: LESS_KNOWN_POPULARITY_MAX } : {}),
+              excludeIds: searchExclusions(seen, ctx.excludeIds),
+              take: MORE_TAKE + CATEGORY_SPARE,
+            },
+            { tripId: ctx.trip.id },
+          );
+          calls.push(...found.calls);
+          await logCalls(turn, ctx, calls, source, key("more"));
+          const fresh = found.results
+            .filter(notExcluded)
+            .filter((r) => !seen.includes(r.place.entityId) && (!askCategory || r.category === askCategory))
+            .slice(0, MORE_TAKE);
+          if (fresh.length > 0) {
+            const items: BoardItem[] = fresh.map((r) => ({
+              place: r.place,
+              category: r.category,
+              affinity: r.affinity,
+              score: r.score,
+              signalScores: r.signalScores,
+              source: "ask",
+            }));
+            const ids = await persistBoardItems(turn, ctx, items);
+            ranked = [
+              ...ranked,
+              ...items.flatMap((item) => {
+                const tripPlaceId = ids.get(item.place.entityId);
+                return tripPlaceId ? [rankedOf(ctx, tripPlaceId, item)] : [];
+              }),
+            ];
+            await persistAskPlaces(turn, ctx, ask.id, ranked);
+            const known = new Set(cards.map((c) => c.tripPlaceId));
+            cards = await cardsInOrder(ctx, ranked.map((r) => r.tripPlaceId));
+            const added = cards.filter((c) => !known.has(c.tripPlaceId));
+            searches = 2;
+            yield output("weighing", { status: more.why });
+            if (added.length > 0) {
+              await explainCards(turn, ctx, added, abortSignal);
+              cards = await cardsInOrder(ctx, ranked.map((r) => r.tripPlaceId));
+              const fresher = cards.filter((c) => !known.has(c.tripPlaceId));
+              const leader = verdicts.find((v) => v.stand === "pick");
+              const leaderName = cards.find((c) => c.tripPlaceId === leader?.tripPlaceId)?.name;
+              const status = leaderName ? `Weighing them against ${leaderName}` : READING_STATUS;
+              yield output("weighing", { status });
+              const second = await weighPlaces(
+                toWeigh(fresher),
+                {
+                  ...brief,
+                  maySearchAgain: false,
+                  ...(leader && leaderName ? { current: { name: leaderName, line: `${leader.good} ${leader.rest}`.trim() } } : {}),
+                },
+                modelOptions,
+              );
+              // Only a pick the model names over the place to beat replaces it.
+              const keepPick = !second.overtakes;
+              for (const verdict of second.verdicts) {
+                verdicts = mergeVerdicts(verdicts, [verdict], { keepPick });
+                yield output("weighing", { status });
+                await pause(VERDICT_BEAT_MS, abortSignal);
+              }
+            }
+          }
+        }
+
+        // The agent's order is now the order: the pick never reads below a place it beat.
+        ranked = dealScores(verdictOrder(ranked, verdicts));
+        await persistAskPlaces(turn, ctx, ask.id, ranked);
+        await writeScores(turn, ranked.flatMap((r) => (r.score === null ? [] : [{ tripPlaceId: r.tripPlaceId, score: r.score }])));
+        const [stored] = await db.select({ query: tripAsks.query }).from(tripAsks).where(eq(tripAsks.id, ask.id)).limit(1);
+        await guarded(turn, (guard) => updateAsk(ask.id, { query: { ...stored?.query, verdicts } }, ctx.scope, { turn: guard }));
+        if (checkpoint.score) checkpoint.score = { ...checkpoint.score, ranked };
+        else if (checkpoint.search) checkpoint.search = { ...checkpoint.search, ranked };
+        checkpoint.weigh = { searches, verdicts };
+        await saveCheckpoint(checkpoint);
+      } catch (error) {
+        if (abortSignal?.aborted || error instanceof TurnSupersededError) throw error;
+        // A failed second search keeps what the first pass said.
+        console.error(`[find_places ${toolCallId}] weighing failed`, error);
+      }
+      cards = await cardsInOrder(ctx, ranked.map((r) => r.tripPlaceId));
+    }
 
     const hoursUnknown = openDay ? await hoursUnknownOn(cards, openDay) : [];
     await assertTurn(turn);

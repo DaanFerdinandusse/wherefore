@@ -1,7 +1,7 @@
 import { getToolName, isToolUIPart } from "ai";
 import { z } from "zod";
 
-import type { AppUIMessage, FindPlacesOutput, RecommendPlaceOutput, SlotName, TripPlaceCard } from "@/lib/contracts";
+import type { AppUIMessage, FindPlacesOutput, PlaceVerdict, RecommendPlaceOutput, SlotName, TripPlaceCard } from "@/lib/contracts";
 
 import type { PlacesMeta } from "../contracts";
 
@@ -39,7 +39,7 @@ export function readPlacesOutput(output: unknown): FindPlacesOutput | undefined 
 
 const targetSchema = z.object({
   day: z.number(),
-  slot: z.enum(["morning", "lunch", "afternoon", "dinner", "night", "stay"]),
+  slot: z.enum(["breakfast", "morning", "lunch", "afternoon", "dinner", "night", "stay"]),
   label: z.string(),
   date: z.string().optional(),
 });
@@ -72,6 +72,8 @@ export type ToolPlacesEvent = {
   target?: { day: number; slot: SlotName };
   /** recommend_place: the ask's one pick. */
   pickTripPlaceId?: string;
+  /** find_places: the agent's lines so far. */
+  verdicts?: PlaceVerdict[];
   /** Changes whenever the output does: tool call, phase, count, preliminary. */
   key: string;
 };
@@ -88,6 +90,7 @@ export function placesMetaOf(event: ToolPlacesEvent): PlacesMeta {
     ...(event.loosened ? { loosened: event.loosened } : {}),
     ...(event.target ? { target: event.target } : {}),
     ...(event.pickTripPlaceId ? { pickTripPlaceId: event.pickTripPlaceId } : {}),
+    ...(event.verdicts?.length ? { verdicts: event.verdicts } : {}),
   };
 }
 
@@ -113,7 +116,8 @@ export function toolPlaceEvents(messages: AppUIMessage[]): ToolPlacesEvent[] {
           elapsedMs: output.elapsedMs,
           loosened: output.loosened,
           ...(output.target ? { target: { day: output.target.day, slot: output.target.slot } } : {}),
-          key: `${part.toolCallId}|${output.phase}|${output.places.length}|${reasons}|${preliminary}`,
+          ...(output.verdicts?.length ? { verdicts: output.verdicts } : {}),
+          key: `${part.toolCallId}|${output.phase}|${output.places.length}|${reasons}|${output.verdicts?.length ?? 0}|${preliminary}`,
         });
       } else if (name === "recommend_place") {
         const output = readRecommendOutput(part.output);

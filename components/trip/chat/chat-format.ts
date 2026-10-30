@@ -1,6 +1,6 @@
 import { getToolName, isToolUIPart } from "ai";
 
-import type { AppUIMessage, ItinerarySlot, RecommendPlaceOutput, TripPlaceCard } from "@/lib/contracts";
+import type { AppUIMessage, ItinerarySlot, PlaceVerdict, RecommendPlaceOutput, TripPlaceCard } from "@/lib/contracts";
 
 import { readRecommendOutput } from "./chat-places";
 
@@ -10,11 +10,27 @@ import { readRecommendOutput } from "./chat-places";
 // opened from the itinerary keeps the slot it was recommended for. Tested in
 // chat-format.test.ts.
 
-export type Recommendation = RecommendPlaceOutput & { card: TripPlaceCard; toolCallId: string };
+export type Recommendation = RecommendPlaceOutput & { card: TripPlaceCard; toolCallId: string; verdict?: PlaceVerdict };
 
 /** Highest visible match first, preserving result order for ties and unscored places. */
 export function placesByMatch(places: readonly TripPlaceCard[]): TripPlaceCard[] {
   return [...places].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+}
+
+/** Pick first, backup next, the places still being read, then the rejected: the order the rows and chips show. */
+export function placesByVerdict(places: readonly TripPlaceCard[], verdicts: readonly PlaceVerdict[] | undefined): TripPlaceCard[] {
+  if (!verdicts?.length) return placesByMatch(places);
+  const stands = new Map(verdicts.map((v) => [v.tripPlaceId, v.stand]));
+  const rank = (place: TripPlaceCard) => {
+    const stand = stands.get(place.tripPlaceId);
+    return stand === "pick" ? 0 : stand === "backup" ? 1 : stand === "out" ? 3 : 2;
+  };
+  // The rejected keep the order they were let go in, so each one lands at the back.
+  const told = new Map(verdicts.map((v, index) => [v.tripPlaceId, index]));
+  return places
+    .map((place, index) => ({ place, index }))
+    .sort((a, b) => rank(a.place) - rank(b.place) || (told.get(a.place.tripPlaceId) ?? a.index) - (told.get(b.place.tripPlaceId) ?? b.index))
+    .map((x) => x.place);
 }
 
 /** Every recommend_place result in transcript order. */

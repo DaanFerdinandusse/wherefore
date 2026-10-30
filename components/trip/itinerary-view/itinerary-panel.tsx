@@ -17,10 +17,12 @@ import {
   coverFacts,
   dayNote,
   dayStatus,
+  daySentence,
   dayTitle,
   firstName,
   findingLabel,
   openDay,
+  tasteWords,
   usesCover,
   type DayView,
   type SlotView,
@@ -68,6 +70,10 @@ export function ItineraryPanel({ actions }: PanelProps) {
   const toggle = (day: DayView) => setToggled((t) => ({ ...t, [day.day]: !isOpen(day) }));
 
   const client = firstName(trip.clientName);
+  // The taste the added places deliver: click a word and the rows behind it light up.
+  const words = useMemo(() => tasteWords(days), [days]);
+  const [picked, setPicked] = useState<string | null>(null);
+  const lit = picked && words.includes(picked) ? picked : null;
   // The first open slot says how to fill one; the others just say Open.
   const firstOpen = days.flatMap((d) => d.slots).find((s) => !s.card && !s.finding && !s.suggestion);
 
@@ -103,6 +109,29 @@ export function ItineraryPanel({ actions }: PanelProps) {
         </section>
       )}
 
+      {words.length > 1 ? (
+        <section aria-label={`${client}'s taste in this trip`} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-1" data-testid="trip-taste">
+          <p className="label-caps text-text-3">{client}&rsquo;s taste</p>
+          <ul className="flex flex-wrap gap-1.5">
+            {words.map((word) => (
+              <li key={word}>
+                <button
+                  type="button"
+                  aria-pressed={lit === word}
+                  onClick={() => setPicked(lit === word ? null : word)}
+                  className={cn(
+                    "cursor-pointer rounded-pill border px-2.75 py-0.75 text-ui-sm leading-5 font-semibold transition-colors",
+                    lit === word ? "border-amber-dot bg-amber-dot text-white" : "border-ink/20 text-text-3 hover:border-ink/45 hover:text-ink",
+                  )}
+                >
+                  {word}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <div className="grid items-start gap-x-6 border-b border-ink/8 @[900px]:grid-cols-2">
         {days.map((day) => (
           <Day
@@ -115,6 +144,7 @@ export function ItineraryPanel({ actions }: PanelProps) {
             countryCode={trip.destination.countryCode}
             favoriteImages={favoriteImages}
             actions={actions}
+            litTaste={lit}
             onToggle={() => toggle(day)}
           />
         ))}
@@ -160,12 +190,14 @@ type DayProps = {
   countryCode?: string;
   favoriteImages: Map<string, string>;
   actions: WorkspaceActions;
+  litTaste: string | null;
   onToggle: () => void;
 };
 
 /** A day: its date and where it mostly is, its progress, the arrow, then one row per slot in a white card. */
 function Day({ day, total, open, firstOpen, onToggle, ...row }: DayProps) {
   const title = dayTitle(day);
+  const sentence = daySentence(day);
   const finding = day.slots.find((s) => s.finding);
   const slotsId = useId();
   return (
@@ -211,6 +243,11 @@ function Day({ day, total, open, firstOpen, onToggle, ...row }: DayProps) {
               open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
             )}
           >
+            {sentence ? (
+              <p className="px-1 pb-2.5 font-display text-[19px] leading-6 text-ink italic" data-testid="day-sentence">
+                {sentence}
+              </p>
+            ) : null}
             <div className="flex flex-col divide-y divide-ink/10 overflow-hidden rounded-card bg-surface-raised shadow-[0_1px_3px_rgb(22_19_15/0.06),0_0_0_1px_rgb(22_19_15/0.04)]">
               {day.parts.map((part) => (
                 <PartGroup key={part.part} part={part} firstOpen={firstOpen} {...row} />

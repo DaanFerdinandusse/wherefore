@@ -5,6 +5,9 @@ import type { Ask, ItinerarySlot, TripPlaceCard, TripSnapshot } from "@/lib/cont
 import { initialState } from "../workspace/reducer";
 
 import {
+  daySentence,
+  tasteWords,
+  verdictOf,
   briefSentence,
   buildDays,
   coverDates,
@@ -321,5 +324,96 @@ describe("recommended slot pick", () => {
       places: [card("highest", { score: 99, askIds: [ASK] }), card("picked", { score: 85, askIds: [ASK] })],
     }));
     expect([...suggestionsBySlot(state).values()].map((p) => p.tripPlaceId)).toEqual(["picked"]);
+  });
+});
+
+describe("the agent's reasoning in the itinerary", () => {
+  const card = (name: string, category: TripPlaceCard["category"], tags: string[]): TripPlaceCard =>
+    ({
+      tripPlaceId: name,
+      placeId: name,
+      entityId: name,
+      name,
+      category,
+      because: [],
+      sharedTags: tags.map((tag) => ({ tagId: tag, name: tag })),
+      status: "added",
+      source: "ask",
+      askIds: [],
+    }) as TripPlaceCard;
+
+  it("reads a place's latest line from whichever search weighed it", () => {
+    const line = (good: string) => ({ tripPlaceId: "a", stand: "pick" as const, good, rest: "", catch: false });
+    expect(verdictOf({ one: { verdicts: [line("First.")] }, two: { verdicts: [line("Second.")] }, three: {} }, "a")?.good).toBe("Second.");
+    expect(verdictOf({}, "a")).toBeUndefined();
+  });
+
+  it("says a day in one sentence, in the client's taste", () => {
+    const day = {
+      slots: [
+        { day: 1, slot: "breakfast" as const, position: 0, card: card("The Folks", "coffee", ["Cozy"]) },
+        { day: 1, slot: "dinner" as const, position: 0, card: card("Da Noi", "eat", ["Italian", "Cozy"]) },
+        { day: 1, slot: "night" as const, position: 0, card: card("Red Frog", "drink", ["Intimate"]) },
+      ],
+    };
+    expect(daySentence(day)).toBe("A cozy breakfast, an Italian dinner, then intimate drinks.");
+  });
+
+  it("never uses a taste word twice in a day", () => {
+    const day = {
+      slots: [
+        { day: 1, slot: "lunch" as const, position: 0, card: card("Leonetta", "eat", ["Cozy", "Italian"]) },
+        { day: 1, slot: "dinner" as const, position: 0, card: card("Memoria", "eat", ["Cozy", "Italian", "Chic"]) },
+      ],
+    };
+    expect(daySentence(day)).toBe("An Italian lunch, then a cozy dinner.");
+  });
+
+  it("does not call one place a day", () => {
+    expect(daySentence({ slots: [{ day: 1, slot: "dinner", position: 0, card: card("Da Noi", "eat", ["Cozy"]) }] })).toBeNull();
+  });
+
+  it("leaves the hotel out of the day", () => {
+    const day = {
+      slots: [
+        { day: 1, slot: "lunch" as const, position: 0, card: card("Mezze", "eat", []) },
+        { day: 1, slot: "dinner" as const, position: 0, card: card("Da Noi", "eat", ["Italian"]) },
+        { day: 1, slot: "stay" as const, position: 0, card: card("Hotel", "stay", ["Chic"]) },
+      ],
+    };
+    expect(daySentence(day)).toBe("A good lunch, then an Italian dinner.");
+  });
+
+  it("lists the taste the places deliver, most delivered first", () => {
+    const days = [
+      {
+        slots: [
+          { day: 1, slot: "lunch" as const, position: 0, card: card("A", "eat", ["Cozy", "Italian"]) },
+          { day: 1, slot: "dinner" as const, position: 0, card: card("B", "eat", ["Cozy"]) },
+        ],
+      },
+    ];
+    expect(tasteWords(days)).toEqual(["Cozy", "Italian"]);
+  });
+});
+
+describe("suggestions after the agent has weighed", () => {
+  const place = (tripPlaceId: string, score: number): TripPlaceCard =>
+    ({ tripPlaceId, placeId: tripPlaceId, entityId: tripPlaceId, name: tripPlaceId, category: "eat", score, because: [], sharedTags: [], status: "suggested", source: "ask", askIds: ["ask"] }) as TripPlaceCard;
+  const verdict = (tripPlaceId: string, stand: "pick" | "backup" | "out") => ({ tripPlaceId, stand, good: "", rest: "", catch: false });
+  const state = (places: TripPlaceCard[], verdicts: ReturnType<typeof verdict>[], pick?: string) => ({
+    ...initialState({ trip: { id: "t", startDate: "2026-05-14", endDate: "2026-05-16" }, travelers: [], places: [], asks: [], slots: [] } as unknown as TripSnapshot),
+    places: Object.fromEntries(places.map((p) => [p.tripPlaceId, p])),
+    asks: { ask: { id: "ask", label: "Dinner", status: "done", resultCount: 3, loosened: [], target: { day: 1, slot: "dinner" as const }, verdicts, ...(pick ? { pickTripPlaceId: pick } : {}) } as Ask },
+  });
+
+  it("offers the backup once the pick has gone elsewhere, never a rejected place", () => {
+    const picked = { ...place("pick", 94), status: "added" } as TripPlaceCard;
+    const suggestions = suggestionsBySlot(state([picked, place("backup", 80), place("rejected", 90)], [verdict("pick", "pick"), verdict("backup", "backup"), verdict("rejected", "out")], "pick"));
+    expect([...suggestions.values()].map((c) => c.tripPlaceId)).toEqual(["backup"]);
+  });
+
+  it("offers nothing when only rejected places are left", () => {
+    expect(suggestionsBySlot(state([place("rejected", 90)], [verdict("rejected", "out")])).size).toBe(0);
   });
 });

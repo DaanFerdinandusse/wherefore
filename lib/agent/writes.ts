@@ -124,6 +124,18 @@ export async function writeReasons(
   return rows.length;
 }
 
+/** Scores in the agent's final order, so a pick never reads below a place it beat. Conditional on the lock. */
+export async function writeScores(turn: TurnRef, scores: { tripPlaceId: string; score: number }[]): Promise<number> {
+  if (scores.length === 0) return 0;
+  const rows = await db
+    .update(tripPlaces)
+    .set({ bestScore: sql`r.score`, updatedAt: sql`now()` })
+    .from(sql`jsonb_to_recordset(${JSON.stringify(scores)}::jsonb) as r("tripPlaceId" uuid, score int)`)
+    .where(and(sql`${tripPlaces.id} = r."tripPlaceId"`, eq(tripPlaces.tripId, turn.tripId), turnHolds(turn)))
+    .returning({ id: tripPlaces.id });
+  return rows.length;
+}
+
 /**
  * Finishes an ask: status, elapsed time, loosened filters, and the final
  * result count (counted from ask_places when not given). Conditional on the

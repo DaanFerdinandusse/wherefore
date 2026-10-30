@@ -10,6 +10,7 @@ import { isOpenSlot } from "@/lib/trips/day-parts";
 import { cn } from "@/lib/ui/cn";
 
 import { useTripStore } from "../store";
+import { VerdictLine } from "../verdict-line";
 import { startPlaceDrag, startSlotDrag } from "../workspace/dnd";
 import { SLOT_LABELS } from "../workspace/format";
 import type { WorkspaceActions } from "../workspace/use-workspace-actions";
@@ -133,10 +134,12 @@ type PlaceRowProps = {
   countryCode?: string;
   favoriteImages: Map<string, string>;
   actions: WorkspaceActions;
+  /** The taste word lit on top of the itinerary: rows that deliver it stand out. */
+  litTaste?: string | null;
 };
 
-function PlaceRow({ view, clientName, countryCode, favoriteImages, actions }: PlaceRowProps) {
-  const { card } = view;
+function PlaceRow({ view, clientName, countryCode, favoriteImages, actions, litTaste }: PlaceRowProps) {
+  const { card, verdict } = view;
   const select = useTripStore((s) => s.select);
   const setHighlight = useTripStore((s) => s.setHighlight);
   const lit = useTripStore((s) => s.highlightedPlaceId === card.tripPlaceId || s.selectedPlaceId === card.tripPlaceId);
@@ -152,13 +155,19 @@ function PlaceRow({ view, clientName, countryCode, favoriteImages, actions }: Pl
   const inOpenSlot = isOpenSlot(view.slot);
   const label = inOpenSlot ? CATEGORY_NOUN[card.category] : undefined;
   const sub = subLine(card, countryCode, { noun: !inOpenSlot });
+  const delivers = card.sharedTags.some((t) => t.name.trim() === litTaste);
 
   return (
     <li
       {...drop.handlers}
       onMouseEnter={() => setHighlight(card.tripPlaceId)}
       onMouseLeave={() => setHighlight(null)}
-      className={cn(drop.over && "bg-why/70 outline-2 -outline-offset-2 outline-glow outline-dashed")}
+      data-lit={litTaste ? (delivers ? "true" : "false") : undefined}
+      className={cn(
+        "transition-[background-color,opacity] duration-200",
+        drop.over && "bg-why/70 outline-2 -outline-offset-2 outline-glow outline-dashed",
+        litTaste && (delivers ? "bg-why" : "opacity-45"),
+      )}
     >
       <div
         draggable
@@ -200,7 +209,9 @@ function PlaceRow({ view, clientName, countryCode, favoriteImages, actions }: Pl
             <SlotLabel slot={view.slot} label={label} inline />
             <h5 className="truncate text-body leading-5 font-semibold text-ink">{card.name}</h5>
             {sub ? <p className="truncate text-ui-sm leading-[17px] text-text-3">{sub}</p> : null}
-            {badges.length > 0 ? (
+            {verdict ? (
+              <VerdictLine verdict={verdict} className="line-clamp-2 text-ui-sm leading-[17px] text-text-3" />
+            ) : badges.length > 0 ? (
               <ul aria-label="Shared taste" className="mt-1 flex h-[22px] flex-wrap gap-1 overflow-hidden">
                 {badges.map((badge) => (
                   <li key={badge} className="rounded-pill bg-why px-2 text-meta leading-[22px] font-medium text-amber-deep">
@@ -211,6 +222,17 @@ function PlaceRow({ view, clientName, countryCode, favoriteImages, actions }: Pl
             ) : null}
           </div>
           <div className="flex items-center gap-0.5">
+            {verdict ? (
+              <span
+                data-testid="slot-verdict"
+                className={cn(
+                  "mr-0.5 shrink-0 rounded-pill px-2 text-meta leading-5.5 font-semibold whitespace-nowrap",
+                  verdict.catch ? "bg-why text-amber-deep" : "bg-amber-dot text-white",
+                )}
+              >
+                {verdict.catch ? "One catch" : "Perfect fit"}
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={() => void actions.clearSlotAt(view.day, view.slot, view.position)}

@@ -4,7 +4,7 @@ import type { AppUIMessage, TripPlaceCard } from "@/lib/contracts";
 
 import { toolErrorText } from "./chat-errors";
 import { placesMetaOf, toolPlaceEvents } from "./chat-places";
-import { composerPlaceholder, liveRecommendationId, mainNeighborhood, picksByAsk, placesByMatch, recommendationByPlace } from "./chat-format";
+import { placesByVerdict, composerPlaceholder, liveRecommendationId, mainNeighborhood, picksByAsk, placesByMatch, recommendationByPlace } from "./chat-format";
 
 const card = (id: string, extra: Partial<TripPlaceCard> = {}): TripPlaceCard => ({
   tripPlaceId: id,
@@ -106,5 +106,25 @@ describe("composer placeholder", () => {
     expect(mainNeighborhood(places, [])).toBe("Chiado");
     expect(mainNeighborhood(places, [{ id: "s", day: 1, slot: "dinner", tripPlaceId: "c", note: "", position: 0 }])).toBe("Alfama");
     expect(mainNeighborhood([], [])).toBeUndefined();
+  });
+});
+
+describe("placesByVerdict", () => {
+  const place = (tripPlaceId: string, score?: number) => ({ tripPlaceId, score }) as TripPlaceCard;
+  const verdict = (tripPlaceId: string, stand: "pick" | "backup" | "out") => ({ tripPlaceId, stand, good: "", rest: "", catch: false });
+
+  it("keeps the match order until the agent speaks", () => {
+    expect(placesByVerdict([place("a", 60), place("b", 94)], undefined).map((p) => p.tripPlaceId)).toEqual(["b", "a"]);
+  });
+
+  it("puts the pick first, those being read next and the rejected at the back in the order they went", () => {
+    const places = [place("a"), place("b"), place("c"), place("d"), place("e")];
+    const order = placesByVerdict(places, [verdict("c", "out"), verdict("a", "out"), verdict("d", "pick")]).map((p) => p.tripPlaceId);
+    expect(order).toEqual(["d", "b", "e", "c", "a"]);
+  });
+
+  it("keeps the backup right behind the pick", () => {
+    const order = placesByVerdict([place("a"), place("b"), place("c")], [verdict("a", "out"), verdict("b", "backup"), verdict("c", "pick")]).map((p) => p.tripPlaceId);
+    expect(order).toEqual(["c", "b", "a"]);
   });
 });

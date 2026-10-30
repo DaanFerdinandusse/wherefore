@@ -65,7 +65,7 @@ export type PlaceProfileProps = {
 export type PlacesMeta = {
   askId?: string;
   toolCallId: string;
-  /** ToolPhase: "searching" | "scoring" | "explaining" | "done", or "error". */
+  /** ToolPhase: "searching" | "scoring" | "explaining" | "weighing" | "done", or "error". */
   phase: string;
   label?: string;
   count?: number;
@@ -75,6 +75,8 @@ export type PlacesMeta = {
   target?: Ask["target"];
   /** recommend_place: the one pick of the ask, suggested for target. */
   pickTripPlaceId?: string;
+  /** find_places: the agent's lines so far. */
+  verdicts?: Ask["verdicts"];
 };
 
 /** The glass chat dock. Owned by the chat runtime. */

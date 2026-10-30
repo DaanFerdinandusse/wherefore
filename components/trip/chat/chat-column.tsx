@@ -9,6 +9,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/ui/cn";
 
 import type { ChatDockProps } from "../contracts";
+import { verdictOf } from "../itinerary-view/itinerary-model";
 import { PlaceCard, type PlaceCardActions } from "../place-profile/place-card";
 import { useTripStore } from "../store";
 import { useWorkspaceActions } from "../workspace/use-workspace-actions";
@@ -56,6 +57,10 @@ const openingSchema = z.object({
   placeholder: z.string(),
 });
 
+/** The space above a search when its pick brings it to the top of the thread. */
+const PICK_TOP_GAP = 12;
+/** While that scroll runs, passing near the bottom must not pin the thread again. */
+const PICK_SCROLL_MS = 1200;
 /** A scroll this soon after wheel, touch or a scroll key counts as the reader's. */
 const USER_SCROLL_WINDOW_MS = 800;
 
@@ -155,6 +160,7 @@ export function ChatColumn({
   const contentRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const userScrollAt = useRef(0);
+  const pickScrollEnds = useRef(0);
   const [showJump, setShowJump] = useState(false);
 
   useEffect(() => {
@@ -175,7 +181,7 @@ export function ChatColumn({
   };
   const onScroll = () => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || Date.now() < pickScrollEnds.current) return;
     if (isAtBottom(el)) {
       pinned.current = true;
       setShowJump(false);
@@ -192,6 +198,22 @@ export function ChatColumn({
     const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   };
+  // A new pick lands in the thread: bring its search to the top of the view, so
+  // the chip row and the card read together instead of the bottom edge of the card.
+  const seenCard = useRef(liveId);
+  useEffect(() => {
+    if (liveId === seenCard.current) return;
+    seenCard.current = liveId;
+    const scroller = scrollRef.current;
+    const search = [...(contentRef.current?.querySelectorAll('[data-testid="search-results"]') ?? [])].at(-1);
+    if (!busy || !pinned.current || !scroller || !search) return;
+    pinned.current = false;
+    pickScrollEnds.current = Date.now() + PICK_SCROLL_MS;
+    const top = search.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - PICK_TOP_GAP;
+    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scroller.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+  }, [liveId, busy]);
+
   const sendAndFollow = (text: string) => {
     pinned.current = true;
     setShowJump(false);
@@ -217,6 +239,7 @@ export function ChatColumn({
   const selected = selectedPlaceId ? (places[selectedPlaceId] ?? chatPlaces.get(selectedPlaceId)) : undefined;
   const selectedRecommendation = selected ? byPlace.get(selected.tripPlaceId) : undefined;
 
+  const asks = useTripStore((s) => s.asks);
   const renderCard = (recommendation: Recommendation) => (
     <PlaceCard
       key={recommendation.card.tripPlaceId}
@@ -225,6 +248,7 @@ export function ChatColumn({
       slots={slots}
       target={recommendation.target}
       clientNote={recommendation.clientNote}
+      verdict={recommendation.verdict ?? verdictOf(asks, recommendation.card.tripPlaceId)}
       actions={actions}
       onHover={hover}
     />
@@ -286,6 +310,7 @@ export function ChatColumn({
             slots={slots}
             target={selectedRecommendation?.target}
             clientNote={selectedRecommendation?.clientNote}
+            verdict={verdictOf(asks, selected.tripPlaceId)}
             variant="overlay"
             onClose={() => select(null)}
             actions={actions}

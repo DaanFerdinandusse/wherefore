@@ -1,4 +1,5 @@
 import type { ChatOpening, SlotName } from "@/lib/contracts";
+import { isFeelWord } from "@/lib/trips/taste-words";
 
 // The first message of an empty chat (S1), composed in code from trip facts:
 // no model run and no search happens until the advisor answers. A chat on a
@@ -25,6 +26,8 @@ export type OpeningFacts = {
   filled: { day: number; slot: SlotName }[];
   /** The number of trip days (from the dates, else what the itinerary uses). */
   dayCount: number;
+  /** The client's taste tags, strongest first. */
+  taste?: readonly { name: string; type?: string }[];
 };
 
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
@@ -91,12 +94,31 @@ function list(items: readonly string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
+const AFTER = /speakeasy|cocktail/i;
+const MAX_FEEL = 3;
+
+/** "Ana loves cozy, intimate, lively places. Italian for dinner, a speakeasy after." Null without taste to speak of. */
+export function tasteSentence(client: string, taste: OpeningFacts["taste"]): string | null {
+  const names = [...new Set((taste ?? []).map((t) => t.name.trim()).filter(Boolean))];
+  const feel = names.filter(isFeelWord).slice(0, MAX_FEEL).map((n) => n.toLowerCase());
+  if (feel.length < 2) return null;
+  const lead = `${client} loves ${feel.join(", ")} places.`;
+  const cuisine = (taste ?? []).find((t) => t.type?.includes("cuisine") && !/^(european|cafe|cafes)$/i.test(t.name))?.name;
+  const after = names.find((n) => AFTER.test(n));
+  const dinner = cuisine ? `${cuisine} for dinner` : null;
+  const later = after ? (/speakeasy/i.test(after) ? "a speakeasy after" : "cocktails after") : null;
+  const tail = [dinner, later].filter(Boolean).join(", ");
+  return tail ? `${lead} ${capitalize(tail)}.` : lead;
+}
+
 export function composeOpening(facts: OpeningFacts): ChatOpening {
   const client = firstName(facts.clientName);
   const who = joinNames(facts.travelerNames.length ? facts.travelerNames : [facts.clientName]);
   const range = dateRange(facts.startDate, facts.endDate);
   const created = [who, facts.destination, range].filter(Boolean).join(", ");
   const placeholder = `Tell me what ${client} wants from ${facts.destination}`;
+  // Talk about the person first; the mechanics stay out of it.
+  const known = facts.favoritesCount > 0 ? tasteSentence(client, facts.taste) : null;
 
   if (facts.filled.length > 0) {
     const count = facts.filled.length;
@@ -109,11 +131,12 @@ export function composeOpening(facts: OpeningFacts): ChatOpening {
         : open.length <= 4
           ? ` Nothing is planned yet on ${list(open.map((d) => dayName(d, facts.startDate)))}.`
           : ` ${capitalize(numberWord(open.length))} days have nothing planned yet.`;
-    return { created, createdFrom: "From the new trip form", paragraphs: [first + openLine, NEXT_QUESTION], placeholder };
+    return { created, createdFrom: "From the new trip form", paragraphs: [...(known ? [known] : []), first + openLine, NEXT_QUESTION], placeholder };
   }
 
   const days = daysBetween(facts.startDate, facts.endDate);
   const lead = days ? `${capitalize(numberWord(days))} ${days === 1 ? "day" : "days"} in ${facts.destination} for ${who}.` : `A trip to ${facts.destination} for ${who}.`;
+  if (known) return { created, createdFrom: "From the new trip form", paragraphs: [known, `${lead} ${BRIEF_QUESTION}`], placeholder };
   let match: string;
   if (facts.favoritesCount > 0) {
     const owners = list((facts.favoriteOwners?.length ? facts.favoriteOwners : [facts.clientName]).map((name) => `${firstName(name)}'s`));

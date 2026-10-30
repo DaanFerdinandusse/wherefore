@@ -220,3 +220,9 @@ open localhost:3000/chat-lab  # the dock on a dev trip; ?chat=<id> for a given c
 npx workflow web              # inspect runs and steps
 PORT=3000 PLAYWRIGHT_CHANNEL=chrome npx playwright test e2e/chat
 ```
+
+## Weighing
+
+`weigh.ts` is the agent choosing out loud. After a search is scored and explained, one model call gives every candidate a stand (pick, backup, out) and one honest line, and may ask for one more search. find_places (`tools/find-places.ts`) streams the lines one at a time, runs that search into the same result set, and weighs the new places against the pick. These words are model-written, unlike `explain.ts`, so `weigh.ts` holds them to the facts: a line that names a favorite or claims hours, prices or reservations falls back to the shared taste. A failed call keeps the search's own order.
+
+The verdicts live on the ask (`query.verdicts`), so a line follows its place into the itinerary and survives a reload. Scores are dealt out again in the agent's order. `recommend_place` always takes the weighed pick, whatever id the model passes.

@@ -106,6 +106,7 @@ export function findPlacesForModel(output: FindPlacesOutput): ModelText {
       })),
     });
   }
+  const pick = output.verdicts?.find((v) => v.stand === "pick");
   return modelText({
     ask_id: output.askId,
     label: output.label,
@@ -119,10 +120,16 @@ export function findPlacesForModel(output: FindPlacesOutput): ModelText {
     ...(output.groundRules?.length
       ? { ground_rules: output.groundRules.map((rule) => (rule.length > MAX_RULE_CHARS ? `${rule.slice(0, MAX_RULE_CHARS - 1)}…` : rule)) }
       : {}),
-    places: output.places.map((card) => ({
-      ...cardForModel(card),
-      ...(output.hoursUnknown?.includes(card.tripPlaceId) ? { hours_unknown: true } : {}),
-    })),
+    ...(output.searches ? { searches_run: output.searches } : {}),
+    ...(pick ? { pick_id: pick.tripPlaceId } : {}),
+    places: output.places.map((card) => {
+      const verdict = output.verdicts?.find((v) => v.tripPlaceId === card.tripPlaceId);
+      return {
+        ...cardForModel(card),
+        ...(output.hoursUnknown?.includes(card.tripPlaceId) ? { hours_unknown: true } : {}),
+        ...(verdict ? { stand: verdict.stand, your_line: `${verdict.good} ${verdict.rest}`.trim() } : {}),
+      };
+    }),
   });
 }
 
@@ -132,7 +139,7 @@ export function recommendPlaceForModel(output: RecommendPlaceOutput): ModelText 
     recommended: cardForModel(output.card),
     ...(output.target ? { for_slot: output.target.label, in_itinerary: false } : {}),
     shown_to_advisor:
-      "The card in the chat shows the photos, the match, the favorites behind it, what reviews mention and the visit facts. Do not list them: say which fact decided the pick.",
+      "The card in the chat shows the photos, the match, your line on this place and the visit facts. Do not repeat them. Reply with one short question about what to plan next and nothing about this place, unless a ground rule could not be confirmed.",
   });
 }
 

@@ -16,7 +16,7 @@ export function SearchResults({ recommendation, liveRecommendationId, renderCard
   const [selectedId, setSelectedId] = useState<string>();
   const selected = props.output?.places.find((place) => place.tripPlaceId === selectedId);
   const current = recommendation?.toolCallId === liveRecommendationId ? recommendation : undefined;
-  const shown: Recommendation | undefined = selected
+  const browsed: Recommendation | undefined = selected
     ? {
         card: selected,
         askId: props.output?.askId,
@@ -25,6 +25,8 @@ export function SearchResults({ recommendation, liveRecommendationId, renderCard
         clientNote: selected.tripPlaceId === recommendation?.card.tripPlaceId ? recommendation.clientNote : undefined,
       }
     : current;
+  const verdict = props.output?.verdicts?.find((v) => v.tripPlaceId === browsed?.card.tripPlaceId);
+  const shown = browsed && verdict ? { ...browsed, verdict } : browsed;
 
   return (
     <div className="flex flex-col gap-3.5" data-testid="search-results">

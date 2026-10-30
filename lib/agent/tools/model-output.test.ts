@@ -157,9 +157,9 @@ describe("scorePlacesForModel", () => {
 });
 
 describe("recommendPlaceForModel", () => {
-  it("asks for the deciding fact instead of telling the model to stay silent on facts", () => {
+  it("tells the model the card already says why, so its reply does not repeat it", () => {
     const { value } = recommendPlaceForModel({ card });
-    expect(value).toContain("say which fact decided the pick");
-    expect(value).not.toContain("Do not repeat them");
+    expect(value).toContain("your line on this place");
+    expect(value).toContain("Do not repeat them");
   });
 });
