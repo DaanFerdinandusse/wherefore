@@ -10,6 +10,7 @@ import {
   advisorPlaces,
   advisors,
   askPlaces,
+  clientFavorites,
   clients,
   itinerarySlots,
   places,
@@ -365,6 +366,8 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
     .groupBy(tripPlaces.tripId)
     .as("place_counts");
 
+  // Today's itinerary day: day 1 is the start date.
+  const todayDay = sql`(${today}::date - ${trips.startDate} + 1)`;
   const slotCounts = db
     .select({
       tripId: itinerarySlots.tripId,
@@ -375,11 +378,44 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
         "filled_days",
       ),
       maxDay: sql<number | null>`max(${itinerarySlots.day})`.as("max_day"),
+      tonightFilled: sql<number>`(count(*) filter (where ${itinerarySlots.tripPlaceId} is not null and ${itinerarySlots.slot} in ('dinner', 'night') and ${itinerarySlots.day} = ${todayDay}))::int`.as(
+        "tonight_filled",
+      ),
     })
     .from(itinerarySlots)
+    .innerJoin(trips, eq(trips.id, itinerarySlots.tripId))
     .where(inArray(itinerarySlots.tripId, pageIds))
     .groupBy(itinerarySlots.tripId)
     .as("slot_counts");
+
+  // Favorites per client of the page's trips: none means "Needs <name>'s favorites".
+  const favoriteCounts = db
+    .select({
+      clientId: clientFavorites.clientId,
+      favorites: sql<number>`count(*)::int`.as("favorites"),
+    })
+    .from(clientFavorites)
+    .where(
+      inArray(
+        clientFavorites.clientId,
+        db.select({ clientId: trips.clientId }).from(trips).where(inArray(trips.id, pageIds)),
+      ),
+    )
+    .groupBy(clientFavorites.clientId)
+    .as("favorite_counts");
+
+  // The newest search per trip that is not archived.
+  const lastAsks = db
+    .selectDistinctOn([tripAsks.tripId], {
+      tripId: tripAsks.tripId,
+      status: sql<string>`${tripAsks.status}`.as("ask_status"),
+      resultCount: sql<number>`${tripAsks.resultCount}`.as("ask_result_count"),
+      updatedAt: sql<string>`${tripAsks.updatedAt}`.as("ask_updated_at"),
+    })
+    .from(tripAsks)
+    .where(and(inArray(tripAsks.tripId, pageIds), ne(tripAsks.status, "archived")))
+    .orderBy(tripAsks.tripId, desc(tripAsks.createdAt))
+    .as("last_asks");
 
   // The city photo: the first image of the best scored place still on the trip.
   const covers = db
@@ -412,6 +448,11 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
       filledSlots: slotCounts.filledSlots,
       filledDays: slotCounts.filledDays,
       maxDay: slotCounts.maxDay,
+      tonightFilled: slotCounts.tonightFilled,
+      favorites: favoriteCounts.favorites,
+      askStatus: lastAsks.status,
+      askResultCount: lastAsks.resultCount,
+      askUpdatedAt: lastAsks.updatedAt,
     })
     .from(page)
     .innerJoin(trips, eq(trips.id, page.id))
@@ -419,6 +460,8 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
     .leftJoin(placeCounts, eq(placeCounts.tripId, trips.id))
     .leftJoin(slotCounts, eq(slotCounts.tripId, trips.id))
     .leftJoin(covers, eq(covers.tripId, trips.id))
+    .leftJoin(favoriteCounts, eq(favoriteCounts.clientId, trips.clientId))
+    .leftJoin(lastAsks, eq(lastAsks.tripId, trips.id))
     .orderBy(desc(trips.updatedAt), asc(trips.id));
 
   const board: TripsByStage = {
@@ -446,14 +489,28 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
       stage: cardStage,
       stageOverride: isTripStage(t.stageOverride) ? t.stageOverride : null,
       shareToken: t.shareToken,
+      sharedAt: t.sharedAt,
+      shareFirstOpenedAt: t.shareFirstOpenedAt,
+      shareLastOpenedAt: t.shareLastOpenedAt,
+      shareOpensTracked: t.shareOpensTracked,
       seedStatus: t.seedStatus,
       imageUrl: row.imageUrl ?? null,
+      clientFavorites: row.favorites ?? 0,
+      lastAsk:
+        row.askStatus === null
+          ? null
+          : {
+              status: row.askStatus,
+              resultCount: Number(row.askResultCount ?? 0),
+              updatedAt: new Date(row.askUpdatedAt ?? t.updatedAt),
+            },
       counts: {
         places: row.places ?? 0,
         added: row.added ?? 0,
         filledSlots: row.filledSlots ?? 0,
         days,
         emptyDays: Math.max(0, days - (row.filledDays ?? 0)),
+        tonightFilled: row.tonightFilled ?? 0,
       },
       updatedAt: t.updatedAt,
     };

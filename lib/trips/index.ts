@@ -29,6 +29,7 @@ export {
   createAsk,
   createTrip,
   logTripCall,
+  recordShareOpen,
   revokeShare,
   saveReplacement,
   setShareToken,

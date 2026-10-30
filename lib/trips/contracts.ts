@@ -73,9 +73,20 @@ export type TripCard = {
   /** The stage set by hand (a drag or "Move to"), null while the stage is computed. */
   stageOverride: TripStage | null;
   shareToken: string | null;
+  /** When the share link was first created. */
+  sharedAt: Date | null;
+  /** When the traveler first and last opened the share link; null until they do. */
+  shareFirstOpenedAt: Date | null;
+  shareLastOpenedAt: Date | null;
+  /** Opens of this link are recorded (it was created after tracking began), so "not opened" is a fact. */
+  shareOpensTracked: boolean;
   seedStatus: string;
   /** First image of the trip's best scored place, for the city photo. */
   imageUrl: string | null;
+  /** Favorites on the client's profile. 0 means a search has nothing to start from. */
+  clientFavorites: number;
+  /** The newest search on the trip that is not archived, or null before the first. */
+  lastAsk: { status: string; resultCount: number; updatedAt: Date } | null;
   counts: {
     /** Trip places not removed. */
     places: number;
@@ -85,6 +96,8 @@ export type TripCard = {
     days: number;
     /** Days without a single filled slot ("itinerary has 2 empty days"). */
     emptyDays: number;
+    /** Filled dinner and night slots on today's itinerary day; 0 when today is outside the dates. */
+    tonightFilled: number;
   };
   updatedAt: Date;
 };
@@ -232,6 +245,12 @@ export type UpdateTrip = (id: string, patch: TripPatch, scope: ScopeInput) => Pr
 /** Creates the share token once; calling again keeps the same link. */
 export type SetShareToken = (id: string, scope: ScopeInput) => Promise<Trip>;
 export type RevokeShare = (id: string, scope: ScopeInput) => Promise<Trip>;
+/**
+ * The traveler opened the share link: sets the first open once and the last
+ * open every time. A visit by the trip's own advisor (in `viewer` scope) is
+ * not an open. Leaves updated_at alone, so the board order does not move.
+ */
+export type RecordShareOpen = (token: string, viewer: ScopeInput | null) => Promise<void>;
 /** A drag on the Trips board. Null returns the trip to its computed stage. */
 export type SetStageOverride = (id: string, stage: TripStage | null, scope: ScopeInput) => Promise<Trip>;
 
