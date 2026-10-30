@@ -176,8 +176,8 @@ export function cardPopularity(value: unknown): number | undefined {
 
 /**
  * Does the provider link the place to Michelin? external.michelin is a list of
- * { id, stars } in /v2/insights and one { id } in /search and /entities. Stars
- * are often null, so the key means listed, never starred.
+ * { id, stars } in /v2/insights and one { id, stars? } in /search and /entities.
+ * Stars are often null, so the key means listed, never starred.
  */
 export function cardMichelin(external: unknown): boolean {
   if (typeof external !== "object" || external === null) return false;

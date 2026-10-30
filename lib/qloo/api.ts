@@ -33,6 +33,7 @@ import {
   displayScore,
   distanceFromDestination,
   explainabilityFor,
+  hasHoursOn,
   isCategoryTagFilter,
   isTooFar,
   isUnpricedTagFilter,
@@ -57,8 +58,8 @@ import {
 const PLACE = "urn:entity:place";
 /** Fewer results than this and findPlaces loosens its filters. */
 export const MIN_RESULTS = 5;
-/** An open-for-the-slot search asks for this many times its take: a dinner search loses the places that only do lunch. */
-const SLOT_OVERFETCH = 3;
+/** A search for an open day asks for this many times its take: the check on each place's own hours comes after it. */
+const OPEN_DAY_OVERFETCH = 3;
 const MAX_UPSTREAM_TAKE = 50;
 const PORTRAIT_TAG_TYPES = ["urn:tag:ambience:qloo", "urn:tag:cuisine:qloo", "urn:tag:decor:qloo"];
 const ENTITY_CHUNK = 25;
@@ -136,14 +137,20 @@ export const searchEntities: SearchEntities = async (query, options, ctx) => {
  * text geocoder picks the wrong city for ambiguous names), and every result
  * farther than 1.5x the radius is dropped (distance from the API, or computed
  * from the coordinates). With fewer than 5 kept results it drops one filter at
- * a time, in this order: tags, popularity, Michelin, price, the open day. An
- * ask for a bare category keeps it longer: popularity, Michelin, price, the
- * category, the open day, because a bar for a dinner ask is worse than a
- * restaurant that misses one option. The open day goes last because a closed
- * restaurant is the worst outcome, and a place whose own hours say closed that
- * day, or for that slot, never comes back on any step. Every drop is named in
- * `loosened`, the whole search's and each result's own. Strict results always
- * come first; looser steps only fill the slots that are left.
+ * a time, in this order: tags, popularity, Michelin, price. An ask for a bare
+ * category keeps it longer: popularity, Michelin, price, the category, because
+ * a bar for a dinner ask is worse than a restaurant that misses one option.
+ *
+ * Open and closed come from /entities, read for every place of every step,
+ * because /v2/insights is not reliable on either: it lists the first span of a
+ * day, calls some open places closed all week (filter.hours drops them with no
+ * trace), and reports no place as closed for good. So filter.hours is not sent.
+ * A closed-for-good place never comes back, and on an open day neither does one
+ * whose hours say closed that day or for that slot. A place with no hours on
+ * record comes last, after every other filter has gone, as loosened "hours".
+ *
+ * Every drop is named in `loosened`, the whole search's and each result's own.
+ * Strict results always come first; looser steps only fill the slots left.
  * @throws QlooLocalityMismatchError when results came back but none of them is
  *   near the destination.
  */
@@ -165,7 +172,7 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
     "signal.interests.entities": hasSignals ? signals : undefined,
     "feature.explainability": hasSignals ? true : undefined,
     "filter.exclude.entities": input.excludeIds?.length ? input.excludeIds : undefined,
-    take: slot ? Math.min(MAX_UPSTREAM_TAKE, input.take * SLOT_OVERFETCH) : input.take,
+    take: input.openDay ? Math.min(MAX_UPSTREAM_TAKE, input.take * OPEN_DAY_OVERFETCH) : input.take,
     page: input.page,
   };
 
@@ -180,7 +187,6 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
   if (input.michelin) filters.push({ drop: "michelin", params: { "filter.external.exists": "michelin" } });
   if (hasPrice) filters.push({ drop: "price", params: { "filter.price_level.max": input.priceMax } });
   if (bareCategory) filters.push(tagFilter);
-  if (input.openDay) filters.push({ drop: "hours", params: { "filter.hours": input.openDay } });
 
   // Strict first, then each loosening step in order. Each step keeps the
   // previous ones dropped.
@@ -199,6 +205,8 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
   const stages: Candidate[][] = [];
   const seen = new Set<string>();
   const far: PlaceResult[] = [];
+  // No hours on record for the open day: the last resort, after every filter.
+  const noHours: Candidate[] = [];
   let kept = 0;
   let localityLabel: string | undefined;
 
@@ -211,24 +219,31 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
     });
     calls.push(call);
     localityLabel ??= data.query?.localities?.filter?.[0]?.disambiguation ?? undefined;
-    let stage: Candidate[] = [];
+    const found: Candidate[] = [];
     for (const raw of data.results.entities) {
       if (seen.has(raw.entity_id)) continue;
       seen.add(raw.entity_id);
       const place = normalizePlace(raw);
-      if (input.openDay && closedOn(place.properties.hours, input.openDay)) continue;
       const distanceM = distanceFromDestination(destination, place, raw.query.distance);
       if (isTooFar(destination, distanceM)) far.push(toResult({ raw, place, distanceM, dropped }, []));
-      else stage.push({ raw, place, distanceM, dropped });
+      else found.push({ raw, place, distanceM, dropped });
     }
-    if (input.openDay && slot) {
-      const { openDay } = input;
-      const hours = await fullHours(stage.map((c) => c.raw.entity_id), ctx);
-      calls.push(...hours.calls);
-      // Only on full hours: the first span alone would take a dinner for shut.
-      stage = stage
-        .map((c) => withFullHours(c, hours.byEntity))
-        .filter((c) => !c.fullHours || openDuring(c.place.properties.hours, openDay, slot));
+    const facts = await entityFacts(found.map((c) => c.raw.entity_id), ctx);
+    calls.push(...facts.calls);
+    const stage: Candidate[] = [];
+    for (const candidate of found.map((c) => withEntityFacts(c, facts.byEntity))) {
+      const { hours, is_closed: closedForGood } = candidate.place.properties;
+      if (closedForGood === true) continue;
+      if (input.openDay) {
+        if (closedOn(hours, input.openDay)) continue;
+        // Only on /entities hours: the first span alone would take a dinner for shut.
+        if (slot && candidate.fullHours && !openDuring(hours, input.openDay, slot)) continue;
+        if (!hasHoursOn(hours, input.openDay)) {
+          noHours.push({ ...candidate, dropped: [...candidate.dropped, "hours"] });
+          continue;
+        }
+      }
+      stage.push(candidate);
     }
     stage.sort((a, b) => b.raw.query.affinity - a.raw.query.affinity);
     stages.push(stage);
@@ -236,15 +251,14 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
     if (kept >= enough) break;
   }
 
-  if (kept === 0 && far.length > 0) {
+  if (kept + noHours.length === 0 && far.length > 0) {
     const requested = destination.disambiguation ?? destination.name;
     throw new QlooLocalityMismatchError(requested, localityLabel ?? majorityLocalityLabel(far) ?? "unknown");
   }
 
-  const top = stages.flat().slice(0, input.take);
-  const hours = await fullHours(top.filter((c) => !c.fullHours).map((c) => c.raw.entity_id), ctx);
-  calls.push(...hours.calls);
-  const picked = top.map((c) => withFullHours(c, hours.byEntity));
+  stages.push(noHours.sort((a, b) => b.raw.query.affinity - a.raw.query.affinity));
+  const picked = stages.flat().slice(0, input.take);
+  if (picked.some((c) => c.dropped.includes("hours"))) loosened.push("hours");
   const affinities = picked.map((c) => c.raw.query.affinity);
   const results = picked.map((c) => toResult(c, affinities));
   const localityCheck = checkLocality(destination, results, localityLabel, far.length);
@@ -259,19 +273,23 @@ type Candidate = {
   fullHours?: true;
 };
 
+type EntityFacts = { hours?: unknown; closedForGood: boolean };
+
 /**
- * /v2/insights lists only the first opening span of a day, so a restaurant open
- * for lunch and dinner reads as shut by 16:00. /entities has every span. Places
- * go on the board with these hours. A failed lookup keeps what the search
- * returned: hours help, they are no reason to lose a search.
+ * What /entities knows about places and /v2/insights does not: every opening
+ * span of a day, and that a place has closed for good (is_closed, false on every
+ * /v2/insights row). Places go on the board with these. A failed lookup keeps
+ * what the search returned: this is no reason to lose a search.
  */
-async function fullHours(entityIds: string[], ctx: CallContext | undefined): Promise<{ byEntity: Map<string, unknown>; calls: QlooCall[] }> {
-  const byEntity = new Map<string, unknown>();
+async function entityFacts(entityIds: string[], ctx: CallContext | undefined): Promise<{ byEntity: Map<string, EntityFacts>; calls: QlooCall[] }> {
+  const byEntity = new Map<string, EntityFacts>();
   if (entityIds.length === 0) return { byEntity, calls: [] };
   try {
     const { places, calls } = await getEntities(entityIds, ctx);
-    for (const place of places) {
-      if (place.properties.hours) byEntity.set(place.entityId, place.properties.hours);
+    for (const { entityId, properties } of places) {
+      const { hours, is_closed: closed } = properties;
+      const listed = typeof hours === "object" && hours !== null && Object.keys(hours).length > 0;
+      byEntity.set(entityId, { closedForGood: closed === true, ...(listed ? { hours } : {}) });
     }
     return { byEntity, calls };
   } catch {
@@ -279,9 +297,14 @@ async function fullHours(entityIds: string[], ctx: CallContext | undefined): Pro
   }
 }
 
-function withFullHours<T extends { place: NormalizedPlace; raw: { entity_id: string } }>(item: T, byEntity: ReadonlyMap<string, unknown>): T & { fullHours?: true } {
-  const hours = byEntity.get(item.raw.entity_id);
-  return hours ? { ...item, place: { ...item.place, properties: { ...item.place.properties, hours } }, fullHours: true } : item;
+function withEntityFacts<T extends { place: NormalizedPlace; raw: { entity_id: string } }>(
+  item: T,
+  byEntity: ReadonlyMap<string, EntityFacts>,
+): T & { fullHours?: true } {
+  const facts = byEntity.get(item.raw.entity_id);
+  if (!facts) return item;
+  const properties = { ...item.place.properties, is_closed: facts.closedForGood, ...(facts.hours ? { hours: facts.hours } : {}) };
+  return { ...item, place: { ...item.place, properties }, ...(facts.hours ? { fullHours: true as const } : {}) };
 }
 
 function toResult({ raw, place, distanceM, dropped }: Candidate, affinities: readonly number[]): PlaceResult {
@@ -332,14 +355,14 @@ export const scoreEntities: ScoreEntities = async (input, ctx) => {
       });
     }
   }
-  const hours = await fullHours(scores.map((s) => s.entityId), ctx);
-  calls.push(...hours.calls);
-  const withHours = scores.map((s) => {
-    const { place } = withFullHours({ place: s.place, raw: { entity_id: s.entityId } }, hours.byEntity);
+  const facts = await entityFacts(scores.map((s) => s.entityId), ctx);
+  calls.push(...facts.calls);
+  const withFacts = scores.map((s) => {
+    const { place } = withEntityFacts({ place: s.place, raw: { entity_id: s.entityId } }, facts.byEntity);
     return { ...s, place };
   });
-  withHours.sort((a, b) => b.affinity - a.affinity);
-  return { scores: withHours, calls };
+  withFacts.sort((a, b) => b.affinity - a.affinity);
+  return { scores: withFacts, calls };
 };
 
 // -------------------------------------------------------------- taste portrait

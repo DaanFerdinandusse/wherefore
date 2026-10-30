@@ -38,7 +38,9 @@ function rawPlace(entityId: string, name: string, affinity: number, favorites: [
 function fakeClient(entities: unknown[]) {
   const urls: URL[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
-    urls.push(new URL(String(input)));
+    const url = new URL(String(input));
+    if (url.pathname === "/entities") return new Response(JSON.stringify({ success: true, results: [] }), { status: 200 });
+    urls.push(url);
     return new Response(JSON.stringify({ success: true, results: { entities } }), { status: 200 });
   });
   const client = createQlooClient({
@@ -253,8 +255,9 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
     expect(members).toHaveLength(2);
     const calls = await db.select().from(tripCalls).where(eq(tripCalls.tripId, tripId));
     // Three results are fewer than five, so the tags were dropped for a second call: both are logged.
-    expect(calls).toHaveLength(2);
-    expect(calls[0]).toMatchObject({ endpoint: "/v2/insights", source: `ask:${askId}`, count: 3, loosened: ["tags"] });
+    const searches = calls.filter((call) => call.endpoint === "/v2/insights");
+    expect(searches).toHaveLength(2);
+    expect(searches[0]).toMatchObject({ source: `ask:${askId}`, count: 3, loosened: ["tags"] });
     expect(urls[1]!.searchParams.get("filter.exclude.entities")).toBe(params.get("filter.exclude.entities"));
   });
 
@@ -291,10 +294,9 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
     const params = urls[0]!.searchParams;
     expect(params.get("filter.popularity.max")).toBe("0.6");
     expect(params.get("filter.external.exists")).toBe("michelin");
-    expect(params.get("filter.hours")).toBe("tuesday");
     // One place back from the first step, so the search tried to drop every
-    // filter, the open day last. That one place needed none of it.
-    expect(urls.at(-1)!.searchParams.has("filter.hours")).toBe(false);
+    // filter. That one place needed none of it.
+    expect(urls.at(-1)!.searchParams.has("filter.popularity.max")).toBe(false);
     expect(notes).toEqual([]);
     // The facts reach the card from places.properties.
     expect(card).toMatchObject({ name: "Hidden gem", popularity: 0.02, michelin: true });
@@ -312,8 +314,9 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
       apiKey: "k",
       baseUrl: "https://api.example.test",
       fetch: vi.fn<typeof globalThis.fetch>(async (input) => {
-        const open = new URL(String(input)).searchParams.has("filter.hours");
-        const entities = open ? [] : [rawPlace(entity("no-hours-known"), "Check its hours", 0.8, favs)];
+        if (new URL(String(input)).pathname === "/entities") return new Response(JSON.stringify({ success: true, results: [] }), { status: 200 });
+        const known = rawPlace(entity("no-hours-known"), "Check its hours", 0.8, favs);
+        const entities = [{ ...known, properties: { ...known.properties, hours: undefined } }];
         return new Response(JSON.stringify({ success: true, results: { entities } }), { status: 200 });
       }),
       store: memoryCacheStore(),

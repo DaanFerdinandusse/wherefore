@@ -17,7 +17,7 @@ export function isLessKnown(popularity: number | undefined): boolean {
   return popularity !== undefined && popularity < LESS_KNOWN_POPULARITY_MAX;
 }
 
-/** The hours block's keys and the values filter.hours takes. */
+/** The hours block's keys. */
 export const WEEKDAY_NAMES: readonly Weekday[] = [
   "monday",
   "tuesday",
@@ -33,6 +33,13 @@ export function closedOn(hours: unknown, day: Weekday): boolean {
   if (!hours || typeof hours !== "object") return false;
   const spans = (hours as Record<string, unknown>)[day];
   return Array.isArray(spans) && spans.length > 0 && spans.every((span) => (span as { closed?: unknown } | null)?.closed === true);
+}
+
+/** Does a place's hours block say anything about this day? */
+export function hasHoursOn(hours: unknown, day: Weekday): boolean {
+  if (!hours || typeof hours !== "object") return false;
+  const spans = (hours as Record<string, unknown>)[day];
+  return Array.isArray(spans) && spans.length > 0;
 }
 
 // The hours a slot covers, in minutes from midnight. A guide for "open for
@@ -402,9 +409,10 @@ export function favoriteDrivers<T extends { entityId: string; name: string }>(be
  * percentages that sum to exactly 100 (largest remainder rounding), biggest
  * first. Inputs that are not in `favorites` (no name to show) are never
  * rescaled away: together they become one "Other favorites" entry, listed
- * last, so a named share is never inflated. Empty when no driver has a name,
- * or when the API returned no explainability (for example with tag signals
- * only).
+ * last. From about 10 signals the API lists only the strongest (their scores
+ * sum to about 0.92), so there a share runs about 8% high and the weakest
+ * favorites have no row. Empty when no driver has a name, or when the API
+ * returned no explainability (for example with tag signals only).
  */
 export function explainabilityFor(
   result: { signalScores: readonly SignalScore[] },

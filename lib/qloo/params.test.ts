@@ -55,10 +55,8 @@ describe("serializeParams", () => {
     expect(() => serializeParams("/v2/insights", { "filter.external.exists": "resy" })).toThrow(/michelin/);
   });
 
-  it("takes filter.hours as a lower case weekday name", () => {
-    expect(serializeParams("/v2/insights", { "filter.hours": "monday" })).toEqual([["filter.hours", "monday"]]);
-    expect(() => serializeParams("/v2/insights", { "filter.hours": "Monday" })).toThrow(/must be one of/);
-    expect(() => serializeParams("/v2/insights", { "filter.hours": "mon" })).toThrow(/must be one of/);
+  it("does not take filter.hours: open days are checked on /entities hours", () => {
+    expect(() => serializeParams("/v2/insights", { "filter.hours": "monday" })).toThrow(/not an allowed param/);
   });
 
   it("allows the new filters on insights only", () => {
@@ -101,8 +99,8 @@ describe("cacheKey", () => {
       key({}),
       key({ "filter.popularity.max": 0.6 }),
       key({ "filter.external.exists": "michelin" }),
-      key({ "filter.hours": "monday" }),
-      key({ "filter.hours": "tuesday" }),
+      key({ "filter.price_level.max": 2 }),
+      key({ "filter.price_level.max": 3 }),
     ];
     expect(new Set(keys).size).toBe(keys.length);
   });

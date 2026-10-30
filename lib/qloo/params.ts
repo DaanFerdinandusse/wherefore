@@ -4,7 +4,6 @@
 // (QLOO_API_FINDINGS.md) are on the list; adding one means testing it first.
 
 import { QlooParamError } from "./errors";
-import { WEEKDAY_NAMES } from "./normalize";
 
 export type QlooEndpoint = "/search" | "/v2/insights" | "/v2/tags" | "/entities";
 
@@ -49,8 +48,6 @@ export const PARAM_ALLOWLIST: Record<QlooEndpoint, Record<string, ParamSpec>> = 
     "filter.popularity.max": { kind: "number", min: 0, max: 1 },
     // Only Michelin is on the list: it is the only key tested live.
     "filter.external.exists": { kind: "enum", values: ["michelin"] },
-    // A lower case weekday name. Places without an hours block do not pass.
-    "filter.hours": { kind: "enum", values: WEEKDAY_NAMES },
     "filter.exclude.entities": { kind: "list" },
     "filter.results.entities": { kind: "list" },
     "filter.tag.types": { kind: "list" },

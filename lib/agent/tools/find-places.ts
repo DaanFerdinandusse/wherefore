@@ -245,6 +245,7 @@ export function meetsAskConstraints(
   const { popularity, michelin } = placeFactsFromProperties(place.properties);
   if (constraints.popularityMax !== undefined && popularity !== undefined && popularity >= constraints.popularityMax) return false;
   if (constraints.michelin && !michelin) return false;
+  if (place.properties?.is_closed === true) return false;
   if (constraints.openDay && closedOn(place.properties?.hours, constraints.openDay)) return false;
   if (constraints.openDay && constraints.openSlot && !openDuring(place.properties?.hours, constraints.openDay, constraints.openSlot)) return false;
   const area = constraints.area;
