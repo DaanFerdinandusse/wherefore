@@ -138,6 +138,15 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
   });
 
+  it("keeps the first few tags of a long list instead of failing the search", async () => {
+    mocks.findPlaces.mockResolvedValue(found(["tags-a"]));
+    const tags = ["one", "two", "three", "four", "five"];
+    const output = await drain(findPlacesTool({ intent: "dinner", tags }, turn, `call-${++call}`));
+    expect(output.error).toBeUndefined();
+    const [ask] = await db.select({ query: tripAsks.query }).from(tripAsks).where(eq(tripAsks.id, output.askId!));
+    expect(ask?.query).toMatchObject({ tags: ["one", "two", "three", "four"] });
+  });
+
   it("does not search on a kind of place from another category", () => {
     expect(isOtherKindTag("urn:tag:category:place:boutique", "stay")).toBe(true);
     expect(isOtherKindTag("urn:tag:category:place:boutique_hotel", "stay")).toBe(false);

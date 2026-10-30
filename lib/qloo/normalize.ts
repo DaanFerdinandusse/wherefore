@@ -234,6 +234,10 @@ const COFFEE_LEAVES = new Set([
   "coffee_bar",
   "espresso_bar",
   "bakery",
+  // Sweets are a stop between meals, not a lunch or a dinner.
+  "ice_cream_shop",
+  "gelateria",
+  "dessert_shop",
   "patisserie",
   "pastry_shop",
   "cake_shop",

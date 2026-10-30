@@ -87,9 +87,8 @@ function realTools(turn: TurnRef) {
         category: categorySchema.optional().describe("The board category when it is clear"),
         tags: z
           .array(z.string().max(60))
-          .max(4)
           .optional()
-          .describe("The advisor's own words as short phrases, e.g. 'seafood', 'lively'"),
+          .describe("Up to 4 of the advisor's own words as short phrases, e.g. 'seafood', 'lively'. Not the client's taste: the favorites already drive the search"),
         price_max: z.number().int().min(1).max(4).optional().describe("Highest price level, 1 to 4"),
         area: z.string().max(60).optional().describe("A neighborhood inside the destination"),
         day_hint: z.string().max(30).optional().describe("The day or time when it is not a slot, e.g. 'Saturday'. On a trip without dates, the weekday of the target too"),

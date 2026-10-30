@@ -96,6 +96,8 @@ const MAX_ADVISOR_EXTRAS = 2;
 /** A category search asks for a few more: results of another kind are left out here. */
 const CATEGORY_SPARE = 3;
 const AREA_RADIUS_M = 1_500;
+/** Tags beyond this add nothing: a few more words are no reason to fail a search. */
+const MAX_TAGS = 4;
 const GENERIC_NOUNS: Record<string, SearchCategory> = {
   bar: "drink",
   bars: "drink",
@@ -338,6 +340,7 @@ export async function* findPlacesTool(
   const elapsed = () => Date.now() - started;
   const ctx = await loadToolTrip(turn.tripId);
   const take = clampTake(input.take);
+  const askedTags = input.tags?.slice(0, MAX_TAGS);
   const split = splitIntent(cleanIntent(input.intent, input.day_hint));
   const askCategory: SearchCategory | undefined = input.category ?? split.category ?? slotCategory(input.target?.slot);
   const target: SlotTarget | undefined = input.target
@@ -352,14 +355,14 @@ export async function* findPlacesTool(
     ...(openDay && input.target ? { openSlot: input.target.slot } : {}),
   };
   const label = askLabel(input.intent, target?.label ?? input.day_hint);
-  const terms = searchTerms(input.tags, split.text);
+  const terms = searchTerms(askedTags, split.text);
   const basedOn = basedOnFavorites(ctx.signals.favoritesUsed.map((f) => f.clientName));
   const key = (step: string) => ({ toolCallId, step });
 
   const askQuery = {
     intent: input.intent,
     ...(askCategory ? { category: askCategory } : {}),
-    ...(input.tags?.length ? { tags: input.tags } : {}),
+    ...(askedTags?.length ? { tags: askedTags } : {}),
     ...(input.price_max ? { priceMax: input.price_max } : {}),
     ...(input.area ? { area: input.area } : {}),
     ...(input.day_hint ? { day: input.day_hint } : {}),
@@ -456,7 +459,7 @@ export async function* findPlacesTool(
       }
 
       // Tags: what the advisor asked for in free text, else the category filter.
-      const wanted = [...(input.tags ?? []), ...(input.tags?.length ? [] : split.text ? [split.text] : [])];
+      const wanted = [...(askedTags ?? []), ...(askedTags?.length ? [] : split.text ? [split.text] : [])];
       const resolved = await resolveTags(wanted, askCategory, ctx, calls);
       const tags = resolved.ids.length > 0 ? resolved.ids : askCategory ? CATEGORY_FILTER_TAGS[askCategory] : [];
       // Kept on the ask so remove_place and the UI's replace can rerun the same search.
