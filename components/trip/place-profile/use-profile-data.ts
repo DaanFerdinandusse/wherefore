@@ -45,12 +45,13 @@ export function useTripPlaceProfile(open: boolean, tripPlaceId: string, initial?
 
 export function useGoogleDetails(placeId: string | null, hasGoogle: boolean, open: boolean, wantFull: boolean) {
   const [basic, setBasic] = useState<Keyed<GooglePlaceDetails> | null>(null);
+  const [basicSettled, setBasicSettled] = useState<string | null>(null);
   const [fullSettled, setFullSettled] = useState<string | null>(null);
   const [full, setFull] = useState<Keyed<GooglePlaceDetails> | null>(null);
 
   useEffect(() => {
     if (!open || !placeId || !hasGoogle) return;
-    return load(placeId, "basic", (value) => setBasic({ key: placeId, value }));
+    return load(placeId, "basic", (value) => setBasic({ key: placeId, value }), () => setBasicSettled(placeId));
   }, [open, placeId, hasGoogle]);
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export function useGoogleDetails(placeId: string | null, hasGoogle: boolean, ope
 
   const fullValue = full?.key === placeId ? full.value : null;
   const basicValue = basic?.key === placeId ? basic.value : null;
-  return { details: fullValue ?? basicValue, full: fullValue, fullLoading: Boolean(open && wantFull && hasGoogle && placeId && !fullValue && fullSettled !== placeId) };
+  return { basicLoading: Boolean(open && hasGoogle && placeId && !basicValue && !fullValue && basicSettled !== placeId), details: fullValue ?? basicValue, full: fullValue, fullLoading: Boolean(open && wantFull && hasGoogle && placeId && !fullValue && fullSettled !== placeId) };
 }
 
 function load(placeId: string, tier: DetailsTier, done: (value: GooglePlaceDetails) => void, settled?: () => void): () => void {

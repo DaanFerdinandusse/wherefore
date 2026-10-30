@@ -28,6 +28,7 @@ import { cn } from "@/lib/ui/cn";
 
 import { startPlaceDrag } from "../workspace/dnd";
 
+import { LoadingPhoto } from "./loading-photo";
 import { keywordBars, morePhotosLabel, shortAuthor } from "./card-format";
 import { ReviewsPanel, VisitPanel } from "./place-card-panels";
 import { firstName, namedDrivers, nextFreeSlot, priceSigns, tripDays, type SlotChoice } from "./profile-format";
@@ -98,10 +99,10 @@ export function PlaceCard({
   const client = firstName(trip.clientName);
   const [tab, setTab] = useState<Tab>("for");
   const [gallery, setGallery] = useState(false);
-  const { profile } = useTripPlaceProfile(true, card.tripPlaceId);
+  const { profile, failed: profileFailed } = useTripPlaceProfile(true, card.tripPlaceId);
   const place = profile?.place ?? null;
   const wantFull = tab !== "for" || gallery;
-  const { details, full, fullLoading } = useGoogleDetails(card.placeId, Boolean(place?.googlePlaceId), true, wantFull);
+  const { details, full, fullLoading, basicLoading } = useGoogleDetails(card.placeId, Boolean(place?.googlePlaceId), true, wantFull);
 
   const photos = useMemo<CardPhoto[]>(() => {
     const provider = (place?.images.length ? place.images : card.imageUrl ? [{ url: card.imageUrl }] : []).map((image, i) => ({
@@ -133,6 +134,7 @@ export function PlaceCard({
     >
       <PhotoStrip
         photos={photos}
+        loading={(!profile && !profileFailed) || basicLoading}
         name={card.name}
         tall={variant === "overlay"}
         tripPlaceId={card.tripPlaceId}
@@ -220,6 +222,7 @@ function GoogleCredit({ attributions }: { attributions?: GoogleAttribution[] }) 
 /** Big photo, second photo, and a third with "+N photos" (opens the gallery). */
 function PhotoStrip({
   photos,
+  loading,
   name,
   tall,
   chips,
@@ -227,6 +230,7 @@ function PhotoStrip({
   onOpenGallery,
 }: {
   photos: CardPhoto[];
+  loading: boolean;
   name: string;
   tall: boolean;
   chips: ReactNode;
@@ -234,11 +238,12 @@ function PhotoStrip({
   onOpenGallery: () => void;
 }) {
   const shown = photos.slice(0, 3);
+  const slotCount = loading ? 3 : shown.length;
   const more = morePhotosLabel(photos.length, shown.length);
   const onDragStart = (event: DragEvent) => startPlaceDrag(event, tripPlaceId);
   const height = tall ? "h-62" : "h-50";
 
-  if (shown.length === 0) {
+  if (slotCount === 0) {
     return (
       <div draggable onDragStart={onDragStart} className={cn("relative flex items-end rounded-photo bg-avatar p-3.5", height)}>
         <span className="absolute inset-0 flex items-center justify-center font-display text-card-md text-text-2">{name[0]}</span>
@@ -252,34 +257,34 @@ function PhotoStrip({
       <div
         className={cn(
           "relative overflow-hidden bg-avatar",
-          shown.length === 1 ? "w-full rounded-photo" : "w-[52%] shrink-0 rounded-l-photo rounded-r-lg",
+          slotCount === 1 ? "w-full rounded-photo" : "w-[52%] shrink-0 rounded-l-photo rounded-r-lg",
         )}
       >
-        <FilmImage src={shown[0]!.src} alt={shown[0]!.alt} sizes="380px" unoptimized />
-        <GoogleCredit attributions={shown[0]!.attributions} />
+        <LoadingPhoto key={shown[0]?.src ?? "pending"} photo={shown[0]} sizes="380px" />
+        <GoogleCredit attributions={shown[0]?.attributions} />
         <div className="absolute bottom-3.5 left-3.5 flex flex-wrap gap-1.5">{chips}</div>
       </div>
-      {shown[1] ? (
-        <div className={cn("relative overflow-hidden bg-avatar", shown.length === 2 ? "grow rounded-l-lg rounded-r-photo" : "w-[27.5%] shrink-0 rounded-lg")}>
-          <FilmImage src={shown[1].src} alt={shown[1].alt} sizes="200px" unoptimized />
-          <GoogleCredit attributions={shown[1].attributions} />
+      {slotCount > 1 ? (
+        <div className={cn("relative overflow-hidden bg-avatar", slotCount === 2 ? "grow rounded-l-lg rounded-r-photo" : "w-[27.5%] shrink-0 rounded-lg")}>
+          <LoadingPhoto key={shown[1]?.src ?? "pending"} photo={shown[1]} sizes="200px" />
+          <GoogleCredit attributions={shown[1]?.attributions} />
         </div>
       ) : null}
-      {shown[2] ? (
+      {slotCount > 2 ? (
         <button
           type="button"
           onClick={onOpenGallery}
           aria-label={`See all ${photos.length} photos of ${name}`}
           className="relative grow overflow-hidden rounded-l-lg rounded-r-photo bg-avatar"
         >
-          <FilmImage src={shown[2].src} alt={shown[2].alt} sizes="140px" unoptimized />
+          <LoadingPhoto key={shown[2]?.src ?? "pending"} photo={shown[2]} sizes="140px" />
           {more ? (
             <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-ink/50 text-white">
               <span className="text-2xl leading-7 font-semibold">{more}</span>
               <span className="text-ui-sm leading-4 font-semibold">photos</span>
             </span>
           ) : (
-            <GoogleCredit attributions={shown[2].attributions} />
+            <GoogleCredit attributions={shown[2]?.attributions} />
           )}
         </button>
       ) : null}
