@@ -103,6 +103,7 @@ export function GoogleSurface({
   return (
     <Map
       mapId={mapId}
+      colorScheme="LIGHT"
       renderingType={RenderingType.VECTOR}
       gestureHandling="greedy"
       disableDefaultUI
