@@ -212,8 +212,11 @@ describe.skipIf(!hasDatabase)("trips", () => {
       seedStatus: "pending",
       builtFrom: undefined,
       chatId,
+      party: { adults: expect.any(Number), children: expect.any(Number) },
     });
     expect(snapshot!.travelers.map((t) => t.role)).toEqual(["client", "guest"]);
+    // The client's favorites ride along for the panel's chips.
+    expect(Array.isArray(snapshot!.travelers[0].favorites)).toBe(true);
     expect(snapshot!.asks).toEqual([
       { id: ask.id, label: "Natural wine · Sat", status: "running", resultCount: 1, elapsedMs: undefined, toolCallId: `call-${run.owner}`, loosened: [] },
     ]);

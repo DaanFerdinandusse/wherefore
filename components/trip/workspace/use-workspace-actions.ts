@@ -157,6 +157,40 @@ export function useWorkspaceActions() {
       );
     }
 
+    /** Takes the place out of a slot and keeps the slot's note where it is. */
+    async function emptySlotKeepNote(ref: SlotRef): Promise<boolean> {
+      const state = store.getState();
+      const position = ref.position ?? 0;
+      const row = slotAt(state.slots, ref.day, ref.slot, position);
+      if (!row?.note.trim()) return clearSlotAt(ref.day, ref.slot, position);
+      const input = { day: ref.day, slot: ref.slot, position, tripPlaceId: null, note: row.note };
+      const write = state.optimisticSlot(input);
+      return queue.run([slotKey(input)], async (isCurrent) => {
+        const result = await saveSlotAction(tripId(), input);
+        if (!result.ok) return fail(write, result.error);
+        write.commit();
+        saveRows([result.data], isCurrent);
+        return true;
+      });
+    }
+
+    /**
+     * Moves a place to another slot. Within a day it is the exact swap of
+     * moveWithinDay. Across days the places trade slots (or the source empties)
+     * and each slot keeps its own note.
+     */
+    async function moveToSlot(from: SlotRef, to: SlotRef): Promise<boolean> {
+      if (from.day === to.day) return moveWithinDay(from, to);
+      const state = store.getState();
+      const fromPosition = from.position ?? 0;
+      const source = slotAt(state.slots, from.day, from.slot, fromPosition);
+      if (!source?.tripPlaceId) return false;
+      const target = slotAt(state.slots, to.day, to.slot, to.position ?? 0);
+      if (!(await addToSlot(source.tripPlaceId, to.day, to.slot, to.position ?? 0))) return false;
+      if (target?.tripPlaceId) return addToSlot(target.tripPlaceId, from.day, from.slot, fromPosition);
+      return emptySlotKeepNote(from);
+    }
+
     async function setStatus(tripPlaceId: string, status: "suggested" | "removed"): Promise<boolean> {
       const write = store.getState().optimisticStatus(tripPlaceId, status);
       const result = await setPlaceStatusAction(tripPlaceId, status);
@@ -249,6 +283,8 @@ export function useWorkspaceActions() {
       clearSlotAt,
       saveNote,
       moveWithinDay,
+      moveToSlot,
+      emptySlotKeepNote,
       removePlace,
       replacePlace,
       restorePlace,

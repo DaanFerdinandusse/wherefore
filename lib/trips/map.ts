@@ -1,8 +1,12 @@
+import { z } from "zod";
+
 import type {
   Ask,
   Category,
   ItinerarySlot,
+  PlaceKeyword,
   SlotName,
+  TravelerFavorite,
   TripPlaceSource,
   TripPlaceStatus,
 } from "@/lib/contracts";
@@ -76,4 +80,89 @@ export function compareSlots(a: ItinerarySlot, b: ItinerarySlot): number {
 export function defaultTripTitle(destinationName: string, clientName: string): string {
   const first = clientName.trim().split(/\s+/)[0] || clientName.trim();
   return first ? `${destinationName} for ${first}` : destinationName;
+}
+
+// Place facts for the cards: what reviews mention and the place's own dishes,
+// read from the provider's raw properties block (places.properties). Parsed
+// leniently: a malformed entry is dropped, never guessed at.
+
+/** How many review keywords a card carries, most mentioned first. */
+export const CARD_KEYWORD_LIMIT = 8;
+/** How many specialty dishes a card carries. */
+export const CARD_DISH_LIMIT = 4;
+
+const RawKeyword = z.object({ name: z.string().trim().min(1), count: z.number().int().nonnegative() });
+// Specialty dishes come as tags ({ name, weight }); a plain string is accepted too.
+const RawDish = z.union([
+  z.string().trim().min(1),
+  z.object({ name: z.string().trim().min(1), weight: z.number().optional() }),
+]);
+
+function parseList<T>(value: unknown, item: z.ZodType<T>): T[] {
+  if (!Array.isArray(value)) return [];
+  const out: T[] = [];
+  for (const entry of value) {
+    const parsed = item.safeParse(entry);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
+/** Review keywords with counts: one per name (case-insensitive), most mentioned first. */
+export function cardKeywords(value: unknown, limit = CARD_KEYWORD_LIMIT): PlaceKeyword[] {
+  const byName = new Map<string, PlaceKeyword>();
+  for (const k of parseList(value, RawKeyword)) {
+    const key = k.name.toLowerCase();
+    const current = byName.get(key);
+    if (!current || k.count > current.count) byName.set(key, { name: k.name, count: k.count });
+  }
+  return [...byName.values()]
+    .filter((k) => k.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
+}
+
+/** The specialty dishes, verbatim, heaviest first when weighted, without repeats. */
+export function cardDishes(value: unknown, limit = CARD_DISH_LIMIT): string[] {
+  const dishes = parseList(value, RawDish).map((d, index) =>
+    typeof d === "string" ? { name: d, weight: 0, index } : { name: d.name, weight: d.weight ?? 0, index },
+  );
+  dishes.sort((a, b) => b.weight - a.weight || a.index - b.index);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of dishes) {
+    const key = d.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(d.name);
+  }
+  return out.slice(0, limit);
+}
+
+const RawFavorite = z.object({
+  name: z.string().trim().min(1),
+  entityId: z.string().min(1).nullish(),
+  imageUrl: z.string().min(1).nullish(),
+});
+
+/** A client's favorites as the snapshot query aggregates them; blanks dropped, nulls left out. */
+export function travelerFavorites(value: unknown): TravelerFavorite[] {
+  return parseList(value, RawFavorite).map((f) => ({
+    name: f.name,
+    ...(f.entityId ? { entityId: f.entityId } : {}),
+    ...(f.imageUrl ? { imageUrl: f.imageUrl } : {}),
+  }));
+}
+
+/** 1 to 4, or undefined. */
+export function cardPriceLevel(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 4 ? value : undefined;
+}
+
+/** The card facts in a places.properties block. Empty fields are left out. */
+export function placeFactsFromProperties(properties: unknown): { keywords?: PlaceKeyword[]; dishes?: string[] } {
+  const block = typeof properties === "object" && properties !== null ? (properties as Record<string, unknown>) : {};
+  const keywords = cardKeywords(block.keywords);
+  const dishes = cardDishes(block.specialty_dishes);
+  return { ...(keywords.length > 0 ? { keywords } : {}), ...(dishes.length > 0 ? { dishes } : {}) };
 }

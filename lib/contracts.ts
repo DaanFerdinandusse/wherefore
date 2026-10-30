@@ -47,6 +47,9 @@ export type Destination = {
 /** A word or dish reviews mention, with how many reviews mention it ("Tuna tostadas", 312). */
 export type PlaceKeyword = { name: string; count: number };
 
+/** One favorite of a traveler's client profile, with the place photo when it resolved. */
+export type TravelerFavorite = { name: string; entityId?: string; imageUrl?: string };
+
 export type BuiltFrom = {
   favorites: { clientName: string; names: string[] }[];
   advisorPlaceCount: number;
@@ -175,8 +178,18 @@ export type TripSnapshot = {
     seedStatus: "pending" | "running" | "done" | "failed";
     builtFrom?: BuiltFrom;
     chatId: string;
+    /** Who travels, from the trip form ("2 adults"). */
+    party?: { adults: number; children: number };
   };
-  travelers: { id: string; name: string; role: "client" | "guest"; clientId?: string; favoritesCount: number }[];
+  travelers: {
+    id: string;
+    name: string;
+    role: "client" | "guest";
+    clientId?: string;
+    favoritesCount: number;
+    /** The client's favorite places, in the advisor's order ("Matched to Ana's favorites"). */
+    favorites?: TravelerFavorite[];
+  }[];
   places: TripPlaceCard[];
   asks: Ask[];
   slots: ItinerarySlot[];

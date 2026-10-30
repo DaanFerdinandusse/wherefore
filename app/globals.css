@@ -33,6 +33,11 @@
   /* The "Shared with client" dot and the "places ready" sparkle (v3 Trips board). */
   --color-ochre: #c98a2e;
 
+  /* v3 trip panel: the "Why Ana" box, its dark amber text, the bullet dots */
+  --color-why: #f5e6cc;
+  --color-amber-deep: #6b4615;
+  --color-amber-dot: #c98a2e;
+
   /* Glass dock */
   --color-glass: rgb(241 237 230 / 0.6);
 

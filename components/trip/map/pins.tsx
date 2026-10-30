@@ -156,6 +156,54 @@ export function PinView({ pin, label }: { pin: PinModel; label?: PinLabelText | 
   );
 }
 
+/**
+ * A pin on the trip panel's map (G2): the place photo in a light ring with
+ * its itinerary day as a small ink badge and the name in a pill under it.
+ * The selected pin is larger, wears the amber halo, and its pill carries the
+ * match score. The box is the disc, so the pin anchors at the disc center.
+ */
+export function ItineraryPinView({ pin }: { pin: PinModel }) {
+  const size = pin.selected ? 76 : 54;
+  return (
+    <span aria-hidden style={{ width: size, height: size }} className="relative block">
+      <span
+        className={cn(
+          "absolute inset-0 overflow-hidden rounded-pill border-[3px] border-surface-raised bg-avatar",
+          pin.selected
+            ? "shadow-[0_0_0_14px_var(--color-glow-halo),0_10px_22px_rgb(22_19_15/0.25)] outline-2 outline-offset-4 outline-glow"
+            : pin.highlighted
+              ? "glow-ring"
+              : "shadow-[0_6px_14px_rgb(22_19_15/0.25)]",
+        )}
+      >
+        {pin.imageUrl ? (
+          <FilmImage src={pin.imageUrl} alt="" sizes={`${size}px`} unoptimized />
+        ) : (
+          <span className="flex size-full items-center justify-center font-display text-card-sm leading-none! text-text-2">
+            {pin.name.trim().charAt(0)}
+          </span>
+        )}
+      </span>
+      {pin.day !== undefined ? (
+        <span className="absolute -top-1.5 -right-2 flex size-[22px] items-center justify-center rounded-pill border-2 border-surface-raised bg-ink text-meta leading-3 font-bold text-white">
+          {pin.day}
+        </span>
+      ) : null}
+      <span
+        className={cn(
+          "absolute top-full left-1/2 flex -translate-x-1/2 items-center gap-[5px] rounded-pill text-ui-sm leading-4 font-semibold whitespace-nowrap text-ink",
+          pin.selected
+            ? "mt-1.5 bg-why px-[11px] py-[5px] shadow-[0_4px_10px_rgb(22_19_15/0.15)]"
+            : "mt-1 bg-surface-raised/97 px-2.5 py-1 shadow-[0_2px_6px_rgb(22_19_15/0.12)]",
+        )}
+      >
+        {pin.selected && typeof pin.score === "number" ? <span className="font-bold text-amber">{Math.round(pin.score)}</span> : null}
+        {pin.name}
+      </span>
+    </span>
+  );
+}
+
 /** The dashed amber "…" pin that holds a place while ask results arrive (F7b). */
 export function PlaceholderPin({ label, className, style }: { label: string; className?: string; style?: CSSProperties }) {
   return (

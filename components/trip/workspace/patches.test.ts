@@ -165,7 +165,7 @@ describe("inverse patches", () => {
           places: [card("a", { askIds: [ASK] })],
           asks: [{ id: ASK, label: "Wine", status: "done", resultCount: 1, loosened: [] }],
         }),
-        { activeTab: `ask:${ASK}` },
+        { activeTab: `ask:${ASK}`, view: "map" },
       ),
     );
     const archive = h.optimistic([{ type: "archiveAsk", askId: ASK }]);

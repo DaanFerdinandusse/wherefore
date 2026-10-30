@@ -19,7 +19,8 @@ export function readUrlState(params: ParamsLike): UrlState {
   const tab = params.get("tab");
   const place = params.get("place");
   return {
-    view: view && (VIEWS as readonly string[]).includes(view) ? (view as TripView) : "board",
+    // "board" is the retired Discover board: old links open the itinerary.
+    view: view && view !== "board" && (VIEWS as readonly string[]).includes(view) ? (view as TripView) : "itinerary",
     activeTab: parseTab(tab),
     selectedPlaceId: place && ID_RE.test(place) ? place : null,
     camera: parseCamera(params.get("cam")),
@@ -60,7 +61,7 @@ function parseTab(tab: string | null): BoardTab {
 /** The search string for a state, keeping unrelated params. Defaults are left out. */
 export function writeUrlState(current: string, state: Omit<UrlState, "camera"> & { camera?: MapCamera | null }): string {
   const params = new URLSearchParams(current);
-  if (state.view === "board") params.delete("view");
+  if (state.view === "itinerary" || state.view === "board") params.delete("view");
   else params.set("view", state.view);
   const askId = askIdOf(state.activeTab);
   if (state.activeTab === "all") params.delete("tab");

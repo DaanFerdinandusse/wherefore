@@ -24,7 +24,7 @@ import type { TripMapProps } from "../contracts";
 import { MapUnavailableNotice, OffscreenChip, SearchAreaButton, ZoomControls } from "./controls";
 import { GoogleSurface } from "./google-surface";
 import { MapErrorBoundary } from "./map-error-boundary";
-import { PinView, PlaceholderPin } from "./pins";
+import { ItineraryPinView, PinView, PlaceholderPin } from "./pins";
 import { MapPreviewCard } from "./preview-card";
 import { StaticSurface } from "./static-surface";
 import { FIT_MAX_ZOOM, FIT_PADDING, sameCamera, type MapEngine, type MoveCause } from "./surface";
@@ -51,6 +51,14 @@ export type TripMapComponentProps = TripMapProps & {
    * the free area.
    */
   insets?: Partial<Padding>;
+  /**
+   * "discover" (the default): photo pins, score dots and numbered itinerary
+   * pins. "itinerary": every place as a photo pin with its day badge and name
+   * (the trip panel's map, G2).
+   */
+  pinStyle?: "discover" | "itinerary";
+  /** The preview card for the selected pin. Off where the chat shows the place instead. */
+  preview?: boolean;
 };
 
 type MapStatus = "loading" | "ready" | "unavailable";
@@ -101,6 +109,8 @@ export function TripMap({
   className,
   surface = "auto",
   insets,
+  pinStyle = "discover",
+  preview = true,
 }: TripMapComponentProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? "";
   const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || "DEMO_MAP_ID";
@@ -170,7 +180,7 @@ export function TripMap({
   );
 
   // With the preview card open, fitting keeps the area under it free.
-  const selectedCard = selectedPlaceId ? placesById.get(selectedPlaceId) : undefined;
+  const selectedCard = preview && selectedPlaceId ? placesById.get(selectedPlaceId) : undefined;
   const cardOpen = selectedCard !== undefined && size.width >= CARD.width * 2;
   const inset = { top: insets?.top ?? 0, right: insets?.right ?? 0, bottom: insets?.bottom ?? 0, left: insets?.left ?? 0 };
   const fitPadding = useMemo<Padding>(
@@ -245,11 +255,12 @@ export function TripMap({
   const clientName = trip.clientName;
   const renderPin = useCallback(
     (pin: PinModel) => {
+      if (pinStyle === "itinerary") return <ItineraryPinView pin={pin} />;
       const card = placesById.get(pin.id);
       const label = card && pin.highlighted && !pin.selected ? pinLabel(card, clientName) : null;
       return <PinView pin={pin} label={label} />;
     },
-    [placesById, clientName],
+    [placesById, clientName, pinStyle],
   );
   const pinTitle = useCallback(
     (pin: PinModel) => {
