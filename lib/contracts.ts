@@ -44,6 +44,9 @@ export type Destination = {
   localityEntityId?: string;
 };
 
+/** A word or dish reviews mention, with how many reviews mention it ("Tuna tostadas", 312). */
+export type PlaceKeyword = { name: string; count: number };
+
 export type BuiltFrom = {
   favorites: { clientName: string; names: string[] }[];
   advisorPlaceCount: number;
@@ -71,6 +74,12 @@ export type TripPlaceCard = {
   status: TripPlaceStatus;
   source: TripPlaceSource;
   askIds: string[];
+  /** Review keywords with counts, most mentioned first (provider properties.keywords). */
+  keywords?: PlaceKeyword[];
+  /** The place's own specialty dishes, verbatim (provider properties.specialty_dishes). */
+  dishes?: string[];
+  /** 1 to 4. */
+  priceLevel?: number;
 };
 
 export type Ask = {
@@ -81,6 +90,8 @@ export type Ask = {
   elapsedMs?: number;
   toolCallId?: string;
   loosened: string[];
+  /** The itinerary slot this search is for ("Friday dinner"), when the advisor named one. */
+  target?: { day: number; slot: SlotName };
 };
 
 export type ItinerarySlot = {
