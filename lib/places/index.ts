@@ -10,7 +10,11 @@ export {
   getPlace,
   getPlacesByEntityIds,
   listAdvisorPlaces,
+  listCityTrips,
 } from "./queries";
+// scorePlacesForClient lives in ./scores (import "@/lib/places/scores"): it
+// reads lib/clients and the agent's signal rules, which the many importers
+// of this barrel (the agent among them) should not pull in.
 export {
   removeAdvisorPlace,
   saveAdvisorPlace,

@@ -7,6 +7,7 @@
 //   note. Owned, so every function takes the caller's scope.
 
 import type { ScopeInput } from "@/lib/auth/scope";
+import type { Category } from "@/lib/contracts";
 import type { advisorPlaces, places } from "@/lib/db/schema";
 
 export type Place = typeof places.$inferSelect;
@@ -26,16 +27,42 @@ export type AdvisorPlaceRow = {
   savedAt: Date;
   lastUsedAt: Date | null;
   primaryType: string | null;
+  /** The provider's category tags (urn:tag:category:place:*). */
+  types: string[];
+  /** The board category of the place, from its genre and tags (categoryOf). */
+  category: Category;
   neighborhood: string | null;
+  /** The country the provider geocoded the place to ("Portugal"). */
+  country: string | null;
   address: string | null;
   lat: number | null;
   lon: number | null;
   imageUrl: string | null;
   /** Trips that have this place as "Your place" (trip_places.advisor_place_id). */
   inTrips: number;
-  /** Title of the most recently updated of those trips ("Last for Ana"). */
+  /** Title of the most recently updated of those trips. */
   lastTripTitle: string | null;
+  /** Client of that trip, for "Last for Ana Ruiz". */
+  lastClientName: string | null;
 };
+
+/** A trip of the advisor, reduced to what My places says about a city. */
+export type CityTrip = {
+  tripId: string;
+  clientId: string;
+  clientName: string;
+  /** The destination's locality name, as the advisor's cities store it. */
+  city: string;
+  /** YYYY-MM-DD, or null while the dates are not set. */
+  startDate: string | null;
+  endDate: string | null;
+};
+
+/** How the advisor's places in one city score for one client. */
+export type ClientPlaceScores =
+  | { status: "scored"; scores: Record<string, number> }
+  | { status: "no-favorites" }
+  | { status: "failed" };
 
 export type SaveAdvisorPlaceInput = {
   placeId: string;
@@ -70,3 +97,15 @@ export type UpdateAdvisorPlaceNote = (id: string, note: string, scope: ScopeInpu
 export type RemoveAdvisorPlace = (id: string, scope: ScopeInput) => Promise<void>;
 /** The advisor's cities with how many places each, most first. */
 export type AdvisorCities = (ownerId: ScopeInput) => Promise<{ city: string; count: number }[]>;
+/** Every trip in scope with its destination city and dates. */
+export type ListCityTrips = (scope: ScopeInput) => Promise<CityTrip[]>;
+/**
+ * Scores saved places (by entity id) for one client's resolved favorites, on
+ * the scale of the set itself, so the best fit reads 94. Display scores by
+ * entity id; a place the provider did not score has none.
+ */
+export type ScorePlacesForClient = (
+  clientId: string,
+  entityIds: string[],
+  scope: ScopeInput,
+) => Promise<ClientPlaceScores>;

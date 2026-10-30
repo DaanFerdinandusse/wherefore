@@ -4,7 +4,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { inScope, isUuid, type ScopeInput } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
-import { advisorPlaces, places } from "@/lib/db/schema";
+import { advisorPlaces, places, trips } from "@/lib/db/schema";
+import { categoryOf } from "@/lib/qloo/normalize";
 import { normalizeQuery, trgmMatch, trgmRank } from "@/lib/search/trgm";
 
 import type {
@@ -14,6 +15,7 @@ import type {
   GetPlace,
   GetPlacesByEntityIds,
   ListAdvisorPlaces,
+  ListCityTrips,
 } from "./contracts";
 
 export const getPlace: GetPlace = async (id) => {
@@ -55,7 +57,9 @@ const advisorPlaceFields = {
   savedAt: advisorPlaces.savedAt,
   lastUsedAt: advisorPlaces.lastUsedAt,
   primaryType: places.primaryType,
+  types: places.types,
   neighborhood: places.neighborhood,
+  country: sql<string | null>`nullif(${places.properties} -> 'geocode' ->> 'country', '')`,
   address: places.address,
   lat: places.lat,
   lon: places.lon,
@@ -73,12 +77,20 @@ const advisorPlaceFields = {
     order by t.updated_at desc
     limit 1
   )`,
+  lastClientName: sql<string | null>`(
+    select t.client_name
+    from trip_places tp
+    join trips t on t.id = tp.trip_id
+    where tp.advisor_place_id = ${ADVISOR_PLACE_ID}
+    order by t.updated_at desc
+    limit 1
+  )`,
 };
 
 export const listAdvisorPlaces: ListAdvisorPlaces = async (ownerId, options = {}) => {
   const q = normalizeQuery(options.q);
   const city = options.city?.trim();
-  const rows: AdvisorPlaceRow[] = await db
+  const rows = await db
     .select(advisorPlaceFields)
     .from(advisorPlaces)
     .innerJoin(places, eq(places.id, advisorPlaces.placeId))
@@ -94,8 +106,22 @@ export const listAdvisorPlaces: ListAdvisorPlaces = async (ownerId, options = {}
       desc(advisorPlaces.savedAt),
     )
     .limit(options.limit ?? 500);
-  return rows;
+  return rows.map((row): AdvisorPlaceRow => ({ ...row, category: categoryOf(row) }));
 };
+
+export const listCityTrips: ListCityTrips = async (scope) =>
+  db
+    .select({
+      tripId: trips.id,
+      clientId: trips.clientId,
+      clientName: trips.clientName,
+      city: sql<string>`coalesce(${trips.destination} ->> 'name', '')`,
+      startDate: trips.startDate,
+      endDate: trips.endDate,
+    })
+    .from(trips)
+    .where(inScope(trips, scope))
+    .orderBy(trips.startDate);
 
 export const getAdvisorPlaceForPlace: GetAdvisorPlaceForPlace = async (ownerId, placeId) => {
   if (!isUuid(placeId)) return null;
