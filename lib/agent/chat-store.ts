@@ -1,10 +1,13 @@
 import "server-only";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
+import { inScopeAs, isUuid, toScope, type ScopeInput } from "@/lib/auth/scope";
 import type { AppUIMessage, ChatSnapshot } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { chats, chatTurns } from "@/lib/db/schema";
+
+import { chatTitleFrom } from "./chat-title";
 
 // Every write to a chats row and its chat_turns records, in one file. The
 // rules (PLAN 6.1, 6.5):
@@ -18,6 +21,9 @@ import { chats, chatTurns } from "@/lib/db/schema";
 // - Releasing the lock finalizes the turn record in the same statement.
 // - Message writes are idempotent by message id, so a Workflow step replay
 //   never duplicates a message.
+// - A trip has several chats. A chat is read and written by its own id; the
+//   trip-level reads below (list, default, create) check the trip's scope and
+//   the chat's owner in the same statement.
 //
 // Plain SQL thinking through Drizzle; jsonb surgery happens in Postgres so a
 // write is one round trip with no read-modify-write race. Statements that
@@ -50,6 +56,7 @@ export function toChatSnapshot(row: ChatRow): ChatSnapshot {
       activeRunId: row.activeRunId ?? undefined,
       activeTurnId: row.activeTurnId ?? undefined,
       lastError: row.lastError ?? undefined,
+      ...(row.title ? { title: row.title } : {}),
       messages: row.messages,
     },
   };
@@ -60,6 +67,98 @@ export async function createChatForTrip(tripId: string, ownerId: string): Promis
   const row = rows[0];
   if (!row) throw new Error("Chat insert returned no row");
   return row;
+}
+
+/** One row of a trip's chat list: no transcript. */
+export type TripChatItem = { id: string; tripId: string; title: string | null; updatedAt: Date };
+
+const tripChatItem = { id: chats.id, tripId: chats.tripId, title: chats.title, updatedAt: chats.updatedAt };
+
+// Drizzle prints a single-table select's columns unqualified; name the outer row.
+const CHAT_TRIP_ID = sql.raw(`"chats"."trip_id"`);
+
+/** `chats.trip_id` names a trip in scope (owner or org). */
+function tripInScopeSql(scope: ScopeInput) {
+  return sql`exists (select 1 from trips t where t.id = ${CHAT_TRIP_ID} and ${inScopeAs("t", scope)})`;
+}
+
+/**
+ * The caller's chats of several trips, newest first (by last activity).
+ * One query for the nav drawer; group by `tripId` on the caller's side.
+ */
+export async function listChatsForTrips(tripIds: readonly string[], scope: ScopeInput): Promise<TripChatItem[]> {
+  const ids = tripIds.filter(isUuid);
+  if (ids.length === 0) return [];
+  return db
+    .select(tripChatItem)
+    .from(chats)
+    .where(and(inArray(chats.tripId, ids), eq(chats.ownerId, toScope(scope).ownerId), tripInScopeSql(scope)))
+    .orderBy(desc(chats.updatedAt), desc(chats.createdAt));
+}
+
+/** A trip's chats, newest first. Empty for a trip out of scope. */
+export function listTripChats(tripId: string, scope: ScopeInput): Promise<TripChatItem[]> {
+  return listChatsForTrips([tripId], scope);
+}
+
+/**
+ * The chat a trip page opens: `chatId` when it is one of the trip's chats
+ * the caller owns, else (no `chatId`) the trip's most recently active chat.
+ * Undefined when `chatId` is not the trip's, or the trip has no chat.
+ */
+export async function getTripChat(tripId: string, chatId: string | undefined, scope: ScopeInput): Promise<ChatRow | undefined> {
+  if (!isUuid(tripId) || (chatId !== undefined && !isUuid(chatId))) return undefined;
+  const rows = await db
+    .select()
+    .from(chats)
+    .where(
+      and(
+        eq(chats.tripId, tripId),
+        chatId ? eq(chats.id, chatId) : undefined,
+        eq(chats.ownerId, toScope(scope).ownerId),
+        tripInScopeSql(scope),
+      ),
+    )
+    .orderBy(desc(chats.updatedAt), desc(chats.createdAt))
+    .limit(1);
+  return rows[0];
+}
+
+/**
+ * A new chat for a trip in scope, owned by the caller. When the trip already
+ * has an empty chat of the caller's (no message, no title, no turn), that
+ * one is brought to the top and returned instead, so "New chat" never piles
+ * up blank chats. Undefined when the trip is not in scope.
+ */
+export async function createTripChat(tripId: string, scope: ScopeInput): Promise<TripChatItem | undefined> {
+  if (!isUuid(tripId)) return undefined;
+  const ownerId = toScope(scope).ownerId;
+  const result = (await db.execute(sql`
+    with trip as (
+      select t.id from trips t where t.id = ${tripId} and ${inScopeAs("t", scope)}
+    ),
+    blank as (
+      select c.id from chats c
+      where c.trip_id = (select id from trip) and c.owner_id = ${ownerId}
+        and c.title is null and c.active_turn_id is null and c.messages = '[]'::jsonb
+      order by c.updated_at desc
+      limit 1
+    ),
+    reused as (
+      update chats set updated_at = now()
+      where id = (select id from blank)
+      returning id, trip_id, title, updated_at
+    ),
+    inserted as (
+      insert into chats (trip_id, owner_id)
+      select id, ${ownerId} from trip where not exists (select 1 from blank)
+      returning id, trip_id, title, updated_at
+    )
+    select * from reused union all select * from inserted
+  `)) as unknown as Rows<{ id: string; trip_id: string; title: string | null; updated_at: string | Date }>;
+  const row = result.rows[0];
+  if (!row) return undefined;
+  return { id: row.id, tripId: row.trip_id, title: row.title, updatedAt: new Date(row.updated_at) };
 }
 
 type Rows<T> = { rows: T[] };
@@ -89,7 +188,8 @@ function resendableSql(messageId: string) {
  * a failed turn re-sends the same user message under a new turn id) the
  * transcript is cut back to that message instead, and the message is
  * replaced by the new copy: the failed partial reply goes, the message is
- * never duplicated. The statement only matches when:
+ * never duplicated. A chat without a title takes one from the message
+ * (chatTitleFrom) in the same statement. The statement only matches when:
  *   - no turn holds the lock,
  *   - this turnId was never recorded (a finished turn is not run again),
  *   - the message is new or is the last user message (no answered history is cut).
@@ -98,10 +198,12 @@ function resendableSql(messageId: string) {
  */
 export async function takeTurnLock(chatId: string, turnId: string, message: AppUIMessage): Promise<boolean> {
   const json = JSON.stringify(message);
+  const title = chatTitleFrom(message);
   const result = (await db.execute(sql`
     with locked as (
       update chats set
         status = 'running',
+        title = coalesce(chats.title, ${title}::text),
         active_turn_id = ${turnId},
         active_run_id = null,
         stop_requested_at = null,

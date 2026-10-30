@@ -1,15 +1,16 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import type { TripSwitcherItem } from "@/components/shell/trip-top-bar";
 import { TripWorkspace } from "@/components/trip/workspace/trip-workspace";
 import { datesLabel } from "@/components/trip/workspace/format";
 import { paramsFromRecord, readUrlState } from "@/components/trip/workspace/url-state";
-import { requirePageUser } from "@/lib/auth/server";
+import { getTripChat, toChatSnapshot } from "@/lib/agent/chat-store";
+import { requirePageUser, type AuthUser } from "@/lib/auth/server";
 import type { ChatSnapshot } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { advisors, chats } from "@/lib/db/schema";
+import { advisors } from "@/lib/db/schema";
 import { getTripSnapshot, listTrips } from "@/lib/trips";
 import type { TripCard } from "@/lib/trips/contracts";
 import { DEV_TRIP_PREFIX, showDevTrips } from "@/lib/trips/dev";
@@ -17,7 +18,9 @@ import { shareUrl } from "@/lib/trips/share-actions";
 
 // /trips/[tripId]: the trip workspace. Loads the snapshot, the chat row and
 // the owner's other trips on the server, then hands them to the client
-// workspace, which hydrates the store. loading.tsx is the Suspense boundary
+// workspace, which hydrates the store. A trip has several chats: `?chat=<id>`
+// opens one of them, no param opens the most recently active one, and an id
+// that is not one of the trip's chats redirects to the default. loading.tsx is the Suspense boundary
 // for the session read. The share link is passed on its own: ShareButton
 // refreshes the route after Share or Stop sharing, and the workspace keeps
 // the store's token in step with it.
@@ -36,34 +39,28 @@ async function requestOrigin(): Promise<string | undefined> {
   return `${h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`;
 }
 
-async function loadChat(chatId: string, tripId: string): Promise<ChatSnapshot> {
-  const empty: ChatSnapshot = { chat: { id: chatId, tripId, status: "idle", messages: [] } };
-  if (!chatId) return empty;
-  const [row] = await db
-    .select({
-      id: chats.id,
-      tripId: chats.tripId,
-      status: chats.status,
-      activeRunId: chats.activeRunId,
-      activeTurnId: chats.activeTurnId,
-      lastError: chats.lastError,
-      messages: chats.messages,
-    })
-    .from(chats)
-    .where(and(eq(chats.id, chatId), eq(chats.tripId, tripId)))
-    .limit(1);
-  if (!row) return empty;
-  return {
-    chat: {
-      id: row.id,
-      tripId: row.tripId,
-      status: row.status === "running" || row.status === "failed" ? row.status : "idle",
-      activeRunId: row.activeRunId ?? undefined,
-      activeTurnId: row.activeTurnId ?? undefined,
-      lastError: row.lastError ?? undefined,
-      messages: row.messages,
-    },
-  };
+/** The chat in `?chat=` (or the trip's newest); undefined when that id is not one of the trip's chats. */
+async function loadChat(
+  trip: { id: string; chatId: string },
+  chatParam: string | undefined,
+  user: AuthUser,
+): Promise<ChatSnapshot | undefined> {
+  const row = await getTripChat(trip.id, chatParam, user);
+  if (row) return toChatSnapshot(row);
+  if (chatParam) return undefined;
+  // A trip with no chat row (createTrip always makes one) opens an empty chat.
+  return { chat: { id: trip.chatId, tripId: trip.id, status: "idle", messages: [] } };
+}
+
+/** The same URL without `?chat=`. */
+function withoutChat(tripId: string, query: Record<string, string | string[] | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "chat" || value === undefined) continue;
+    for (const v of Array.isArray(value) ? value : [value]) params.append(key, v);
+  }
+  const search = params.toString();
+  return `/trips/${tripId}${search ? `?${search}` : ""}`;
 }
 
 export default async function TripPage({
@@ -80,11 +77,13 @@ export default async function TripPage({
     showDevTrips() ? listTrips(user, { dev: "only" }) : Promise.resolve(null),
   ]);
   if (!snapshot) notFound();
+  const chatParam = paramsFromRecord(query).get("chat") || undefined;
   const [chat, advisorName, origin] = await Promise.all([
-    loadChat(snapshot.trip.chatId, snapshot.trip.id),
+    loadChat(snapshot.trip, chatParam, user),
     advisorDisplayName(user.userId),
     requestOrigin(),
   ]);
+  if (!chat) redirect(withoutChat(snapshot.trip.id, query));
 
   // The switcher: the newest real trips, then (in development only) the dev trips in their own group.
   const switcherItems = (columns: typeof byStage | null, limit: number, dev: boolean): TripSwitcherItem[] =>

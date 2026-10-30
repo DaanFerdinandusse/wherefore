@@ -10,6 +10,7 @@ import { FilmImage } from "@/components/ui/film-image";
 import { Sheet } from "@/components/ui/sheet";
 import { cardDatesLabel, tripDayToday } from "@/components/trips/format";
 import type { NavSummary, NavTrip } from "@/lib/trips/nav";
+import { activeChatId, chatTimeLabel, UNTITLED_CHAT, type NavChat } from "@/lib/trips/nav-chats";
 import { cn } from "@/lib/ui/cn";
 
 import { flattenResults, type SearchResults } from "./search-results";
@@ -17,8 +18,10 @@ import { signOut, useShell } from "./shell-store";
 
 // G3 Nav drawer: the menu button's sheet from the left. New trip, a search
 // across clients, trips and places, the sections, the most recent trips
-// (the open trip lists its chats under it), and the advisor at the bottom.
-// Its data loads each time it opens (/api/nav), so counts stay current.
+// (the open trip lists its chats under it, with "New chat for this trip"),
+// and the advisor at the bottom. Its data loads each time it opens
+// (/api/nav), so counts stay current. Switching chats is a URL change:
+// /trips/<id>?chat=<chatId>.
 
 const SECTIONS = [
   { href: "/trips", label: "Trips", icon: BriefcaseBusiness },
@@ -63,6 +66,8 @@ function DrawerBody({ onClose, pathname }: { onClose: () => void; pathname: stri
   const router = useRouter();
   const userName = useShell((s) => s.userName);
   const [summary, setSummary] = useState<NavSummary | null>(null);
+  // The open chat (?chat=), read when the data lands: the drawer mounts on open.
+  const [chatParam, setChatParam] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<{ q: string; results: SearchResults } | null>(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -71,7 +76,10 @@ function DrawerBody({ onClose, pathname }: { onClose: () => void; pathname: stri
     const controller = new AbortController();
     fetch("/api/nav", { signal: controller.signal })
       .then((res) => (res.ok ? (res.json() as Promise<NavSummary>) : null))
-      .then((data) => setSummary(data))
+      .then((data) => {
+        setChatParam(new URLSearchParams(window.location.search).get("chat"));
+        setSummary(data);
+      })
       .catch(() => undefined);
     return () => controller.abort();
   }, []);
@@ -217,7 +225,9 @@ function DrawerBody({ onClose, pathname }: { onClose: () => void; pathname: stri
                         </span>
                         <span aria-hidden className={cn("mr-1.5 size-2 shrink-0 rounded-pill", STAGE_DOT[trip.stage])} />
                       </Link>
-                      {/* The open trip's chats nest here (several chats per trip). */}
+                      {current ? (
+                        <TripChats tripId={trip.id} chats={trip.chats} activeId={activeChatId(trip.chats, chatParam)} onNavigate={onClose} />
+                      ) : null}
                     </div>
                   );
                 })}
@@ -247,6 +257,89 @@ function DrawerBody({ onClose, pathname }: { onClose: () => void; pathname: stri
         </button>
       </div>
     </>
+  );
+}
+
+/** The open trip's chats, nested under its row, and the action that starts another. */
+function TripChats({
+  tripId,
+  chats,
+  activeId,
+  onNavigate,
+}: {
+  tripId: string;
+  chats: NavChat[];
+  activeId: string | undefined;
+  onNavigate: () => void;
+}) {
+  const router = useRouter();
+  const [creating, setCreating] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const now = new Date();
+
+  async function startChat() {
+    setCreating(true);
+    setFailed(false);
+    try {
+      const res = await fetch(`/api/trips/${tripId}/chats`, { method: "POST" });
+      const body = res.ok ? ((await res.json()) as { chat?: { id?: unknown } }) : null;
+      const id = typeof body?.chat?.id === "string" ? body.chat.id : null;
+      if (!id) throw new Error("No chat id");
+      onNavigate();
+      router.push(`/trips/${tripId}?chat=${id}`);
+    } catch {
+      setFailed(true);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5 pt-0.5 pb-1.5 pl-7.5">
+      {chats.map((chat) => {
+        const active = chat.id === activeId;
+        return (
+          <Link
+            key={chat.id}
+            href={`/trips/${tripId}?chat=${chat.id}`}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-2.5 rounded-xl px-2.5 py-[7px] transition-colors",
+              active ? "bg-canvas" : "hover:bg-canvas",
+            )}
+          >
+            <ChatIcon className={active ? "text-ink" : "text-text-muted"} />
+            <span className={cn("min-w-0 flex-1 truncate text-ui text-ink", active ? "font-semibold" : "font-normal")}>
+              {chat.title ?? UNTITLED_CHAT}
+            </span>
+            <span className="shrink-0 text-meta text-text-muted">{chatTimeLabel(new Date(chat.updatedAt), now)}</span>
+          </Link>
+        );
+      })}
+      <button
+        type="button"
+        onClick={startChat}
+        disabled={creating}
+        className="flex items-center gap-2.5 rounded-xl px-2.5 py-[7px] text-left transition-colors hover:bg-canvas disabled:opacity-60"
+      >
+        <Plus size={14} strokeWidth={2} aria-hidden className="shrink-0 text-text-muted" />
+        <span className="text-ui font-medium text-text-3">{creating ? "Starting a new chat" : "New chat for this trip"}</span>
+      </button>
+      {failed ? (
+        <p role="alert" className="px-2.5 text-meta text-text-2">
+          Could not start a new chat. Check your connection and try again.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ChatIcon({ className }: { className?: string }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden className={cn("shrink-0", className)}>
+      <path d="M4 5h16v11H9l-5 4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
   );
 }
 
