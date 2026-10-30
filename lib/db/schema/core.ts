@@ -65,6 +65,8 @@ export const clients = pgTable(
     homeCity: text("home_city"),
     homeLat: doublePrecision("home_lat"),
     homeLon: doublePrecision("home_lon"),
+    // Optional: where the advisor sends the trip link.
+    email: text("email"),
     avatarUrl: text("avatar_url"),
     notes: text("notes").notNull().default(""),
     groundRules: jsonb("ground_rules").$type<string[]>().notNull().default([]),

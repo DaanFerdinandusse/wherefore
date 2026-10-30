@@ -69,11 +69,15 @@ export function addMedia(list: readonly MediaFavorite[], item: MediaFavorite): M
 export type FavoriteTile = {
   id: string;
   query: string;
+  /** The matched entity, null while unmatched. */
+  entityId: string | null;
   match: "resolved" | "unmatched" | "weak";
   /** The matched place's name, else what the advisor typed. */
   name: string;
   city: string | null;
   imageUrl: string | null;
+  /** The provider's genre urn for the place, null when unknown or unmatched. */
+  primaryType: string | null;
   candidates: FavoriteCandidate[];
 };
 

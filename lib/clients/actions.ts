@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { z } from "zod";
 
 import { isAppError } from "@/lib/auth/errors";
@@ -60,11 +61,76 @@ const fieldsSchema = z
     homeCity: z.string().trim().max(120).nullable(),
     homeLat: z.number().min(-90).max(90).nullable(),
     homeLon: z.number().min(-180).max(180).nullable(),
+    email: z.union([z.literal(""), z.email().max(200)]).nullable(),
     notes: z.string().max(5000),
   })
   .partial();
 
 export type ClientFieldsInput = z.input<typeof fieldsSchema>;
+
+const newClientSchema = z.object({
+  name,
+  homeCity: z.string().trim().max(120).nullable(),
+  homeLat: z.number().min(-90).max(90).nullable(),
+  homeLon: z.number().min(-180).max(180).nullable(),
+  email: z.union([z.literal(""), z.email().max(200)]).nullable(),
+  favorites: z.array(z.object({ query, entityId: z.string().min(1).max(80), near })).max(50),
+});
+
+export type NewClientInput = z.input<typeof newClientSchema>;
+
+/**
+ * C1 New client: creates the client with the places the advisor picked, in
+ * order. Each pick resolves to its place on the server (a cache hit of the
+ * picker's own search); a pick that no longer resolves is kept as typed, as
+ * an unmatched favorite. Taste tags are computed after the response.
+ */
+export async function createClientWithFavoritesAction(input: NewClientInput): Promise<ActionResult<{ id: string }>> {
+  return run(async (user) => {
+    const fields = newClientSchema.parse(input);
+    const client = await createClient(
+      {
+        name: fields.name,
+        homeCity: fields.homeCity || null,
+        homeLat: fields.homeLat,
+        homeLon: fields.homeLon,
+        email: fields.email || null,
+      },
+      user,
+    );
+
+    const seen = new Set<string>();
+    let matched = 0;
+    for (const pick of fields.favorites) {
+      if (seen.has(pick.entityId)) continue;
+      seen.add(pick.entityId);
+      const place = await placeFor(pick.entityId, pick.query, pick.near).catch((error: unknown) => {
+        console.warn("[clients] a new client's favorite did not resolve", pick.entityId, error);
+        return null;
+      });
+      if (place) {
+        const placeId = await savePlace(place);
+        await addFavorite(
+          client.id,
+          { query: pick.query, entityId: place.entityId, placeId, match: "resolved", candidates: [] },
+          user,
+        );
+        matched += 1;
+      } else {
+        await addFavorite(client.id, { query: pick.query, match: "unmatched", candidates: [] }, user);
+      }
+    }
+
+    if (matched > 0) {
+      after(async () => {
+        await recomputeTasteTags(client.id, user).catch((error: unknown) =>
+          console.error("[clients] taste tags after create failed", error),
+        );
+      });
+    }
+    return { id: client.id };
+  });
+}
 
 /** Creates the client on the first keystroke of the name (/clients/new). */
 export async function createClientAction(input: ClientFieldsInput): Promise<ActionResult<{ id: string }>> {
@@ -76,6 +142,7 @@ export async function createClientAction(input: ClientFieldsInput): Promise<Acti
         homeCity: fields.homeCity || null,
         homeLat: fields.homeLat ?? null,
         homeLon: fields.homeLon ?? null,
+        email: fields.email || null,
         notes: fields.notes ?? "",
       },
       user,
@@ -89,6 +156,7 @@ export async function updateClientFieldsAction(clientId: string, input: ClientFi
   return run(async (user) => {
     const fields = fieldsSchema.parse(input);
     if (fields.homeCity === "") fields.homeCity = null;
+    if (fields.email === "") fields.email = null;
     await updateClientFields(id.parse(clientId), fields, user);
     return undefined;
   });
@@ -98,10 +166,12 @@ function tileFromPlace(favorite: ClientFavorite, place: NormalizedPlace | null):
   return {
     id: favorite.id,
     query: favorite.query,
+    entityId: favorite.entityId,
     match: favorite.match === "resolved" ? "resolved" : favorite.match === "weak" ? "weak" : "unmatched",
     name: place?.name ?? favorite.query,
     city: place?.city ?? null,
     imageUrl: place?.images[0]?.url ?? null,
+    primaryType: place?.primaryType ?? null,
     candidates: favorite.candidates,
   };
 }

@@ -26,6 +26,8 @@ export type ClientSummary = {
   avatarUrl: string | null;
   status: ClientStatus;
   favoritesCount: number;
+  /** All trips for this client, past and upcoming. */
+  tripCount: number;
   /** First image of the first 4 favorites that have one, in favorite order. */
   favoriteImages: string[];
   /** The first 3 favorites by name: the matched place's name, else what the advisor typed. */
@@ -38,11 +40,20 @@ export type ClientSummary = {
   nextTrip: { id: string; title: string; startDate: string | null } | null;
   /** The later of the client's and their trips' last update. */
   lastActivityAt: Date;
+  createdAt: Date;
 };
 
 /** A favorite with the place it resolved to, for the "places she loves" grid. */
 export type FavoriteWithPlace = ClientFavorite & {
-  place: { id: string; entityId: string; name: string; city: string | null; imageUrl: string | null } | null;
+  place: {
+    id: string;
+    entityId: string;
+    name: string;
+    city: string | null;
+    imageUrl: string | null;
+    /** The provider's genre urn ("urn:tag:genre:place:restaurant:italian"), for the type under the photo. */
+    primaryType: string | null;
+  } | null;
 };
 
 export type ClientTripRow = {
@@ -66,6 +77,7 @@ export type CreateClientInput = {
   homeCity?: string | null;
   homeLat?: number | null;
   homeLon?: number | null;
+  email?: string | null;
   avatarUrl?: string | null;
   notes?: string;
   status?: ClientStatus;
@@ -75,7 +87,7 @@ export type CreateClientInput = {
 
 /** The fields the edit-in-place profile saves as you type. */
 export type ClientFieldsPatch = Partial<
-  Pick<Client, "name" | "homeCity" | "homeLat" | "homeLon" | "avatarUrl" | "notes"> & {
+  Pick<Client, "name" | "homeCity" | "homeLat" | "homeLon" | "email" | "avatarUrl" | "notes"> & {
     status: ClientStatus;
   }
 >;
