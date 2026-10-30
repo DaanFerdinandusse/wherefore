@@ -157,6 +157,15 @@ const GENERIC_NOUNS: Record<string, SearchCategory> = {
   hotel: "stay",
   hotels: "stay",
 };
+/** What the provider calls these: alone, "gallery" is only a decor and a setting tag. */
+const KIND_WORDS: Record<string, string> = {
+  gallery: "art gallery",
+  galleries: "art gallery",
+  "art galleries": "art gallery",
+  museums: "museum",
+};
+/** Names a category, but also more than it: a museum is not every place to see. */
+const NARROW_NOUNS = new Set(["museum", "museums", "gallery", "galleries", "pub", "pubs"]);
 const FILLER = new Set(["places", "place", "spots", "spot", "option", "options", "ideas", "good", "best", "some", "great", "vibe", "vibes", "like", "a", "an", "the", "more"]);
 
 /** The category a slot implies when the ask names none: a meal is a restaurant, the stay a hotel. */
@@ -179,7 +188,7 @@ export function splitIntent(intent: string): { text: string; category?: SearchCa
     const bare = word.replace(/[^a-z]/g, "");
     if (GENERIC_NOUNS[bare]) {
       category ??= GENERIC_NOUNS[bare];
-      return false;
+      return NARROW_NOUNS.has(bare);
     }
     return !FILLER.has(bare);
   });
@@ -221,7 +230,7 @@ async function resolveTags(
   const ids: string[] = [];
   const names: string[] = [];
   for (const text of texts) {
-    const trimmed = text.trim();
+    const trimmed = KIND_WORDS[text.trim().toLowerCase()] ?? text.trim();
     if (!trimmed) continue;
     if (trimmed.startsWith("urn:tag:")) {
       ids.push(trimmed);
@@ -252,10 +261,39 @@ function steps(search: ToolStep, score: ToolStep, explain: ToolStep): ToolStep[]
   return [search, score, explain];
 }
 
+/**
+ * The kinds of place an ask names, from its resolved tags. A museum search wants
+ * museums, not whatever else counts as a place to see: that category spans
+ * museums, markets and gardens. Everywhere else the category already holds, and
+ * a tag such as "seafood" narrows a search without being a kind of its own.
+ */
+export function namedKinds(tagIds: readonly string[], category: SearchCategory | undefined): string[] {
+  return category === "see" ? tagIds.filter(isKindTag) : [];
+}
+
+const leafOf = (tagId: string) => tagId.slice(tagId.lastIndexOf(":") + 1);
+
+/**
+ * Is the place that kind? Its own genre decides: upstream tags are loose, so a
+ * restaurant called Museu can carry the museum tag. Only a place with no genre
+ * is read by its tags. An art museum is a museum, and the other way round.
+ */
+export function isNamedKind(place: Pick<NormalizedPlace, "tags"> & Partial<Pick<NormalizedPlace, "primaryType" | "types">>, kinds: readonly string[]): boolean {
+  if (kinds.length === 0) return true;
+  const leaves = kinds.map(leafOf);
+  if (place.primaryType) {
+    const genre = leafOf(place.primaryType);
+    return leaves.some((leaf) => genre.includes(leaf) || leaf.includes(genre));
+  }
+  return place.tags.some((t) => kinds.includes(t.tagId)) || (place.types ?? []).some((t) => kinds.includes(t));
+}
+
 /** The ask's filters, as advisor places admitted into the ask must meet them too. */
 export type AskConstraints = {
   /** Tag ids the exact results carry; empty when the search dropped them. */
   tagIds: string[];
+  /** The kinds of place the ask names. These are never dropped. */
+  kinds?: string[];
   priceMax?: number;
   area?: { lat: number; lon: number; radiusM: number };
   popularityMax?: number;
@@ -274,6 +312,7 @@ export type AskConstraints = {
  */
 export function askConstraints(input: AskFilters & {
   tagIds: string[];
+  kinds?: string[];
   loosened: readonly string[];
   priceMax?: number;
   area?: AskConstraints["area"];
@@ -282,6 +321,7 @@ export function askConstraints(input: AskFilters & {
   const priceHeld = !input.loosened.includes("price") && !input.loosened.includes("price_not_applicable");
   return {
     tagIds: tagsHeld ? input.tagIds : [],
+    ...(input.kinds?.length ? { kinds: input.kinds } : {}),
     ...(input.priceMax && priceHeld ? { priceMax: input.priceMax } : {}),
     ...(input.area ? { area: input.area } : {}),
     ...(input.popularityMax !== undefined && !input.loosened.includes("popularity") ? { popularityMax: input.popularityMax } : {}),
@@ -297,10 +337,11 @@ export function askConstraints(input: AskFilters & {
  * so a place without one is not on the list.
  */
 export function meetsAskConstraints(
-  place: Pick<NormalizedPlace, "tags" | "priceLevel" | "lat" | "lon"> & Partial<Pick<NormalizedPlace, "properties">>,
+  place: Pick<NormalizedPlace, "tags" | "priceLevel" | "lat" | "lon"> & Partial<Pick<NormalizedPlace, "properties" | "primaryType" | "types">>,
   constraints: AskConstraints,
 ): boolean {
   if (constraints.tagIds.length > 0 && !place.tags.some((t) => constraints.tagIds.includes(t.tagId))) return false;
+  if (!isNamedKind(place, constraints.kinds ?? [])) return false;
   if (constraints.priceMax && place.priceLevel != null && place.priceLevel > constraints.priceMax) return false;
   const { popularity, michelin } = placeFactsFromProperties(place.properties);
   if (constraints.popularityMax !== undefined && popularity !== undefined && popularity >= constraints.popularityMax) return false;
@@ -356,6 +397,7 @@ const checkpointSchema = z.object({
       note: z.string(),
       constraints: z.object({
         tagIds: z.array(z.string()),
+        kinds: z.array(z.string()).optional(),
         priceMax: z.number().optional(),
         area: z.object({ lat: z.number(), lon: z.number(), radiusM: z.number() }).optional(),
         popularityMax: z.number().optional(),
@@ -564,7 +606,10 @@ export async function* findPlacesTool(
       // Tags: what the advisor asked for in free text, else the category filter.
       const wanted = [...(askedTags ?? []), ...(askedTags?.length ? [] : split.text ? [split.text] : [])];
       const resolved = await resolveTags(wanted, askCategory, ctx, calls);
-      const tags = resolved.ids.length > 0 ? resolved.ids : askCategory ? CATEGORY_FILTER_TAGS[askCategory] : [];
+      // A named kind searches on that kind alone: "garden" also resolves to the
+      // amenity, and restaurants with a garden would take every result.
+      const kinds = namedKinds(resolved.ids, askCategory);
+      const tags = kinds.length > 0 ? kinds : resolved.ids.length > 0 ? resolved.ids : askCategory ? CATEGORY_FILTER_TAGS[askCategory] : [];
       // Kept on the ask so remove_place and the UI's replace can rerun the same search.
       await guarded(turn, (guard) =>
         updateAsk(ask.id, { query: { ...askQuery, resolvedTags: tags, searchArea } }, ctx.scope, { turn: guard }),
@@ -587,6 +632,7 @@ export async function* findPlacesTool(
               ...filters,
               ...(ctx.excludeIds.length ? { excludeIds: ctx.excludeIds } : {}),
               take: askCategory ? take + CATEGORY_SPARE : take,
+              ...(kinds.length ? { keep: (place: NormalizedPlace) => isNamedKind(place, kinds) } : {}),
               onStage: (stage) => report(previewOf(stage, askCategory, take, excluded)),
             },
             { tripId: ctx.trip.id },
@@ -622,8 +668,10 @@ export async function* findPlacesTool(
       // Few exact matches for the advisor's words: the search dropped every tag.
       // Fill the rest from the asked category instead (exact matches first),
       // so "natural wine bars" never turns into restaurants and cafes.
+      // A named kind is never filled from its category: three museums beat three
+      // museums and a market.
       const otherKind = results.some((r) => r.category !== askCategory);
-      if (resolved.ids.length > 0 && askCategory && (loosened.includes("tags") || otherKind)) {
+      if (kinds.length === 0 && resolved.ids.length > 0 && askCategory && (loosened.includes("tags") || otherKind)) {
         const exact = results.filter(
           (r) => r.category === askCategory && r.place.tags.some((t) => resolved.ids.includes(t.tagId)),
         );
@@ -692,6 +740,7 @@ export async function* findPlacesTool(
       await persistAskPlaces(turn, ctx, ask.id, ranked);
       constraints = askConstraints({
         tagIds: resolved.ids,
+        kinds,
         loosened,
         priceMax: input.price_max,
         area: { lat: searchArea.lat, lon: searchArea.lon, radiusM: reachedM },
@@ -893,6 +942,7 @@ export async function* findPlacesTool(
               ...(more.lessKnown ? { popularityMax: LESS_KNOWN_POPULARITY_MAX } : {}),
               excludeIds: searchExclusions(seen, ctx.excludeIds),
               take: MORE_TAKE + CATEGORY_SPARE,
+              ...(constraints.kinds?.length ? { keep: (place: NormalizedPlace) => isNamedKind(place, constraints.kinds ?? []) } : {}),
             },
             { tripId: ctx.trip.id },
           );

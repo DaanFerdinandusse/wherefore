@@ -104,26 +104,26 @@ function PlaceItem({ place, layout, verdict, picked, backup, selected, onPlacesH
               ? "bg-why ring-[1.5px] ring-amber-dot"
               : verdict?.stand === "backup"
                 ? "bg-surface-raised ring-[1.5px] ring-amber-dot/45"
-                : "bg-surface-raised ring-1 ring-ink/6"
+                : out
+                  ? "bg-ink/4"
+                  : "bg-surface-raised ring-1 ring-ink/6"
             : selected
               ? "bg-why ring-[1.5px] ring-amber-dot"
-              : "bg-surface-raised ring-1 ring-ink/6 hover:bg-white",
+              : out
+                ? "bg-ink/4 hover:bg-surface-raised"
+                : "bg-surface-raised ring-1 ring-ink/6 hover:bg-white",
         )}
       >
         <span
           className={cn(
-            "relative shrink-0 overflow-hidden rounded-[10px] bg-avatar transition-[width,height] duration-500 ease-[var(--ease-out-expo)] motion-reduce:transition-none",
+            "relative shrink-0 overflow-hidden rounded-[10px] bg-avatar transition-[width,height,filter,opacity] duration-500 ease-[var(--ease-out-expo)] motion-reduce:transition-none",
             rows ? (out ? "h-9 w-11" : "h-13 w-16") : "size-10",
+            // On the frame: the photo's own film filter would override it.
+            out && !selected && "opacity-60 grayscale group-hover/place:opacity-100 group-hover/place:grayscale-0",
           )}
         >
           {place.imageUrl ? (
-            <FilmImage
-              src={place.imageUrl}
-              alt=""
-              sizes="64px"
-              unoptimized
-              className={cn(out && !selected && "grayscale transition-[filter] duration-300 group-hover/place:grayscale-0")}
-            />
+            <FilmImage src={place.imageUrl} alt="" sizes="64px" unoptimized />
           ) : (
             <span aria-hidden className="absolute inset-0 flex items-center justify-center font-display text-lg leading-5 text-text-2">
               {place.name[0]}
@@ -131,12 +131,12 @@ function PlaceItem({ place, layout, verdict, picked, backup, selected, onPlacesH
           )}
         </span>
         <span className="flex min-w-0 grow flex-col gap-px">
-          <span className={cn("truncate font-semibold", rows ? (out ? "text-ui font-medium text-text-2" : "text-body leading-5 text-ink") : cn("text-ui-sm leading-4.25", out && !selected ? "text-text-2" : "text-ink"))}>
+          <span className={cn("truncate font-semibold", rows ? (out ? "text-ui font-medium text-text-muted" : "text-body leading-5 text-ink") : cn("text-ui-sm leading-4.25", out && !selected ? "font-medium text-text-muted" : "text-ink"))}>
             {place.name}
           </span>
           {rows ? (
             verdict ? (
-              <VerdictLine verdict={verdict} className={cn("rise-in", out ? "text-ui-sm leading-[17px] text-text-3" : "text-ui leading-[19px] text-text-3")} />
+              <VerdictLine verdict={verdict} quiet={out} className={cn("rise-in", out ? "text-ui-sm leading-[17px] text-text-muted" : "text-ui leading-[19px] text-text-3")} />
             ) : (
               <span aria-hidden className="skeleton-sheen mt-1 block h-2.5 w-[56%] rounded-pill" />
             )

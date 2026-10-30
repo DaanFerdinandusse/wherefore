@@ -154,6 +154,8 @@ export type FindPlacesInput = {
   openSlot?: SlotName;
   take: number;
   page?: number;
+  /** Only places that pass count as results: the kind of place the ask named. */
+  keep?: (place: NormalizedPlace) => boolean;
   /** Called after each search step that kept places, with everything kept so far, so they can show before the search ends. */
   onStage?: (places: NormalizedPlace[]) => void;
 };

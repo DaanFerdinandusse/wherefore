@@ -254,6 +254,7 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
       if (seen.has(raw.entity_id)) continue;
       const place = normalizePlace(raw);
       if (input.noShopping && isShoppingPlace(place)) continue;
+      if (input.keep && !input.keep(place)) continue;
       const distanceM = distanceFromDestination(destination, place, raw.query.distance);
       if (isTooFar(step, distanceM)) {
         far.set(raw.entity_id, toResult({ raw, place, distanceM, dropped }, []));
