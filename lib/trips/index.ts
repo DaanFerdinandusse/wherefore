@@ -21,6 +21,7 @@ export {
   listTripCalls,
   listTripPlaceCards,
   listTrips,
+  tripBarCityImages,
 } from "./queries";
 export {
   addAskPlaces,

@@ -10,7 +10,7 @@ import type { TripStage } from "@/lib/contracts";
 import { clients } from "@/lib/db/schema";
 import { advisorCities } from "@/lib/places";
 
-import { clientPastDestinations, listRecentClientsForTripBar, setStageOverride } from "./index";
+import { clientPastDestinations, listRecentClientsForTripBar, setStageOverride, tripBarCityImages } from "./index";
 import type { PastDestination } from "./contracts";
 import { computeStage, isTripStage } from "./stage";
 
@@ -26,6 +26,8 @@ export type TripBarClient = {
   homeCity: string | null;
   avatarUrl: string | null;
   favoritesCount: number;
+  /** Photos of the first favorites that have one, in favorite order. */
+  favoriteImages: string[];
   nextTrip: { id: string; title: string; startDate: string | null } | null;
 };
 
@@ -37,6 +39,8 @@ export type TripBarContext = {
   cities: { city: string; count: number }[];
   /** Where the prefilled client went before. */
   pastDestinations: PastDestination[];
+  /** One photo per advisor city, for the city cards. */
+  cityImages: { city: string; imageUrl: string }[];
 };
 
 function toTripBarClient(summary: ClientSummary): TripBarClient {
@@ -46,6 +50,7 @@ function toTripBarClient(summary: ClientSummary): TripBarClient {
     homeCity: summary.homeCity,
     avatarUrl: summary.avatarUrl,
     favoritesCount: summary.favoritesCount,
+    favoriteImages: summary.favoriteImages,
     nextTrip: summary.nextTrip,
   };
 }
@@ -55,17 +60,18 @@ export async function loadTripBarContext(input: { clientId?: string | null }): P
   const user = await requireUser();
   const clientId = input.clientId && uuid.safeParse(input.clientId).success ? input.clientId : null;
 
-  const [recent, cities, prefillRows, pastDestinations] = await Promise.all([
+  const [recent, cities, prefillRows, pastDestinations, cityImages] = await Promise.all([
     listRecentClientsForTripBar(user, 4),
     advisorCities(user),
     clientId
       ? selectClientSummaries(user, eq(clients.id, clientId), { limit: 1 })
       : Promise.resolve([]),
     clientId ? clientPastDestinations(clientId, user) : Promise.resolve([]),
+    tripBarCityImages(user),
   ]);
   const prefill = prefillRows[0] ? toTripBarClient(prefillRows[0]) : null;
 
-  return { recentClients: recent.map(toTripBarClient), prefill, cities, pastDestinations };
+  return { recentClients: recent.map(toTripBarClient), prefill, cities, pastDestinations, cityImages };
 }
 
 const searchSchema = z.string().trim().min(1).max(80);

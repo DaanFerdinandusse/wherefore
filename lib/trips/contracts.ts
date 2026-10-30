@@ -220,6 +220,8 @@ export type ListTripPlaceCards = (
   options?: { tripPlaceIds?: string[]; placeIds?: string[] },
 ) => Promise<TripPlaceCard[]>;
 export type ListRecentClientsForTripBar = ListRecentClients;
+/** One photo per advisor city (any case), for the New trip city cards. */
+export type TripBarCityImages = (scope: ScopeInput) => Promise<{ city: string; imageUrl: string }[]>;
 /** Where the client went before, most recent first, one row per destination name. */
 export type ClientPastDestinations = (clientId: string, scope: ScopeInput) => Promise<PastDestination[]>;
 export type ListTripCalls = (tripId: string, scope: ScopeInput) => Promise<TripCall[]>;

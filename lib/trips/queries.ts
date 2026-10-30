@@ -30,6 +30,7 @@ import type {
   ListTripPlaceCards,
   ListTrips,
   PastDestination,
+  TripBarCityImages,
   TripCard,
   TripsByStage,
 } from "./contracts";
@@ -467,6 +468,21 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
 
 export const listRecentClientsForTripBar: ListRecentClientsForTripBar = (ownerId, limit = 4) =>
   listRecentClients(ownerId, limit);
+
+/**
+ * A photo per advisor city for the New trip city cards: the first image of
+ * the most recently saved place in that city that has one.
+ */
+export const tripBarCityImages: TripBarCityImages = async (scope) =>
+  db
+    .selectDistinctOn([advisorPlaces.city], {
+      city: advisorPlaces.city,
+      imageUrl: sql<string>`${places.images} -> 0 ->> 'url'`,
+    })
+    .from(advisorPlaces)
+    .innerJoin(places, eq(places.id, advisorPlaces.placeId))
+    .where(and(inScope(advisorPlaces, scope), sql`jsonb_array_length(${places.images}) > 0`))
+    .orderBy(advisorPlaces.city, desc(advisorPlaces.savedAt));
 
 export const clientPastDestinations: ClientPastDestinations = async (clientId, scope) => {
   if (!isUuid(clientId)) return [];
