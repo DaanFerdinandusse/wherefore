@@ -4,26 +4,13 @@
 
 ## Run it
 
-1. Have an account. Sign up in the app (`npm run dev`, then `/sign-up`), or call the auth API of the branch in `DATABASE_URL`:
+The public hackathon app uses one shared owner, with no account creation:
 
-   ```sh
-   curl -X POST "$NEON_AUTH_BASE_URL/sign-up/email" \
-     -H 'content-type: application/json' -H 'origin: http://localhost:3000' \
-     -d '{"name":"Daan","email":"you@example.test","password":"<a password>"}'
-   ```
+```sh
+npx tsx --conditions=react-server scripts/seed-demo.ts --owner tastebrief-demo
+```
 
-   Each Neon branch has its own Neon Auth instance. `NEON_AUTH_BASE_URL` must be the auth URL of the branch in `DATABASE_URL`, or the user lands in another branch's `neon_auth` and the seed cannot find it. The Neon console (or the `get_neon_auth_config` MCP tool) shows the URL per branch.
-
-2. Seed, by email or by user id:
-
-   ```sh
-   npx tsx --conditions=react-server scripts/seed-demo.ts --owner-email you@example.test
-   npx tsx --conditions=react-server scripts/seed-demo.ts --owner <authUserId>
-   ```
-
-   `--conditions=react-server` lets the server-only modules load outside Next. The script reads `.env.local` (`DATABASE_URL`, `QLOO_API_KEY`, `QLOO_API_URL`).
-
-The script never writes to `neon_auth`; it reads `neon_auth."user"` to resolve the owner and fails with a clear message when the user is not there.
+The script reads `.env.local`. This owner needs no Neon Auth row. Existing account seeds still support `--owner-email` for maintenance, but the public app only opens `tastebrief-demo`.
 
 ## What it creates
 
@@ -55,7 +42,7 @@ Safe to run twice: clients are matched by name within the owner, favorites by qu
 ## Reset
 
 ```sh
-npx tsx --conditions=react-server scripts/seed-demo.ts --owner-email you@example.test --reset
+npx tsx --conditions=react-server scripts/seed-demo.ts --owner tastebrief-demo --reset
 ```
 
 `--reset` first deletes this owner's chats, trips (with their travelers, trip places, asks, slots and calls), saved places and clients (with their favorites), in one batch, then seeds again. The advisors row stays (its taste tags are recomputed). Other owners' rows and the shared `places` cache are never touched. Use it to move the relative dates back to today.

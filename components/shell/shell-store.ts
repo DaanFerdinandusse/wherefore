@@ -3,8 +3,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-// The app shell's own state: whether the nav drawer is open and who is signed
-// in. The (app) layout reads the user on the server and hands the name over
+// The app shell's own state: whether the nav drawer is open and the shared advisor. The (app) layout reads the user on the server and hands the name over
 // with <ShellUser>, so the panel header avatar and the drawer footer can show
 // it without every page passing it down.
 type ShellState = {
@@ -23,13 +22,9 @@ export const useShell = create<ShellState>((set) => ({
   setUserName: (userName) => set({ userName }),
 }));
 
-/** Mounted by the (app) layout once the session is read. Renders nothing. */
+/** Mounted by the (app) layout with the shared advisor. Renders nothing. */
 export function ShellUser({ name }: { name: string }) {
   const setUserName = useShell((s) => s.setUserName);
   useEffect(() => setUserName(name), [name, setUserName]);
   return null;
-}
-
-export async function signOut(): Promise<void> {
-  await fetch("/api/auth/sign-out", { method: "POST" }).catch(() => undefined);
 }

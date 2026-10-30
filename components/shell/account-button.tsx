@@ -1,18 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LogOut } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
-import { Menu, MenuItem } from "@/components/ui/menu";
+import { Menu } from "@/components/ui/menu";
 
-import { signOut, useShell } from "./shell-store";
+import { useShell } from "./shell-store";
 
-// The advisor's initials at the right end of a panel header, opening a menu
-// with Sign out. Reads the name the layout handed to the shell store.
+// The shared advisor identity at the right end of a panel header.
 export function AccountButton() {
-  const router = useRouter();
   const userName = useShell((s) => s.userName);
   const [open, setOpen] = useState(false);
   return (
@@ -35,23 +31,12 @@ export function AccountButton() {
     >
       {userName ? (
         <p className="px-3 pt-1.5 pb-2 text-ui text-text-2">
-          Signed in as <span className="font-semibold text-ink">{userName}</span>
+          Shared workspace: <span className="font-semibold text-ink">{userName}</span>
         </p>
       ) : null}
-      <MenuItem
-        title="Sign out"
-        leading={
-          <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-pill border border-pill-outline">
-            <LogOut size={14} strokeWidth={2} aria-hidden />
-          </span>
-        }
-        onSelect={async () => {
-          setOpen(false);
-          await signOut();
-          router.push("/sign-in");
-          router.refresh();
-        }}
-      />
+      <p className="px-3 pb-2 text-ui-sm text-text-muted">
+        Everyone can view and edit the same trips, clients, and saved places.
+      </p>
     </Menu>
   );
 }

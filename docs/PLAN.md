@@ -1,5 +1,9 @@
 # Tastebrief: full app build plan
 
+## Hackathon access update (30 Oct 2026)
+
+The app now opens directly into one shared `tastebrief-demo` workspace. There is no visitor authentication, login page, session cookie, or auth proxy. Existing owner scopes remain and resolve to that shared owner. The authentication sections below describe the earlier design.
+
 ## Context
 
 The v2 designs in Paper (file `qloo`, page "v2 Itinerary builder", 20 artboards) and `PRODUCT.md` define a B2B itinerary builder for travel advisors and concierge teams. The advisor sets up a trip in a booking-style bar, the client's saved favorites drive a first search for places, the advisor refines with a durable chat agent, picks places into a day-by-day itinerary, and shares a read-only link with the traveler. Every recommendation shows why: the client's taste (explainability from the recommendation API) and the advisor's own saved places and notes.

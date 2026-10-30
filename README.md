@@ -6,7 +6,9 @@ Read `AGENTS.md` for the working agreements and `docs/PLAN.md` for the full desi
 
 ## Stack
 
-Next.js 16 (App Router, React 19), AI SDK 7 with the Vercel Workflow DevKit (`WorkflowAgent`, durable and resumable turns), a Codex OAuth provider for the model, Neon Postgres with Drizzle, Neon Auth, Google Maps and Places (New), Tailwind v4 tokens.
+Next.js 16 (App Router, React 19), AI SDK 7 with the Vercel Workflow DevKit (`WorkflowAgent`, durable and resumable turns), a Codex OAuth provider for the model, Neon Postgres with Drizzle, Google Maps and Places (New), Tailwind v4 tokens.
+
+Everyone enters the same shared demo workspace without signing in. Trips, clients, and saved places belong to the stable `tastebrief-demo` owner. Existing account workspaces stay separate. No Neon Auth configuration is required.
 
 ## Run it
 
@@ -25,7 +27,7 @@ Useful scripts:
 | `npm run typecheck`, `npm run lint`, `npm test` | TypeScript, ESLint, Vitest (DB tests use `DATABASE_URL`) |
 | `npm run copy:audit` | fails on provider names or em dashes in UI code |
 | `npm run db:generate` / `db:migrate` / `db:push` / `db:studio` | drizzle-kit |
-| `npx tsx --conditions=react-server scripts/seed-demo.ts --owner-email <email>` | demo clients, places and trips for an account (see `docs/DEMO.md`) |
+| `npx tsx --conditions=react-server scripts/seed-demo.ts --owner tastebrief-demo` | demo clients, places and trips for an account (see `docs/DEMO.md`) |
 | `npx tsx --conditions=react-server scripts/qloo-smoke.ts` | live check of the recommendation client |
 | `PORT=3105 AGENT_DEV_TOOLS=1 PLAYWRIGHT_CHANNEL=chrome npx playwright test e2e/chat` | the chat reliability scenarios against a dev server on that port |
 

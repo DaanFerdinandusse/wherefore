@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Bookmark, BriefcaseBusiness, Plus, Search, Settings, Users, X } from "lucide-react";
+import { Bookmark, BriefcaseBusiness, Plus, Search, Users, X } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { FilmImage } from "@/components/ui/film-image";
@@ -14,7 +14,7 @@ import { activeChatId, chatTimeLabel, UNTITLED_CHAT, type NavChat } from "@/lib/
 import { cn } from "@/lib/ui/cn";
 
 import { flattenResults, type SearchResults } from "./search-results";
-import { signOut, useShell } from "./shell-store";
+import { useShell } from "./shell-store";
 
 // G3 Nav drawer: the menu button's sheet from the left. New trip, a search
 // across clients, trips and places, the sections, the most recent trips
@@ -241,20 +241,8 @@ function DrawerBody({ onClose, pathname }: { onClose: () => void; pathname: stri
         <Avatar name={userName} tone="ink" size={38} />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-body leading-5 font-semibold text-ink">{userName || "Your account"}</span>
-          <span className="text-ui-sm text-text-muted">Your account</span>
+          <span className="text-ui-sm text-text-muted">Shared demo workspace</span>
         </span>
-        <button
-          type="button"
-          onClick={async () => {
-            await signOut();
-            router.push("/sign-in");
-            router.refresh();
-          }}
-          className="inline-flex h-[38px] items-center gap-2 rounded-pill px-3 text-ui-sm font-medium text-text-3 transition-colors hover:bg-canvas hover:text-ink"
-        >
-          <Settings size={16} strokeWidth={1.8} aria-hidden />
-          Sign out
-        </button>
       </div>
     </>
   );

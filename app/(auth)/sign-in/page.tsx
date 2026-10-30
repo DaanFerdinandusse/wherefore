@@ -1,9 +1,7 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { AuthForm } from "../auth-form";
+import { HOME_PATH } from "@/lib/auth/next-path";
 
-export const metadata: Metadata = { title: "Sign in · Tastebrief" };
-
-export default function SignInPage() {
-  return <AuthForm mode="sign-in" />;
+export default function Page() {
+  redirect(HOME_PATH);
 }

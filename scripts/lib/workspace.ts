@@ -2,6 +2,7 @@ import "server-only";
 
 import { eq, sql } from "drizzle-orm";
 
+import { sharedUser } from "@/lib/auth/shared-user";
 import { db } from "@/lib/db";
 import { advisorPlaces, advisors, chats, clients, trips } from "@/lib/db/schema";
 
@@ -14,8 +15,12 @@ export class OwnerNotFoundError extends Error {
   override name = "OwnerNotFoundError";
 }
 
-/** The Neon Auth user by id or email. Reads neon_auth."user" only. */
+/** The shared demo owner, or a legacy Neon Auth user by id or email. */
 export async function findAuthUser(owner: { id: string } | { email: string }): Promise<AuthUserRow> {
+  const demo = sharedUser();
+  if ("id" in owner && owner.id === demo.userId) {
+    return { id: demo.userId, email: demo.email, name: demo.name, createdAt: null };
+  }
   const where =
     "id" in owner ? sql`u.id::text = ${owner.id}` : sql`lower(u.email) = lower(${owner.email})`;
   const result = await db.execute<AuthUserRow>(sql`

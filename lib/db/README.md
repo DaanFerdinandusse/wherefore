@@ -6,7 +6,7 @@ Drizzle on Neon over HTTP (`drizzle-orm/neon-http`). `lib/db/index.ts` holds the
 
 | Table | Owned | What it holds | Written by |
 |---|---|---|---|
-| `advisors` | yes | Profile per Neon Auth user: display name, home city, taste tags | `lib/auth/advisor.ts` (`ensureAdvisor` on the first authenticated request) |
+| `advisors` | yes | Profile per workspace owner: display name, home city, taste tags | `lib/auth/advisor.ts` (`ensureAdvisor` on the first request) |
 | `clients`, `client_favorites` | yes (favorites through their client) | Client profile, favorites in order, rules, media, taste tags | `lib/clients` |
 | `places` | no | Cache of every place touched, unique on `entity_id` | `upsertPlaces` in `lib/places` |
 | `advisor_places` | yes | My places: saved place, city, private note | `lib/places` |
@@ -16,7 +16,7 @@ Drizzle on Neon over HTTP (`drizzle-orm/neon-http`). `lib/db/index.ts` holds the
 | `trip_calls` | through the trip | The "How we got this" log | `logTripCall` in `lib/trips` |
 | `chats`, `codex_credentials`, `api_cache` | see `chat.ts`, `cache.ts` | Agent runtime and provider cache | agent and recommendation slices |
 
-`neon_auth.*` belongs to Neon Auth. We only read `neon_auth.member` to get a user's org ids (`lib/auth/server.ts`). `drizzle.config.ts` filters it out.
+`neon_auth.*` belongs to Neon Auth. The public demo does not read it. Legacy account maintenance scripts can still resolve previous owners from it. `drizzle.config.ts` filters it out.
 
 ## Ownership rule
 

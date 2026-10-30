@@ -267,8 +267,8 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
         endDate: trips.endDate,
         clientName: trips.clientName,
         advisorName: advisors.displayName,
-        // The advisor's sign-in email: the page's "Message" action writes to it.
-        advisorEmail: sql<string | null>`(select u.email from neon_auth."user" u where u.id::text = ${trips.ownerId})`,
+        // The public demo has no personal advisor email.
+        advisorEmail: sql<string | null>`null::text`,
       })
       .from(trips)
       .leftJoin(advisors, eq(advisors.userId, trips.ownerId))

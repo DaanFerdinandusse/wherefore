@@ -5,8 +5,8 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { advisors } from "@/lib/db/schema";
 
-// The advisors row is the app's own profile for a Neon Auth user: display name,
-// home city, taste portrait. It is created on the first authenticated request.
+// The advisors row holds the workspace profile: display name, home city,
+// and taste portrait. It is created on the first request.
 
 export type Advisor = typeof advisors.$inferSelect;
 
@@ -38,7 +38,7 @@ export async function ensureAdvisor(user: AdvisorSeed): Promise<Advisor> {
   return row;
 }
 
-/** The advisors row for a user; null before their first authenticated request. */
+/** The advisors row for a user; null before their first request. */
 export async function getAdvisor(userId: string): Promise<Advisor | null> {
   const [row] = await db.select().from(advisors).where(eq(advisors.userId, userId)).limit(1);
   return row ?? null;
