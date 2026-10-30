@@ -175,6 +175,24 @@ describe("plain drivers", () => {
     ]);
     expect(view.days[0]?.slots[0]?.place?.because).toEqual([{ name: "Via Carota", share: 50 }]);
   });
+
+  it("keeps the mark of an artist or film, and no tags", () => {
+    const view = toSharedTripView(trip, [
+      slot({
+        place: {
+          ...uva,
+          explainability: [
+            { entityId: "e-via-carota", name: "Via Carota", share: 60, tags: ["Italian", "Warm"] },
+            { entityId: "e-band", name: "Khruangbin", share: 40, media: true },
+          ],
+        },
+      }),
+    ]);
+    expect(view.days[0]?.slots[0]?.place?.because).toEqual([
+      { name: "Via Carota", share: 60 },
+      { name: "Khruangbin", share: 40, media: true },
+    ]);
+  });
 });
 
 describe("place facts from the provider properties", () => {

@@ -291,7 +291,7 @@ async function* seed(
   yield output("explaining", { done: 0, total: toExplain.length, progress: "Explaining picks" });
   let explained = 0;
   try {
-    explained = (await explainCards(turn, ctx, toExplain, abortSignal)).size;
+    explained = (await explainCards(turn, ctx, toExplain, abortSignal)).reasons.size;
   } catch (error) {
     if (abortSignal?.aborted) throw error;
     console.error(`[seed_trip ${turn.tripId}] explaining failed`, error);

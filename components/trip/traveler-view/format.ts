@@ -116,13 +116,15 @@ export type ReasonLine = { favorite: string; text: string };
 /**
  * "Because you love Via Carota: the same cozy, lively feel." The favorite
  * with the biggest share names the line; up to two shared taste tags finish
- * it. Without tags the line stops at the favorite. Null without a named
- * favorite: a reason must say which favorite the place connects to.
+ * it. Without tags the line stops at the favorite, and so it does for an
+ * artist or film: a place does not have the same feel as a band. Null without
+ * a named favorite: a reason must say which favorite the place connects to.
  */
 export function reasonLine(place: Pick<SharedTripPlace, "because" | "sharedTags">): ReasonLine | null {
   const favorite = topFavorites(place.because)[0];
   if (!favorite) return null;
-  const tags = place.sharedTags
+  const media = place.because.some((item) => item.media && item.name.trim() === favorite);
+  const tags = (media ? [] : place.sharedTags)
     .map((tag) => tag.trim())
     .filter(Boolean)
     .slice(0, 2)

@@ -24,6 +24,7 @@ the Workflow run, its stream and a conditional UPDATE.
 | `prompt.ts`, `trip-context.ts` | System prompt with the trip header (as a `<trip_data>` block) and the seed-turn brief; `TripContextOutput`, capped under about 3k tokens. |
 | `writes.ts` | Every tool write: the turn guard inside the write statement (`lib/trips/turn-guard.ts`), keyed upserts. |
 | `explain.ts` | explainStep: one model call per ask that only picks favorites, shared tags and one snippet index from the input; the sentence is a template rendered in code. |
+| `taste-overlap.ts` | Which favorite a place is most like and on which tags: `withOverlap`, `likeLine` ("Like Via Carota: Italian, warm, stylish"), `mediaDriver`, `tagPhrase`. Pure and client safe: the cards render the same line. |
 | `tools/index.ts` | The tool set for a turn (`toModelOutput` per tool), `activeToolsFor` (seed turn). |
 | `tools/steps.ts` | Every `"use step"` function, and nothing else (keeps server code out of the workflow bundle). |
 | `tools/*.ts` | The tool bodies: `seed-trip`, `find-places`, `score-places`, `place-tools` (lookup, itinerary, remove), shared `search-core`, `trip-data`, pure `signals`, `category-loop`, `labels`, `model-output`, `notes` (agent slot notes). |
@@ -132,6 +133,17 @@ The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives i
 - **Reasons are templates.** The model picks favorites, shared tags and one
   description snippet by index; anything not in the input is dropped and a
   place with no valid favorite gets no reason (`explain.ts`).
+- **"Like" is chosen in code.** Driver shares are nearly flat, so the explain
+  step (`explainCards`) compares tags, read once per search from the `places`
+  rows: cuisine, culinary style, ambience and decor only, empty words out, a tag
+  every candidate carries worth nothing, a cuisine worth more than a mood. Only
+  the favorite of the best overlap carries `tags` on its driver row, stored in
+  the `explainability` jsonb of `trip_places` and `ask_places` and in the
+  checkpoint; at least 2 tags, at most 3, else no line and the "Because Ana
+  loves ..." sentence stays. A plain driver, an artist or film (`media` on the
+  row) and the place itself are never the favorite. Cards found again by a later
+  search get their tags back here, since their drivers were replaced. A
+  replacement (remove_place, the UI's replace) has no explain step: no line.
 - **Agent slot notes are for the advisor only** (`note_source = 'agent'`,
   `note_for_traveler` false), with hours, prices and reservation claims
   stripped unless they quote a stored fact (`tools/notes.ts`).

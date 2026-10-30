@@ -346,7 +346,7 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
     expect(urls[0]!.searchParams.get("signal.interests.entities")).toBe(signals.join(","));
     expect(card?.because).toEqual([
       { entityId: FAV_A, name: "Via Carota", share: 50 },
-      { entityId: ARTIST, name: "Khruangbin", share: 20 },
+      { entityId: ARTIST, name: "Khruangbin", share: 20, media: true },
       { entityId: "trip-picks", name: "This trip's picks", share: 30 },
     ]);
     const [row] = await db.select().from(tripPlaces).where(eq(tripPlaces.id, card!.tripPlaceId));

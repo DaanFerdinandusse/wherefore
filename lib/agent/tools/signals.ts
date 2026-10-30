@@ -56,7 +56,7 @@ export type TripSignals = {
   /** Entity ids for signal.interests.entities, favorites first. */
   signals: string[];
   /** Named client favorites (places, artists, films), for explainability. */
-  favorites: { entityId: string; name: string }[];
+  favorites: { entityId: string; name: string; media?: true }[];
   favoritesUsed: BuiltFrom["favorites"];
   companionsWithoutFavorites: string[];
   /** Advisor place entity ids added as signals (blend on), else empty. */
@@ -76,7 +76,7 @@ export function buildSignals(input: {
 }): TripSignals {
   const seen = new Set<string>();
   const signals: string[] = [];
-  const favorites: { entityId: string; name: string }[] = [];
+  const favorites: TripSignals["favorites"] = [];
   const favoritesUsed: BuiltFrom["favorites"] = [];
   const companionsWithoutFavorites: string[] = [];
   const doneClients = new Set<string>();
@@ -88,21 +88,23 @@ export function buildSignals(input: {
     }
     if (doneClients.has(traveler.clientId)) continue;
     doneClients.add(traveler.clientId);
-    const own = [
+    const own: TripSignals["favorites"] = [
       ...input.favorites.flatMap((f) =>
         f.clientId === traveler.clientId && f.entityId && f.match !== "unmatched" ? [{ entityId: f.entityId, name: f.name }] : [],
       ),
       ...(input.media ?? []).flatMap((m) =>
-        m.clientId === traveler.clientId && m.entityId ? [{ entityId: m.entityId, name: m.name ?? m.query }] : [],
+        m.clientId === traveler.clientId && m.entityId
+          ? [{ entityId: m.entityId, name: m.name ?? m.query, media: true as const }]
+          : [],
       ),
     ];
     const names: string[] = [];
-    for (const { entityId, name } of own) {
-      if (seen.has(entityId) || signals.length >= MAX_SIGNALS) continue;
-      seen.add(entityId);
-      signals.push(entityId);
-      favorites.push({ entityId, name });
-      names.push(name);
+    for (const favorite of own) {
+      if (seen.has(favorite.entityId) || signals.length >= MAX_SIGNALS) continue;
+      seen.add(favorite.entityId);
+      signals.push(favorite.entityId);
+      favorites.push(favorite);
+      names.push(favorite.name);
     }
     if (names.length === 0) companionsWithoutFavorites.push(traveler.name);
     else favoritesUsed.push({ clientName: traveler.name, names });
@@ -172,6 +174,7 @@ export function driversFor(
 ): Explainability {
   const advisor = new Set(signals.advisorSignals);
   const picks = new Set(signals.tripPickSignals);
+  const media = new Set(signals.favorites.filter((f) => f.media).map((f) => f.entityId));
   const merged = signalScores.map((s) =>
     advisor.has(s.entityId)
       ? { entityId: ADVISOR_DRIVER_ID, score: s.score }
@@ -188,7 +191,7 @@ export function driversFor(
   const named = rows.filter((r) => !isPlainDriver(r.entityId));
   if (named.length === 0) return [];
   return [
-    ...named,
+    ...named.map((r) => (media.has(r.entityId) ? { ...r, media: true } : r)),
     ...rows.filter((r) => r.entityId === ADVISOR_DRIVER_ID),
     ...rows.filter((r) => r.entityId === TRIP_PICKS_DRIVER_ID),
     ...rows.filter((r) => r.entityId === OTHER_FAVORITES_ID),

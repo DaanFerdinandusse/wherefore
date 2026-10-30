@@ -188,6 +188,24 @@ describe("cover and brief", () => {
 });
 
 describe("a place card", () => {
+  it("says which favorite the place is like before who its fans are", () => {
+    const via = { entityId: "E1", name: "Via Carota", share: 27 };
+    const lilia = { entityId: "E2", name: "Lilia", share: 25, tags: ["Italian", "Warm", "Stylish"] };
+    expect(headline({ because: [via, lilia] })).toBe("Like Lilia: Italian, warm, stylish");
+    // A dish or a keyword still comes first.
+    expect(headline({ dishes: ["Oysters"], because: [via, lilia] })).toBe("For the oysters");
+    expect(headline({ keywords: [{ name: "Tinned fish", count: 132 }], because: [via, lilia] })).toBe("Known for tinned fish");
+    expect(headline({ because: [via, { ...lilia, tags: ["Warm"] }] })).toBe("Via Carota fans come here");
+    expect(headline({ because: [{ entityId: "trip-picks", name: "This trip's picks", share: 90, tags: ["Warm", "Cozy"] }, via] })).toBe(
+      "Via Carota fans come here",
+    );
+    const long = { entityId: "E3", name: "Le Châteaubriand", share: 25, tags: ["Gastronomic", "Minimalist", "Stylish"] };
+    expect(headline({ because: [long] })).toBe("Like Le Châteaubriand: gastronomic, minimalist");
+    expect(headline({ because: [{ ...long, name: "A Very Long Favorite Name Of A Restaurant Here" }] })).toBe(
+      "A Very Long Favorite Name Of A Restaurant Here fans come here",
+    );
+  });
+
   it("leads with a dish, then a keyword, then a favorite, else nothing", () => {
     expect(headline({ dishes: ["Oysters"], keywords: [{ name: "fish", count: 50 }], because: [] })).toBe("For the oysters");
     expect(headline({ keywords: [{ name: "Tinned fish", count: 132 }], because: [] })).toBe("Known for tinned fish");

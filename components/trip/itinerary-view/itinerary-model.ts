@@ -6,6 +6,7 @@
 // the UI hides that element. Never model prose, never demo data.
 
 import type { Ask, Category, ItinerarySlot, SlotName, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
+import { likeLine } from "@/lib/agent/taste-overlap";
 import { favoriteDrivers } from "@/lib/qloo/normalize";
 
 import { SLOT_LABELS } from "../workspace/format";
@@ -340,6 +341,9 @@ export function subLine(card: Pick<TripPlaceCard, "category" | "neighborhood" | 
 /** The longest dish or keyword the photo headline takes. */
 export const HEADLINE_MAX = 24;
 
+/** The longest "Like ..." headline: two lines on the small card. */
+export const HEADLINE_LIKE_MAX = 48;
+
 /** Reviews mention a keyword this often before it can carry a headline or a Why line. */
 export const KEYWORD_MIN_COUNT = 3;
 
@@ -350,7 +354,8 @@ function lower(text: string): string {
 /**
  * The italic line on the photo. From the place's own top dish ("For the
  * oysters"), else the most mentioned review keyword ("Known for tinned
- * fish"), else the favorite most behind the pick ("Devoción fans come
+ * fish"), else the favorite the place is most like ("Like Via Carota: Italian,
+ * warm, stylish"), else the one most behind the pick ("Devoción fans come
  * here"). Null when there is no fact to say it from.
  */
 export function headline(card: Pick<TripPlaceCard, "dishes" | "keywords" | "because">): string | null {
@@ -359,6 +364,8 @@ export function headline(card: Pick<TripPlaceCard, "dishes" | "keywords" | "beca
   if (dish) return `For the ${lower(dish)}`;
   const keyword = card.keywords?.find((k) => k.count >= KEYWORD_MIN_COUNT && k.name.trim().length <= HEADLINE_MAX)?.name.trim();
   if (keyword) return `Known for ${lower(keyword)}`;
+  const like = likeLine(card.because, HEADLINE_LIKE_MAX);
+  if (like) return like;
   const top = [...favoriteDrivers(card.because)].sort((a, b) => b.share - a.share)[0];
   if (top?.name) return `${top.name} fans come here`;
   return null;

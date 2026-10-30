@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { FilmImage } from "@/components/ui/film-image";
+import { likeLine } from "@/lib/agent/taste-overlap";
 import type { Category, ItinerarySlot, SlotName, SlotTarget, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
 import type { GoogleAttribution } from "@/lib/google/contracts";
 import type { TripPlaceProfileDriver } from "@/lib/trips/profile-types";
@@ -361,6 +362,7 @@ function ForPanel({
   const bars = keywordBars(card.keywords);
   const noted = new Set((clientNote?.matches ?? []).map((m) => m.toLowerCase()));
   const named = namedDrivers(card.because).slice(0, 3);
+  const like = likeLine(card.because);
   const photos = new Map(drivers.map((d) => [d.entityId, d.imageUrl]));
   const tags = card.sharedTags.slice(0, 4);
   const quote = card.yourPlace?.note?.trim()
@@ -437,6 +439,7 @@ function ForPanel({
               </p>
             ) : null}
           </div>
+          {like ? <p className="text-body leading-5 text-ink" data-testid="place-card-like">{like}</p> : null}
           {named.map((driver) => {
             const photo = photos.get(driver.entityId);
             return (

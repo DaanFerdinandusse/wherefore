@@ -24,6 +24,7 @@ import { descriptionTexts } from "@/lib/trips/map";
 import { agentModelRef, agentProviderOptions } from "@/lib/codex/provider";
 
 import { explainPlaces, factSnippets, type ExplainInput } from "../explain";
+import { likeDriver, searchTags, withOverlap } from "../taste-overlap";
 import { cacheWrite, guarded, writeReasons, type TurnRef } from "../writes";
 
 import { driversFor, isPlainDriver } from "./signals";
@@ -193,35 +194,63 @@ export async function scoreAdvisorPlaces(
   };
 }
 
+/** What explainStep wrote, by trip place id. `drivers`: the cards that have a favorite to be "Like", tags included. */
+export type ExplainedCards = { reasons: Map<string, string>; drivers: Map<string, Explainability> };
+
 /**
- * explainStep: one model call over the cards, grounded reasons written to
- * trip_places.reason (conditional on the turn). Returns the reasons written.
+ * explainStep: which favorite each card is like, from the tags of `cards` (one
+ * search's candidates) and of their favorites, read here once. Then one model
+ * call over the cards without a reason, and grounded reasons and tags written
+ * to trip_places (conditional on the turn). A place found again by a later
+ * search keeps its reason but has new drivers, so tags are for every card.
  */
 export async function explainCards(
   turn: TurnRef,
   ctx: ToolTrip,
   cards: TripPlaceCard[],
   abortSignal?: AbortSignal,
-): Promise<Map<string, string>> {
-  const todo = cards.filter((c) => !c.reason);
-  if (todo.length === 0) return new Map();
-  const factRows = await db
-    .select({ id: places.id, description: places.description, properties: places.properties })
+): Promise<ExplainedCards> {
+  if (cards.length === 0) return { reasons: new Map(), drivers: new Map() };
+  const favoriteIds = [
+    ...new Set(cards.flatMap((c) => c.because.filter((b) => !isPlainDriver(b.entityId) && !b.media).map((b) => b.entityId))),
+  ];
+  const rows = await db
+    .select({
+      id: places.id,
+      entityId: places.entityId,
+      tags: places.tags,
+      description: places.description,
+      properties: places.properties,
+    })
     .from(places)
-    .where(inArray(places.id, [...new Set(todo.map((c) => c.placeId))]));
-  const factsByPlace = new Map(factRows.map((r) => [r.id, factSnippets(descriptionTexts(r))]));
-  const inputs: ExplainInput[] = todo.map((card) => ({
-    tripPlaceId: card.tripPlaceId,
-    name: card.name,
-    category: card.category,
-    neighborhood: card.neighborhood,
-    because: card.because
-      .filter((b) => !isPlainDriver(b.entityId))
-      .map((b) => ({ name: b.name, share: b.share, entityId: b.entityId })),
-    sharedTags: card.sharedTags.map((t) => t.name),
-    facts: factsByPlace.get(card.placeId) ?? [],
-    yourPlace: Boolean(card.yourPlace),
-  }));
+    .where(or(inArray(places.id, [...new Set(cards.map((c) => c.placeId))]), inArray(places.entityId, favoriteIds)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const favoriteTags = new Map(rows.map((r) => [r.entityId, r.tags]));
+  const search = searchTags(cards.map((c) => byId.get(c.placeId)?.tags ?? []));
+
+  const drivers = new Map<string, Explainability>();
+  for (const card of cards) {
+    // Tags from an earlier search stay: they are what its reason says.
+    const candidate = { entityId: card.entityId, tags: byId.get(card.placeId)?.tags ?? [] };
+    const tagged = likeDriver(card.because) ? card.because : withOverlap(candidate, card.because, favoriteTags, search);
+    if (likeDriver(tagged)) drivers.set(card.tripPlaceId, tagged);
+  }
+
+  const inputs: ExplainInput[] = cards
+    .filter((card) => !card.reason)
+    .map((card) => {
+      const row = byId.get(card.placeId);
+      return {
+        tripPlaceId: card.tripPlaceId,
+        name: card.name,
+        category: card.category,
+        neighborhood: card.neighborhood,
+        because: (drivers.get(card.tripPlaceId) ?? card.because).filter((b) => !isPlainDriver(b.entityId)),
+        sharedTags: card.sharedTags.map((t) => t.name),
+        facts: row ? factSnippets(descriptionTexts(row)) : [],
+        yourPlace: Boolean(card.yourPlace),
+      };
+    });
   const ownerOf: Record<string, string> = {};
   for (const used of ctx.signals.favoritesUsed) {
     for (const name of used.names) ownerOf[name] ??= used.clientName;
@@ -237,9 +266,13 @@ export async function explainCards(
   );
   await writeReasons(
     turn,
-    [...reasons.entries()].map(([tripPlaceId, reason]) => ({ tripPlaceId, reason })),
+    [...new Set([...reasons.keys(), ...drivers.keys()])].map((tripPlaceId) => ({
+      tripPlaceId,
+      reason: reasons.get(tripPlaceId),
+      explainability: drivers.get(tripPlaceId),
+    })),
   );
-  return reasons;
+  return { reasons, drivers };
 }
 
 /**

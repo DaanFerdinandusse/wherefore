@@ -24,6 +24,7 @@ import {
 } from "@/lib/qloo";
 import { placeFactsFromProperties, type AskFilters } from "@/lib/trips/map";
 
+import { carryTags } from "../taste-overlap";
 import { assertTurn, finishAsk, guarded, TurnSupersededError, type TurnRef } from "../writes";
 
 import {
@@ -245,7 +246,15 @@ const rankedSchema = z.object({
   category: z.enum(["eat", "drink", "coffee", "see", "stay", "other"]),
   affinity: z.number(),
   score: z.number(),
-  explainability: z.array(z.object({ entityId: z.string(), name: z.string(), share: z.number() })),
+  explainability: z.array(
+    z.object({
+      entityId: z.string(),
+      name: z.string(),
+      share: z.number(),
+      tags: z.array(z.string()).optional(),
+      media: z.boolean().optional(),
+    }),
+  ),
 });
 const stepSchema = z.object({
   key: z.enum(["search", "score", "explain"]),
@@ -279,10 +288,15 @@ const checkpointSchema = z.object({
 });
 export type AskCheckpoint = z.infer<typeof checkpointSchema>;
 
+/** A stored checkpoint, or none when it does not read. */
+export function parseCheckpoint(value: unknown): AskCheckpoint {
+  const parsed = checkpointSchema.safeParse(value ?? {});
+  return parsed.success ? parsed.data : {};
+}
+
 async function readCheckpoint(askId: string): Promise<AskCheckpoint> {
   const [row] = await db.select({ checkpoint: tripAsks.checkpoint }).from(tripAsks).where(eq(tripAsks.id, askId)).limit(1);
-  const parsed = checkpointSchema.safeParse(row?.checkpoint ?? {});
-  return parsed.success ? parsed.data : {};
+  return parseCheckpoint(row?.checkpoint);
 }
 
 export async function* findPlacesTool(
@@ -613,7 +627,13 @@ export async function* findPlacesTool(
       };
       yield output("explaining", { done: 0, total: toExplain });
       try {
-        explained = (await explainCards(turn, ctx, cards, abortSignal)).size;
+        const { reasons, drivers } = await explainCards(turn, ctx, cards, abortSignal);
+        explained = reasons.size;
+        // The tags reach the ask's rows and the checkpoint too, so a retried step keeps them.
+        ranked = ranked.map((r) => ({ ...r, explainability: carryTags(r.explainability, drivers.get(r.tripPlaceId)) }));
+        await persistAskPlaces(turn, ctx, ask.id, ranked);
+        if (checkpoint.score) checkpoint.score = { ...checkpoint.score, ranked };
+        else if (checkpoint.search) checkpoint.search = { ...checkpoint.search, ranked };
         checkpoint.explain = { done: explained, total: toExplain };
         await saveCheckpoint(checkpoint);
       } catch (error) {

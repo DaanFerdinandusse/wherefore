@@ -83,6 +83,17 @@ describe.skipIf(!hasDatabase)("lib/agent/writes", () => {
     expect(row?.reason).toBe("Natural wine like Via Carota.");
   });
 
+  it("writes the tagged drivers with the reason, and keeps what a row leaves out", async () => {
+    const drivers = [{ entityId: "e-via", name: "Via Carota", share: 100, tags: ["Italian", "Warm"] }];
+    expect(await writeReasons(turn, [{ tripPlaceId, explainability: drivers }])).toBe(1);
+    const read = async () =>
+      (await db.select({ reason: tripPlaces.reason, drivers: tripPlaces.explainability }).from(tripPlaces).where(eq(tripPlaces.id, tripPlaceId)))[0];
+    expect(await read()).toEqual({ reason: "Natural wine like Via Carota.", drivers });
+    expect(await writeReasons(stale, [{ tripPlaceId, explainability: [] }])).toBe(0);
+    expect(await writeReasons(turn, [{ tripPlaceId, reason: "Like Via Carota: Italian and warm." }])).toBe(1);
+    expect(await read()).toEqual({ reason: "Like Via Carota: Italian and warm.", drivers });
+  });
+
   it("never writes a reason onto another trip's place", async () => {
     const otherTrip = { ...turn, tripId: randomUUID() };
     expect(await writeReasons(otherTrip, [{ tripPlaceId, reason: "Nope." }])).toBe(0);

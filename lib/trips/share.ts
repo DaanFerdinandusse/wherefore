@@ -199,7 +199,7 @@ function toSharedPlace(place: NonNullable<SharedSlotRow["place"]>): SharedTripPl
     ...(images[0] ? { imageUrl: images[0] } : {}),
     neighborhood: place.neighborhood ?? undefined,
     // Named favorites only: "Your places" and "Other favorites" are no favorites of the traveler's.
-    because: favoriteDrivers(place.explainability).map(({ name, share }) => ({ name, share })),
+    because: favoriteDrivers(place.explainability).map(({ name, share, media }) => ({ name, share, ...(media ? { media } : {}) })),
     sharedTags: place.sharedTags.map((tag) => tag.name),
     reason: place.reason?.trim() || undefined,
     ...(images.length > 0 ? { images } : {}),

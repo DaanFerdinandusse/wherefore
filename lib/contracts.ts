@@ -34,7 +34,15 @@ export type FavoriteCandidate = {
 
 // Per client favorite: how much it drove a recommendation. Shares are integer
 // percentages that sum to 100 within one result.
-export type Explainability = { entityId: string; name: string; share: number }[];
+export type Explainability = {
+  entityId: string;
+  name: string;
+  share: number;
+  /** On the one favorite this place is most like, the taste tags they share ("Like Via Carota: Italian, warm, stylish"). */
+  tags?: string[];
+  /** An artist or film: it drives the match and has no place tags. */
+  media?: boolean;
+}[];
 
 export type Destination = {
   name: string;
@@ -154,7 +162,7 @@ export type SharedTripPlace = {
   imageUrl?: string;
   neighborhood?: string;
   /** "Because you love Via Carota and Lilia": the favorite names and their shares. */
-  because: { name: string; share: number }[];
+  because: { name: string; share: number; media?: boolean }[];
   sharedTags: string[];
   reason?: string;
   /** Up to three photo urls, the first one first. `imageUrl` is the first of them. */

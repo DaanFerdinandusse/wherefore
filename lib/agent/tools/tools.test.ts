@@ -239,8 +239,9 @@ describe("buildSignals", () => {
         media: [...media, { clientId: "c-marcus", entityId: "e-jazz", name: "Alice Coltrane", query: "alice" }],
       });
       expect(signals.signals).toEqual(["e-via", "e-lilia", "e-khruangbin", "e-mood", "e-jazz"]);
-      expect(signals.favorites).toContainEqual({ entityId: "e-khruangbin", name: "Khruangbin" });
-      expect(signals.favorites).toContainEqual({ entityId: "e-mood", name: "in the mood for love" });
+      expect(signals.favorites).toContainEqual({ entityId: "e-khruangbin", name: "Khruangbin", media: true });
+      expect(signals.favorites).toContainEqual({ entityId: "e-mood", name: "in the mood for love", media: true });
+      expect(signals.favorites).toContainEqual({ entityId: "e-via", name: "Via Carota" });
       expect(signals.favoritesUsed).toEqual([
         { clientName: "Ana Ruiz", names: ["Via Carota", "Lilia", "Khruangbin", "in the mood for love"] },
         { clientName: "Marcus", names: ["Alice Coltrane"] },
@@ -269,7 +270,7 @@ describe("buildSignals", () => {
         ),
       ).toEqual([
         { entityId: "e-via", name: "Via Carota", share: 82 },
-        { entityId: "e-khruangbin", name: "Khruangbin", share: 18 },
+        { entityId: "e-khruangbin", name: "Khruangbin", share: 18, media: true },
       ]);
     });
 

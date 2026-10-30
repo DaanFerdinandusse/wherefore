@@ -3,7 +3,7 @@ import "server-only";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { FatalError } from "workflow";
 
-import type { BuiltFrom, TripSnapshot } from "@/lib/contracts";
+import type { BuiltFrom, Explainability, TripSnapshot } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { chats, tripAsks, tripPlaces, trips } from "@/lib/db/schema";
 import { TurnLostError, turnGuardSql, type TurnGuard } from "@/lib/trips/turn-guard";
@@ -100,20 +100,25 @@ export async function cacheWrite<T>(turn: TurnRef, write: () => Promise<T>): Pro
 }
 
 /**
- * Stores grounded reason sentences on trip places of this trip. One
- * statement, conditional on the lock. Keyed by trip place: a replay writes
- * the same text again. A null reason clears nothing (only strings are sent).
+ * Stores grounded reason sentences and the drivers with their taste tags on
+ * trip places of this trip. One statement, conditional on the lock. Keyed by
+ * trip place: a replay writes the same text again. What a row leaves out
+ * stays as it is.
  * @returns how many trip places were updated (0 when the turn lost its lock).
  */
-export async function writeReasons(turn: TurnRef, reasons: { tripPlaceId: string; reason: string }[]): Promise<number> {
+export async function writeReasons(
+  turn: TurnRef,
+  reasons: { tripPlaceId: string; reason?: string; explainability?: Explainability }[],
+): Promise<number> {
   if (reasons.length === 0) return 0;
   const rows = await db
     .update(tripPlaces)
     .set({
-      reason: sql`r.reason`,
+      reason: sql`coalesce(r.reason, ${tripPlaces.reason})`,
+      explainability: sql`coalesce(r.explainability, ${tripPlaces.explainability})`,
       updatedAt: sql`now()`,
     })
-    .from(sql`jsonb_to_recordset(${JSON.stringify(reasons)}::jsonb) as r("tripPlaceId" uuid, reason text)`)
+    .from(sql`jsonb_to_recordset(${JSON.stringify(reasons)}::jsonb) as r("tripPlaceId" uuid, reason text, explainability jsonb)`)
     .where(and(sql`${tripPlaces.id} = r."tripPlaceId"`, eq(tripPlaces.tripId, turn.tripId), turnHolds(turn)))
     .returning({ id: tripPlaces.id });
   return rows.length;

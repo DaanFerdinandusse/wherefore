@@ -3,28 +3,43 @@ import { z } from "zod";
 
 import { registryModel } from "@/lib/codex/workflow-model";
 
+import { isProperAdjective, likeDriver, mediaDriver, tagPhrase } from "./taste-overlap";
+
+export { tagPhrase } from "./taste-overlap";
+
 // explainStep (PLAN 7): one model call per ask, and the model writes no
 // words. For each place it picks from the facts we hand it: which of the
 // client's favorites drive the pick, which shared taste tags matter, and at
 // most one description snippet by index. The sentence is rendered here from
 // a template:
 //
+//   "Like Via Carota: Italian, warm and stylish; known for its natural wine
+//    list. Also fits Ana's love of Khruangbin."
+//
+// The favorite and the tags of "Like" are chosen in code (taste-overlap.ts),
+// never by the model; the media clause appears when an artist or film is among
+// the three biggest drivers. A place with no tag line says who it is for:
+//
 //   "Because Ana loves Via Carota and Lilia; it shares cozy and Italian;
 //    known for its natural wine list."
 //
-// where the last clause is the provider's own snippet, verbatim. A pick that
-// is not in the place's input is dropped, a place with no valid favorite gets
-// no reason (the card shows the drivers only), so nothing the API did not
-// return can reach a card. If the model call fails, the top drivers and tags
-// are picked in code instead: still only facts.
+// where the snippet is the provider's own, verbatim. A pick that is not in the
+// place's input is dropped, a place with no valid favorite gets no reason (the
+// card shows the drivers only), so nothing the API did not return can reach a
+// card. If the model call fails, the top drivers and tags are picked in code
+// instead: still only facts.
 
 export type ExplainInput = {
   tripPlaceId: string;
   name: string;
   category: string;
   neighborhood?: string;
-  /** The drivers of this match, biggest share first. Plain entries ("Other favorites", "Your places", "This trip's picks") are never picked. */
-  because: { name: string; share: number; entityId?: string }[];
+  /**
+   * The drivers of this match, biggest share first. Plain entries ("Other
+   * favorites", "Your places", "This trip's picks") are never picked. `tags`
+   * marks the favorite the place is like, `media` an artist or film.
+   */
+  because: { name: string; share: number; entityId?: string; tags?: string[]; media?: boolean }[];
   /** The client's taste tags this place shares. */
   sharedTags: string[];
   /** Short description snippets from the provider (factSnippets). */
@@ -64,11 +79,13 @@ const normalize = (text: string) =>
     .trim()
     .toLowerCase();
 
+/** The drivers a reason may name for this place (no plain entries). */
+const namedDrivers = (place: Pick<ExplainInput, "because">) =>
+  place.because.filter((b) => b.name && !PLAIN_DRIVERS.has(b.entityId ?? "") && !PLAIN_NAMES.has(normalize(b.name)));
+
 /** The client favorites a reason may name for this place (no plain entries). */
 export function favoriteDrivers(place: Pick<ExplainInput, "because">): string[] {
-  return place.because
-    .filter((b) => b.name && !PLAIN_DRIVERS.has(b.entityId ?? "") && !PLAIN_NAMES.has(normalize(b.name)))
-    .map((b) => b.name);
+  return namedDrivers(place).map((b) => b.name);
 }
 
 /**
@@ -137,32 +154,6 @@ export function listOf(items: readonly string[]): string {
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
-// Adjectives of places and peoples stay capitalized ("Italian", "Japanese").
-const PROPER_ADJECTIVES = new Set(
-  (
-    "italian french japanese chinese thai indian mexican spanish portuguese greek turkish korean vietnamese " +
-    "lebanese moroccan peruvian brazilian argentinian argentine american british english irish scottish welsh european " +
-    "german austrian swiss dutch belgian scandinavian nordic danish swedish norwegian finnish icelandic " +
-    "mediterranean middle eastern asian african ethiopian caribbean cuban filipino indonesian malaysian " +
-    "persian israeli georgian basque catalan sicilian neapolitan tuscan roman venetian parisian provencal " +
-    "cajun creole hawaiian australian latin cantonese szechuan sichuan taiwanese nepalese pakistani polish " +
-    "russian ukrainian hungarian czech balkan levantine colombian venezuelan chilean egyptian senegalese " +
-    "nigerian jamaican singaporean burmese tibetan mongolian uzbek armenian syrian iranian afghan"
-  ).split(" "),
-);
-
-function isProperAdjective(word: string): boolean {
-  return PROPER_ADJECTIVES.has(word.toLowerCase());
-}
-
-/** A tag as it reads mid-sentence: "Cozy" -> "cozy", "Italian" stays. */
-export function tagPhrase(tag: string): string {
-  return tag
-    .split(/\s+/)
-    .map((word) => (isProperAdjective(word) ? word.charAt(0).toUpperCase() + word.slice(1) : word.toLowerCase()))
-    .join(" ");
-}
-
 /** A snippet as the last clause: verbatim, its first letter lowered unless it starts a name. */
 export function snippetClause(snippet: string, properNames: readonly string[]): string {
   const first = snippet.split(/\s+/)[0] ?? "";
@@ -175,29 +166,45 @@ export function snippetClause(snippet: string, properNames: readonly string[]): 
   return proper ? snippet : snippet.charAt(0).toLowerCase() + snippet.slice(1);
 }
 
-/**
- * The sentence for a validated pick. Favorites are grouped by the traveler
- * who named them: "Because Ana loves Via Carota and Marcus loves Lilia".
- */
-export function renderReason(
-  place: Pick<ExplainInput, "name" | "neighborhood">,
-  selection: ReasonSelection,
-  context: ExplainContext,
-): string {
-  const client = firstName(context.clientName);
+/** "Because Ana loves Via Carota and Marcus loves Lilia", favorites grouped by the traveler who named them. */
+function becauseClause(favorites: readonly string[], client: string, context: ExplainContext): string {
   const groups = new Map<string, string[]>();
-  for (const favorite of selection.drivers) {
+  for (const favorite of favorites) {
     const owner = firstName(context.ownerOf?.[favorite] ?? client);
     groups.set(owner, [...(groups.get(owner) ?? []), favorite]);
   }
   const loves = [...groups.entries()].map(([owner, names]) => `${owner} loves ${listOf(names)}`);
-  const clauses = [`Because ${loves.join(" and ")}`];
-  if (selection.tags.length > 0) clauses.push(`it shares ${listOf(selection.tags.map(tagPhrase))}`);
+  return `Because ${loves.join(" and ")}`;
+}
+
+/**
+ * The sentence for a validated pick: "Like <favorite>: <tags>" when the place
+ * has a favorite it is like, else "Because Ana loves ...". An artist or film
+ * among the top drivers gets its own sentence unless the first one names it.
+ */
+export function renderReason(
+  place: Pick<ExplainInput, "name" | "neighborhood" | "because">,
+  selection: ReasonSelection,
+  context: ExplainContext,
+): string {
+  const client = firstName(context.clientName);
+  const named = namedDrivers(place);
+  const like = likeDriver(named);
+  const clauses: string[] = [];
+  if (like) {
+    clauses.push(`Like ${like.name}: ${listOf((like.tags ?? []).map(tagPhrase))}`);
+  } else {
+    clauses.push(becauseClause(selection.drivers, client, context));
+    if (selection.tags.length > 0) clauses.push(`it shares ${listOf(selection.tags.map(tagPhrase))}`);
+  }
   if (selection.fact) {
     const names = [place.name, ...(place.neighborhood ? [place.neighborhood] : []), ...(context.properNames ?? [])];
     clauses.push(snippetClause(selection.fact, names));
   }
-  return `${clauses.join("; ")}.`;
+  const media = mediaDriver(named);
+  const sentence = `${clauses.join("; ")}.`;
+  if (!media || (!like && selection.drivers.includes(media.name))) return sentence;
+  return `${sentence} Also fits ${firstName(context.ownerOf?.[media.name] ?? client)}'s love of ${media.name}.`;
 }
 
 const pickSchema = z.object({

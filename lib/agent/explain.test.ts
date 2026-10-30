@@ -84,6 +84,80 @@ describe("structured reasons", () => {
     expect(reason).toBe("Because Ana loves Via Carota and Marcus loves Lilia.");
   });
 
+  describe("with a favorite the place is like", () => {
+    const like: ExplainInput = {
+      ...place,
+      because: [
+        { name: "Lilia", share: 27, entityId: "e-lilia" },
+        { name: "Via Carota", share: 25, entityId: "e-via", tags: ["Italian", "Warm", "Stylish"] },
+        { name: "Other favorites", share: 48, entityId: "other" },
+      ],
+    };
+    const band = { name: "Khruangbin", share: 20, entityId: "e-band", media: true };
+
+    it("names that favorite and its tags, whatever the model picked", () => {
+      const result = reasonsFromPicks([like], [{ place_id: "tp-1", drivers: ["Lilia"], tags: ["Cozy"] }], context);
+      expect(result.reasons.get("tp-1")).toBe("Like Via Carota: Italian, warm and stylish.");
+    });
+
+    it("keeps the model's snippet clause as it is", () => {
+      const reason = renderReason(like, { drivers: ["Lilia"], tags: ["Cozy"], fact: "Known for its natural wine list" }, context);
+      expect(reason).toBe("Like Via Carota: Italian, warm and stylish; known for its natural wine list.");
+    });
+
+    it("adds the artist or film among the top three drivers", () => {
+      const reason = renderReason({ ...like, because: [...like.because, band] }, { drivers: ["Lilia"], tags: [] }, context);
+      expect(reason).toBe("Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.");
+    });
+
+    it("says whose love it is", () => {
+      const reason = renderReason(
+        { ...like, because: [...like.because, band] },
+        { drivers: ["Lilia"], tags: [] },
+        { ...context, ownerOf: { Khruangbin: "Marcus Lee" } },
+      );
+      expect(reason).toContain("Also fits Marcus's love of Khruangbin.");
+    });
+
+    it("keeps an artist or film out when it is not a top driver", () => {
+      const others = [
+        { name: "A", share: 40, entityId: "e-a" },
+        { name: "B", share: 30, entityId: "e-b" },
+        { name: "Via Carota", share: 25, entityId: "e-via", tags: ["Italian", "Warm"] },
+        { ...band, share: 5 },
+      ];
+      expect(renderReason({ ...like, because: others }, { drivers: ["A"], tags: [] }, context)).toBe("Like Via Carota: Italian and warm.");
+    });
+
+    it("never takes a plain driver as the favorite", () => {
+      const plain = { ...place, because: [{ name: "Your places", share: 60, entityId: "advisor", tags: ["Warm", "Cozy"] }, ...place.because] };
+      expect(renderReason(plain, { drivers: ["Via Carota"], tags: [] }, context)).toBe("Because Ana loves Via Carota.");
+    });
+  });
+
+  describe("without a tag line", () => {
+    const band = { name: "Khruangbin", share: 30, entityId: "e-band", media: true };
+    const withBand = { ...place, because: [band, ...place.because] };
+
+    it("falls back to the favorites sentence", () => {
+      expect(renderReason(place, { drivers: ["Via Carota"], tags: ["Cozy"], fact: "Known for its natural wine list" }, context)).toBe(
+        "Because Ana loves Via Carota; it shares cozy; known for its natural wine list.",
+      );
+    });
+
+    it("adds an artist or film the sentence does not name", () => {
+      expect(renderReason(withBand, { drivers: ["Via Carota"], tags: [] }, context)).toBe(
+        "Because Ana loves Via Carota. Also fits Ana's love of Khruangbin.",
+      );
+    });
+
+    it("does not say it twice", () => {
+      expect(renderReason(withBand, { drivers: ["Khruangbin", "Via Carota"], tags: [] }, context)).toBe(
+        "Because Ana loves Khruangbin and Via Carota.",
+      );
+    });
+  });
+
   it("keeps a snippet that starts with a name as it is", () => {
     expect(snippetClause("Senhor Uva pours low intervention wines", ["Senhor Uva"])).toBe(
       "Senhor Uva pours low intervention wines",
