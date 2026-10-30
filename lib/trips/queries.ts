@@ -10,6 +10,7 @@ import {
   advisorPlaces,
   advisors,
   askPlaces,
+  clientFavorites,
   clients,
   itinerarySlots,
   places,
@@ -34,7 +35,7 @@ import type {
   TripsByStage,
 } from "./contracts";
 import { asCategory, asPlaceStatus, asSource, compareSlots, toAsk, toSlot } from "./map";
-import { type SharedSlotRow, toSharedTripView } from "./share";
+import { type SharedFavoriteRow, type SharedSlotRow, toSharedTripView } from "./share";
 import { DEV_TRIP_PREFIX } from "./dev";
 import { computeStage, isTripStage, todayIso, tripDayCount } from "./stage";
 
@@ -209,15 +210,24 @@ function asSeedStatus(value: string): TripSnapshot["trip"]["seedStatus"] {
 
 /**
  * The public traveler view. It never goes through the advisor snapshot: the
- * two selects below name every column the traveler may see, and
+ * selects below name every column the traveler may see, and
  * `toSharedTripView` drops what the page does not show (ids, scores, asks,
  * advisor place notes, slot notes not marked for the traveler). Removed
- * places do not join.
+ * places do not join. The last two read the travelers' favorites with their
+ * photos for "Built from your favorites"; only the favorites that drove a
+ * shown place reach the page.
  */
 export const getSharedTripView: GetSharedTripView = async (token) => {
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
   const sharedTripId = db.select({ id: trips.id }).from(trips).where(eq(trips.shareToken, token));
-  const [tripRows, slotRows] = await db.batch([
+  // The trip's client and every traveler with a profile.
+  const tripClientIds = sql`(
+    select t.client_id from trips t where t.share_token = ${token}
+    union
+    select tt.client_id from trip_travelers tt join trips t on t.id = tt.trip_id
+    where t.share_token = ${token} and tt.client_id is not null
+  )`;
+  const [tripRows, slotRows, favoriteRows, mediaRows] = await db.batch([
     db
       .select({
         title: trips.title,
@@ -226,6 +236,8 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
         endDate: trips.endDate,
         clientName: trips.clientName,
         advisorName: advisors.displayName,
+        // The advisor's sign-in email: the page's "Message" action writes to it.
+        advisorEmail: sql<string | null>`(select u.email from neon_auth."user" u where u.id::text = ${trips.ownerId})`,
       })
       .from(trips)
       .leftJoin(advisors, eq(advisors.userId, trips.ownerId))
@@ -243,7 +255,12 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
         placeName: places.name,
         category: tripPlaces.category,
         imageUrl: sql<string | null>`${places.images} -> 0 ->> 'url'`,
+        images: places.images,
         neighborhood: places.neighborhood,
+        description: places.description,
+        keywords: sql<unknown>`${places.properties} -> 'keywords'`,
+        dishes: sql<unknown>`${places.properties} -> 'specialty_dishes'`,
+        hotelClass: sql<unknown>`coalesce(${places.properties} -> 'hotel_class', ${places.properties} -> 'star_rating')`,
         explainability: tripPlaces.explainability,
         sharedTags: tripPlaces.sharedTags,
         reason: tripPlaces.reason,
@@ -255,6 +272,19 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
       )
       .leftJoin(places, eq(places.id, tripPlaces.placeId))
       .where(inArray(itinerarySlots.tripId, sharedTripId)),
+    db
+      .select({
+        entityId: places.entityId,
+        name: places.name,
+        imageUrl: sql<string | null>`${places.images} -> 0 ->> 'url'`,
+      })
+      .from(clientFavorites)
+      .innerJoin(places, eq(places.id, clientFavorites.placeId))
+      .where(sql`${clientFavorites.clientId} in ${tripClientIds}`),
+    db
+      .select({ mediaFavorites: clients.mediaFavorites })
+      .from(clients)
+      .where(sql`${clients.id} in ${tripClientIds}`),
   ]);
   const trip = tripRows[0];
   if (!trip) return null;
@@ -274,13 +304,28 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
             name: row.placeName,
             category: row.category ?? "other",
             imageUrl: row.imageUrl,
+            images: (row.images ?? []).map((image) => image.url),
             neighborhood: row.neighborhood,
+            description: row.description,
+            keywords: row.keywords,
+            dishes: row.dishes,
+            hotelClass: row.hotelClass,
             explainability: row.explainability ?? [],
             sharedTags: row.sharedTags ?? [],
             reason: row.reason,
           },
   }));
-  return toSharedTripView(trip, slots);
+  const favorites: SharedFavoriteRow[] = [
+    ...favoriteRows,
+    ...mediaRows.flatMap((row) =>
+      row.mediaFavorites.map((media) => ({
+        entityId: media.entityId ?? null,
+        name: media.name ?? media.query,
+        imageUrl: media.imageUrl ?? null,
+      })),
+    ),
+  ];
+  return toSharedTripView(trip, slots, favorites);
 };
 
 export const listTripPlaceCards: ListTripPlaceCards = async (tripId, scope, options = {}) => {

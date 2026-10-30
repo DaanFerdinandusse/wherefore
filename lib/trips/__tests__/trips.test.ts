@@ -365,6 +365,7 @@ describe.skipIf(!hasDatabase)("trips", () => {
       because: [{ name: "Lilia", share: 100 }],
       sharedTags: ["natural wine"],
       reason: "Natural wine, like Lilia.",
+      images: ["https://example.test/uva.jpg"],
     });
     const json = JSON.stringify(view);
     for (const leak of [trip.id, ids[uva]!, saved.id, "Advisor eyes only", "Client is slow", "Secret ask", "Cervejaria", "e-lilia"]) {
