@@ -20,7 +20,7 @@ Every API function returns its data plus `calls: QlooCall[]` (`{ endpoint, param
 |---|---|
 | `resolveLocality` | `/search?types=urn:entity:locality&take=5` |
 | `searchEntities` | `/search?query&types&take[&filter.location=lat,lon]` |
-| `findPlaces` | `/v2/insights?filter.type=urn:entity:place&filter.location=POINT(lon lat)&filter.location.radius&signal.interests.entities&feature.explainability=true[&filter.tags&operator.filter.tags&filter.price_level.max&filter.exclude.entities&page]` |
+| `findPlaces` | `/v2/insights?filter.type=urn:entity:place&filter.location=POINT(lon lat)&filter.location.radius&signal.interests.entities&feature.explainability=true[&filter.tags&operator.filter.tags&filter.popularity.max&filter.external.exists&filter.price_level.max&filter.hours&filter.exclude.entities&page]` |
 | `scoreEntities` | `/v2/insights` + `filter.results.entities` (chunks of 50) |
 | `tastePortrait` | `/v2/insights?filter.type=urn:tag&filter.tag.types=ambience,cuisine,decor&take=20` |
 | `findTags` | `/v2/tags?filter.query&filter.parents.types=urn:entity:place&take=10` |
@@ -32,7 +32,7 @@ Every API function returns its data plus `calls: QlooCall[]` (`{ endpoint, param
 The upstream answers HTTP 200 with a generic, signal-free list when it does not know a param, so `serializeParams` throws `QlooParamError` on any key that is not listed, and on values of the wrong shape (take 1 to 50, POINT format, lists without commas). Arrays are comma-joined, keys sorted.
 
 - `/search`: `query`, `types`, `take`, `page`, `filter.location` (lat,lon)
-- `/v2/insights`: `filter.type`, `filter.location` (POINT only), `filter.location.radius`, `filter.tags`, `operator.filter.tags`, `filter.price_level.min/max`, `filter.exclude.entities`, `filter.results.entities`, `filter.tag.types`, `filter.geocode.country_code`, `signal.interests.entities`, `signal.interests.tags`, `feature.explainability`, `bias.trends`, `take`, `page`
+- `/v2/insights`: `filter.type`, `filter.location` (POINT only), `filter.location.radius`, `filter.tags`, `operator.filter.tags`, `filter.price_level.min/max`, `filter.popularity.max` (0 to 1), `filter.external.exists` (michelin only), `filter.hours` (lower case weekday), `filter.exclude.entities`, `filter.results.entities`, `filter.tag.types`, `filter.geocode.country_code`, `signal.interests.entities`, `signal.interests.tags`, `feature.explainability`, `bias.trends`, `take`, `page`
 - `/v2/tags`: `filter.query`, `filter.parents.types`, `take`, `page`
 - `/entities`: `entity_ids`
 
@@ -48,14 +48,17 @@ Key: `qloo:` + sha256 of `JSON.stringify([endpoint, pairs])`, pairs sorted by ke
 
 ## Fallbacks
 
-Fewer than 5 kept results (or `take` if smaller): drop `filter.tags`, then the price cap. Strict results always come first, sorted by affinity; each looser step only fills the slots that are left, so a loosened result never displaces a strict one even with a higher affinity. Scores stay affinity-based over the final set.
+Fewer than 5 kept results (or `take` if smaller): drop `filter.tags`, then the popularity cap, then Michelin, then the price cap, and last the open day, because a closed restaurant is the worst outcome. Strict results always come first, sorted by affinity; each looser step only fills the slots that are left, so a loosened result never displaces a strict one even with a higher affinity. Scores stay affinity-based over the final set.
 
 `loosened` lists what was not applied as asked:
 
 | Value | Meaning | UI copy |
 |---|---|---|
 | `"tags"` | too few results, `filter.tags` dropped | "Widened beyond the category" |
+| `"popularity"` | too few less known places, `filter.popularity.max` dropped | "Too few less known places, so check which of these carry the Less known chip." |
+| `"michelin"` | too few Michelin places, `filter.external.exists` dropped | "Too few Michelin places, so check which of these carry the Michelin chip." |
 | `"price"` | too few results, price cap dropped | "Price cap dropped to find enough places" |
+| `"hours"` | too few places open that day, `filter.hours` dropped | "Too few places are open on Monday, so check the hours on these." |
 | `"price_not_applicable"` | `priceMax` asked on a see or stay ask; never sent | "Price cap not applied to museums and hotels" |
 
 The price filter drops places without a `price_level` (museums, hotels), so when every tag is a see or stay category (`isUnpricedTagFilter`), `findPlaces` does not send `priceMax` and returns `"price_not_applicable"` first in `loosened`, whether or not the tags were dropped later.

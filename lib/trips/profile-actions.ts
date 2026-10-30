@@ -56,18 +56,20 @@ export async function addToSlotAction(
 /**
  * "Not for Ana": marks the place removed. With `replace` the same ask (or
  * category) is asked again without the trip's places and the best new place
- * comes back as `replacement` (null when nothing new was found).
+ * comes back as `replacement` (null when nothing new was found), with a `note`
+ * when the search had to loosen a filter to find it.
  */
 export async function removeTripPlaceAction(
   tripId: string,
   tripPlaceId: string,
   replace: boolean,
-): Promise<{ removedId: string; replacement: TripPlaceCard | null }> {
+): Promise<{ removedId: string; replacement: TripPlaceCard | null; note?: string }> {
   const user = await requireUser();
   const input = z.object({ tripId: uuid, tripPlaceId: uuid, replace: z.boolean() }).parse({ tripId, tripPlaceId, replace });
   if (input.replace) {
-    const replacement = await replaceTripPlace(input.tripId, input.tripPlaceId, user);
-    return { removedId: input.tripPlaceId, replacement };
+    const notes: string[] = [];
+    const replacement = await replaceTripPlace(input.tripId, input.tripPlaceId, user, { onNote: (note) => notes.push(note) });
+    return { removedId: input.tripPlaceId, replacement, ...(notes.length ? { note: notes.join(" ") } : {}) };
   }
   const trip = await getTrip(input.tripId, user);
   if (!trip) throw new NotFoundError("trip");

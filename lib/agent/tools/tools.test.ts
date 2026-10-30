@@ -10,12 +10,17 @@ import {
   cleanIntent,
   dateOfDay,
   loosenedCopy,
+  openDayOf,
+  replacementNote,
   rowTitle,
   searchTerms,
   searchTitle,
   shortDay,
   slotPhrase,
   slotTarget,
+  weekdayInHint,
+  weekdayName,
+  WIDENED_IN_CATEGORY,
 } from "./labels";
 import { asTripData, cardForModel, DATA_CLOSE } from "./model-output";
 import { matchClientNote, mentions, targetOfQuery } from "./recommend-format";
@@ -60,6 +65,84 @@ describe("ask labels", () => {
 
   it("says loosened filters in plain words", () => {
     expect(loosenedCopy(["price_not_applicable", "unknown"])).toEqual(["Price cap not applied to museums and hotels"]);
+  });
+
+  it("names what changed and what to do for every new filter", () => {
+    expect(loosenedCopy(["popularity", "michelin"])).toEqual([
+      "Too few less known places, so check which of these carry the Less known chip.",
+      "Too few Michelin places, so check which of these carry the Michelin chip.",
+    ]);
+    expect(loosenedCopy(["hours"])).toEqual(["Too few places are open that day, so check the hours on these."]);
+  });
+
+  it("names the day in the hours line when it is known", () => {
+    expect(loosenedCopy(["hours"], "monday")).toEqual(["Too few places are open on Monday, so check the hours on these."]);
+  });
+
+  it("still reports the search's drops next to the widened category", () => {
+    const merged = [WIDENED_IN_CATEGORY, "popularity", "hours"];
+    expect(loosenedCopy(merged, "sunday")).toEqual([
+      "Few exact matches, so the rest are other places of the same kind",
+      "Too few less known places, so check which of these carry the Less known chip.",
+      "Too few places are open on Sunday, so check the hours on these.",
+    ]);
+  });
+
+  it("says what a replacement loosened as one line, without the category", () => {
+    expect(replacementNote([])).toBeUndefined();
+    expect(replacementNote(["tags"])).toBeUndefined();
+    expect(replacementNote(["tags", "price", "hours"], "monday")).toBe(
+      "Price cap dropped to find enough places. Too few places are open on Monday, so check the hours on these.",
+    );
+  });
+});
+
+describe("openDayOf", () => {
+  const exact = { startDate: "2027-05-14", datesMode: "exact" }; // A Friday.
+
+  it("reads a weekday from an ISO date", () => {
+    expect(weekdayName("2027-05-14")).toBe("friday");
+    expect(weekdayName("2027-05-16")).toBe("sunday");
+    expect(weekdayName("2027-05-17")).toBe("monday");
+  });
+
+  it("takes a slot's day from the trip's exact dates", () => {
+    expect(openDayOf({ target: { day: 1, slot: "dinner" }, trip: exact })).toBe("friday");
+    expect(openDayOf({ target: { day: 3, slot: "lunch" }, trip: exact })).toBe("sunday");
+    expect(openDayOf({ target: { day: 4, slot: "night" }, trip: exact })).toBe("monday");
+  });
+
+  it("has no day for a target without a real date, whatever the hint says", () => {
+    const unset = { startDate: null, datesMode: "unset" };
+    expect(openDayOf({ target: { day: 1, slot: "dinner" }, trip: unset })).toBeUndefined();
+    expect(openDayOf({ target: { day: 1, slot: "dinner" }, dayHint: "Friday", trip: unset })).toBeUndefined();
+    expect(openDayOf({ target: { day: 1, slot: "dinner" }, trip: { startDate: "2027-05-14", datesMode: "unset" } })).toBeUndefined();
+  });
+
+  it("never applies to a stay, by slot or by category", () => {
+    expect(openDayOf({ target: { day: 1, slot: "stay" }, trip: exact })).toBeUndefined();
+    expect(openDayOf({ target: { day: 1, slot: "stay" }, dayHint: "Friday", trip: exact })).toBeUndefined();
+    expect(openDayOf({ category: "stay", dayHint: "Saturday", trip: exact })).toBeUndefined();
+  });
+
+  it("uses a day hint that names a weekday when there is no target", () => {
+    const unset = { startDate: null, datesMode: "unset" };
+    expect(openDayOf({ dayHint: "Saturday night", trip: unset })).toBe("saturday");
+    expect(openDayOf({ dayHint: "tues", category: "eat", trip: exact })).toBe("tuesday");
+  });
+
+  it("prefers the slot's real date over a hint", () => {
+    expect(openDayOf({ target: { day: 1, slot: "dinner" }, dayHint: "Monday", trip: exact })).toBe("friday");
+  });
+
+  it("has no day without a weekday in the hint, or with two of them", () => {
+    expect(openDayOf({ trip: exact })).toBeUndefined();
+    expect(weekdayInHint(undefined)).toBeUndefined();
+    expect(weekdayInHint("day 2")).toBeUndefined();
+    expect(weekdayInHint("late night")).toBeUndefined();
+    expect(weekdayInHint("Friday or Saturday")).toBeUndefined();
+    expect(weekdayInHint("Friday, fri night")).toBe("friday");
+    expect(weekdayInHint("this Sat.")).toBe("saturday");
   });
 });
 
@@ -339,6 +422,35 @@ describe("cardForModel", () => {
 
 type R = { place: { entityId: string }; category: Category };
 const r = (id: string, category: Category): R => ({ place: { entityId: id }, category });
+
+describe("cardForModel facts", () => {
+  const card = {
+    tripPlaceId: "t1",
+    placeId: "p1",
+    entityId: "e1",
+    name: "Ceia",
+    category: "eat",
+    because: [],
+    sharedTags: [],
+    status: "suggested",
+    source: "ask",
+    askIds: [],
+  } as const;
+
+  it("marks a less known and a Michelin place, never with the number", () => {
+    const out = cardForModel({ ...card, because: [], sharedTags: [], askIds: [], popularity: 0.02, michelin: true });
+    expect(out).toMatchObject({ less_known: true, michelin: true });
+    expect(out).not.toHaveProperty("popularity");
+  });
+
+  it("says nothing when the fact is unknown or the place is well known", () => {
+    for (const popularity of [undefined, 0.6, 0.97]) {
+      const out = cardForModel({ ...card, because: [], sharedTags: [], askIds: [], popularity });
+      expect(out).not.toHaveProperty("less_known");
+      expect(out).not.toHaveProperty("michelin");
+    }
+  });
+});
 
 describe("category loop", () => {
   it("re-checks categories: a result lands in its real category, other is dropped", () => {

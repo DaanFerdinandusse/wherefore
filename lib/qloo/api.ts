@@ -129,9 +129,11 @@ export const searchEntities: SearchEntities = async (query, options, ctx) => {
  * per-result explainability. Location is always POINT(lon lat) plus radius (the
  * text geocoder picks the wrong city for ambiguous names), and every result
  * farther than 1.5x the radius is dropped (distance from the API, or computed
- * from the coordinates). With fewer than 5 kept results it drops filter.tags,
- * then the price cap, and says so in `loosened`. Strict results always come
- * first; looser steps only fill the slots that are left.
+ * from the coordinates). With fewer than 5 kept results it drops one filter at
+ * a time, in this order: tags, popularity, Michelin, price, the open day. The
+ * open day goes last because a closed restaurant is the worst outcome. Every
+ * drop is named in `loosened`. Strict results always come first; looser steps
+ * only fill the slots that are left.
  * @throws QlooLocalityMismatchError when results came back but none of them is
  *   near the destination.
  */
@@ -155,18 +157,27 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
     take: input.take,
     page: input.page,
   };
-  const tagParams: QlooParams = hasTags
-    ? { "filter.tags": input.tags, "operator.filter.tags": input.tagsOperator }
-    : {};
-  const priceParams: QlooParams = hasPrice ? { "filter.price_level.max": input.priceMax } : {};
+
+  // In the order they are dropped.
+  const filters: { drop: LoosenedFilter; params: QlooParams }[] = [];
+  if (hasTags) {
+    filters.push({ drop: "tags", params: { "filter.tags": input.tags, "operator.filter.tags": input.tagsOperator } });
+  }
+  if (input.popularityMax !== undefined) {
+    filters.push({ drop: "popularity", params: { "filter.popularity.max": input.popularityMax } });
+  }
+  if (input.michelin) filters.push({ drop: "michelin", params: { "filter.external.exists": "michelin" } });
+  if (hasPrice) filters.push({ drop: "price", params: { "filter.price_level.max": input.priceMax } });
+  if (input.openDay) filters.push({ drop: "hours", params: { "filter.hours": input.openDay } });
 
   // Strict first, then each loosening step in order. Each step keeps the
   // previous ones dropped.
+  const paramsFrom = (first: number): QlooParams =>
+    filters.slice(first).reduce<QlooParams>((params, filter) => ({ ...params, ...filter.params }), base);
   const steps: { drop: LoosenedFilter | null; params: QlooParams }[] = [
-    { drop: null, params: { ...base, ...tagParams, ...priceParams } },
+    { drop: null, params: paramsFrom(0) },
+    ...filters.map((filter, index) => ({ drop: filter.drop, params: paramsFrom(index + 1) })),
   ];
-  if (hasTags) steps.push({ drop: "tags", params: { ...base, ...priceParams } });
-  if (hasPrice) steps.push({ drop: "price", params: { ...base } });
 
   const enough = Math.min(MIN_RESULTS, input.take);
   const calls: QlooCall[] = [];

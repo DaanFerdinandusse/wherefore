@@ -35,7 +35,7 @@ the Workflow run, its stream and a conditional UPDATE.
 | --- | --- | --- |
 | `seed_trip` | `{}`, forced on step 0 of the seed turn only | `FindPlacesOutput` with `kind: "seed"`, `steps`, `summary: SeedSummary` |
 | `get_trip_context` | `{}` | `TripContextOutput` |
-| `find_places` | `{ intent, category?, tags?, price_max?, area?, day_hint?, take? }` | `FindPlacesOutput` (phases searching, scoring, explaining, done) |
+| `find_places` | `{ intent, category?, tags?, price_max?, area?, day_hint?, target?, discovery?: "less_known", michelin?, take? }` | `FindPlacesOutput` (phases searching, scoring, explaining, done) |
 | `score_places` | `{ place_ids?, names?, scope?: "advisor_places" }` | `ScorePlacesOutput` |
 | `lookup_place` | `{ place_id }` | `LookupPlaceOutput` |
 | `set_itinerary` | `{ days: [{ day, slots: [{ slot, place_id, note? }] }], mode }` | `SetItineraryOutput` (notes stored as agent notes) |
@@ -108,6 +108,18 @@ The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives i
   places (capped at `MAX_EXCLUDED`), upstream and again in code. A place that was
   only shown stays available for another slot, which also lets a retried
   search find its own results.
+- **Search options stay on the ask.** `discovery: "less_known"` (popularity below
+  `LESS_KNOWN_POPULARITY_MAX`), `michelin` and the open day are stored in the ask
+  query (`popularityMax`, `michelin`, `openDay`), sent on the main and the fill
+  call, and read back by remove_place and the UI's replace (`askFiltersOfQuery`),
+  so a rerun stays the same search. `openDayOf` (`tools/labels.ts`) derives the
+  day: a target's real date with exact trip dates, else a day hint that names one
+  weekday, never for a stay. Advisor places admitted into the ask meet the same
+  filters; unknown hours or popularity do not count against them, and stored
+  hours that say closed keep them out even when the search dropped the open day.
+- **Loosening is never silent.** Every filter findPlaces drops is a `loosened`
+  code with copy in `LOOSENED_COPY`: the search row, the model and, for a
+  replacement, the tool card or the toast say what changed and what to check.
 - **Reasons are templates.** The model picks favorites, shared tags and one
   description snippet by index; anything not in the input is dropped and a
   place with no valid favorite gets no reason (`explain.ts`).

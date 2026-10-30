@@ -11,6 +11,8 @@ import type {
   TripPlaceStatus,
 } from "@/lib/contracts";
 import type { itinerarySlots, tripAsks } from "@/lib/db/schema";
+import type { FindPlacesInput } from "@/lib/qloo/contracts";
+import { WEEKDAY_NAMES } from "@/lib/qloo/normalize";
 
 // Pure row-to-contract mapping. The text columns hold closed sets; these
 // narrow them once so the UI never sees a value outside the union.
@@ -165,10 +167,55 @@ export function cardPriceLevel(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 4 ? value : undefined;
 }
 
+/** A popularity percentile from 0 to 1, or undefined. */
+export function cardPopularity(value: unknown): number | undefined {
+  return typeof value === "number" && value >= 0 && value <= 1 ? value : undefined;
+}
+
+/**
+ * Does the provider link the place to Michelin? external.michelin is a list of
+ * { id, stars } in /v2/insights and one { id } in /search and /entities. Stars
+ * are often null, so the key means listed, never starred.
+ */
+export function cardMichelin(external: unknown): boolean {
+  if (typeof external !== "object" || external === null) return false;
+  const value = (external as Record<string, unknown>).michelin;
+  const refs: unknown[] = Array.isArray(value) ? value : [value];
+  return refs.some((ref) => {
+    const id = typeof ref === "object" && ref !== null ? (ref as Record<string, unknown>).id : undefined;
+    return (typeof id === "string" && id !== "") || typeof id === "number";
+  });
+}
+
 /** The card facts in a places.properties block. Empty fields are left out. */
-export function placeFactsFromProperties(properties: unknown): { keywords?: PlaceKeyword[]; dishes?: string[] } {
+export function placeFactsFromProperties(properties: unknown): {
+  keywords?: PlaceKeyword[];
+  dishes?: string[];
+  popularity?: number;
+  michelin?: boolean;
+} {
   const block = typeof properties === "object" && properties !== null ? (properties as Record<string, unknown>) : {};
   const keywords = cardKeywords(block.keywords);
   const dishes = cardDishes(block.specialty_dishes);
-  return { ...(keywords.length > 0 ? { keywords } : {}), ...(dishes.length > 0 ? { dishes } : {}) };
+  const popularity = cardPopularity(block.popularity);
+  return {
+    ...(keywords.length > 0 ? { keywords } : {}),
+    ...(dishes.length > 0 ? { dishes } : {}),
+    ...(popularity !== undefined ? { popularity } : {}),
+    ...(cardMichelin(block.external) ? { michelin: true } : {}),
+  };
+}
+
+/** The search options of an ask that a rerun of it must keep. */
+export type AskFilters = Pick<FindPlacesInput, "popularityMax" | "michelin" | "openDay">;
+
+/** The search options stored on an ask's query (find_places writes them). */
+export function askFiltersOfQuery(query: Record<string, unknown>): AskFilters {
+  const popularityMax = cardPopularity(query.popularityMax);
+  const openDay = WEEKDAY_NAMES.find((day) => day === query.openDay);
+  return {
+    ...(popularityMax !== undefined ? { popularityMax } : {}),
+    ...(query.michelin === true ? { michelin: true } : {}),
+    ...(openDay ? { openDay } : {}),
+  };
 }

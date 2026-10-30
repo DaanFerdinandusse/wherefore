@@ -27,6 +27,8 @@ import { cn } from "@/lib/ui/cn";
 
 import { startPlaceDrag } from "../workspace/dnd";
 
+import { PlaceChips } from "../place-chips";
+
 import { PhotoViewer } from "./photo-viewer";
 import { LoadingPhoto } from "./loading-photo";
 import { keywordBars, shortAuthor } from "./card-format";
@@ -174,6 +176,7 @@ export function PlaceCard({
                 </PhotoChip>
               ) : null}
               {card.yourPlace ? <PhotoChip icon={Bookmark}>Your place</PhotoChip> : null}
+              <PlaceChips place={card} variant="photo" />
             </>
           }
         />

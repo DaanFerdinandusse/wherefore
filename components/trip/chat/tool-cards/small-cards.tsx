@@ -78,7 +78,7 @@ export function RemoveCard({ state, preliminary, output, errorText, onRetry, ...
       <CardHeader
         state={output?.error ? "failed" : status}
         title={status === "running" ? "Removing a place" : name ? `Removed ${name}` : "Nothing removed"}
-        details={output?.replacement ? `Added ${output.replacement.name} instead` : output?.note}
+        details={output?.replacement ? `Added ${output.replacement.name} instead${output.note ? `. ${output.note}` : ""}` : output?.note}
       />
       {output?.replacement ? (
         <ul className="flex pl-8" onMouseLeave={() => handlers.onPlacesHover?.(null)}>

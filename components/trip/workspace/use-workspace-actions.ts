@@ -215,8 +215,9 @@ export function useWorkspaceActions() {
       const state = store.getState();
       const name = state.places[tripPlaceId]?.name ?? "The place";
       let replacement: TripPlaceCard | null;
+      let note: string | undefined;
       try {
-        ({ replacement } = await removeTripPlaceAction(tripId(), tripPlaceId, true));
+        ({ replacement, note } = await removeTripPlaceAction(tripId(), tripPlaceId, true));
       } catch {
         throw new Error("The place was not removed. Try again.");
       }
@@ -224,7 +225,7 @@ export function useWorkspaceActions() {
       dispatch({ type: "status", tripPlaceId, status: "removed" });
       if (replacement) {
         dispatch({ type: "upsertPlace", card: replacement });
-        toast(`Replaced with ${replacement.name}`);
+        toast(note ? `Replaced with ${replacement.name}. ${note}` : `Replaced with ${replacement.name}`);
       } else {
         toast(`${name} is off the list for ${firstName(state.trip.clientName)}. Nothing new came up to replace it.`);
       }

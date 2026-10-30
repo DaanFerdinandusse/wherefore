@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { FatalError } from "workflow";
 import { z } from "zod";
 
-import type { Category, FindPlacesOutput, SlotName, SlotTarget, ToolStep, TripPlaceCard } from "@/lib/contracts";
+import type { Category, FindPlacesOutput, SlotName, SlotTarget, ToolStep, TripPlaceCard, Weekday } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { tripAsks } from "@/lib/db/schema";
 import { createAsk, updateAsk } from "@/lib/trips";
@@ -14,12 +14,15 @@ import {
   findPlaces,
   findTags,
   haversineM,
+  LESS_KNOWN_POPULARITY_MAX,
   QlooLocalityMismatchError,
   resolveLocality,
+  WEEKDAY_NAMES,
   type NormalizedPlace,
   type PlaceResult,
   type QlooCall,
 } from "@/lib/qloo";
+import { placeFactsFromProperties, type AskFilters } from "@/lib/trips/map";
 
 import { assertTurn, finishAsk, guarded, TurnSupersededError, type TurnRef } from "../writes";
 
@@ -28,6 +31,7 @@ import {
   basedOnFavorites,
   categoryNoun,
   cleanIntent,
+  openDayOf,
   rowTitle,
   searchDetails,
   searchTerms,
@@ -36,6 +40,7 @@ import {
   WIDENED_IN_CATEGORY,
   type SearchCategory,
 } from "./labels";
+import { hoursOf } from "./place-tools";
 import {
   cardsInOrder,
   explainCards,
@@ -55,8 +60,8 @@ import { firstName, loadToolTrip, logCalls, type ToolTrip } from "./trip-data";
 //              itinerary and the removed places left out), the ask and its
 //              places written (keyed by toolCallId);
 //   scoring    the advisor's places in the city scored, the ones that fit
-//              the ask (category, tags, price cap, area) kept and marked
-//              "Your place";
+//              the ask (category, tags, price cap, area, less known, Michelin,
+//              open day) kept and marked "Your place";
 //   explaining one grounded sentence per place (lib/agent/explain.ts).
 // Each phase is checkpointed on the ask, so a retried step resumes.
 // A locality mismatch comes back as a clear error output, never an empty tab.
@@ -70,6 +75,10 @@ export type FindPlacesInput = {
   day_hint?: string;
   /** The itinerary slot this search is for: the ask carries it, the workspace highlights it. */
   target?: { day: number; slot: SlotName };
+  /** "less_known": only places below LESS_KNOWN_POPULARITY_MAX. */
+  discovery?: "less_known";
+  /** Only places Michelin lists. */
+  michelin?: boolean;
   take?: number;
 };
 
@@ -174,14 +183,19 @@ export type AskConstraints = {
   tagIds: string[];
   priceMax?: number;
   area?: { lat: number; lon: number; radiusM: number };
+  popularityMax?: number;
+  michelin?: boolean;
+  /** Stored hours that say closed on this day leave a place out. */
+  openDay?: Weekday;
 };
 
 /**
  * The filters that held for this ask's own results: the advisor's places
  * admitted into the ask must meet the same ones. A filter the search had to
- * drop (loosened) does not apply to them either.
+ * drop (loosened) does not apply to them either, except the open day: a place
+ * whose own hours say closed stays out however few places were open.
  */
-export function askConstraints(input: {
+export function askConstraints(input: AskFilters & {
   tagIds: string[];
   loosened: readonly string[];
   priceMax?: number;
@@ -193,16 +207,27 @@ export function askConstraints(input: {
     tagIds: tagsHeld ? input.tagIds : [],
     ...(input.priceMax && priceHeld ? { priceMax: input.priceMax } : {}),
     ...(input.area ? { area: input.area } : {}),
+    ...(input.popularityMax !== undefined && !input.loosened.includes("popularity") ? { popularityMax: input.popularityMax } : {}),
+    ...(input.michelin && !input.loosened.includes("michelin") ? { michelin: true } : {}),
+    ...(input.openDay ? { openDay: input.openDay } : {}),
   };
 }
 
-/** Does a place meet the ask's filters? An unknown price or position does not count against it. */
+/**
+ * Does a place meet the ask's filters? An unknown price, position, popularity
+ * or set of hours does not count against it. Michelin does: it is a listing,
+ * so a place without one is not on the list.
+ */
 export function meetsAskConstraints(
-  place: Pick<NormalizedPlace, "tags" | "priceLevel" | "lat" | "lon">,
+  place: Pick<NormalizedPlace, "tags" | "priceLevel" | "lat" | "lon"> & Partial<Pick<NormalizedPlace, "properties">>,
   constraints: AskConstraints,
 ): boolean {
   if (constraints.tagIds.length > 0 && !place.tags.some((t) => constraints.tagIds.includes(t.tagId))) return false;
   if (constraints.priceMax && place.priceLevel != null && place.priceLevel > constraints.priceMax) return false;
+  const { popularity, michelin } = placeFactsFromProperties(place.properties);
+  if (constraints.popularityMax !== undefined && popularity !== undefined && popularity >= constraints.popularityMax) return false;
+  if (constraints.michelin && !michelin) return false;
+  if (constraints.openDay && hoursOf(place.properties?.hours)?.[constraints.openDay] === "closed") return false;
   const area = constraints.area;
   if (area && place.lat != null && place.lon != null && haversineM(place.lat, place.lon, area.lat, area.lon) > area.radiusM) {
     return false;
@@ -243,6 +268,9 @@ const checkpointSchema = z.object({
         tagIds: z.array(z.string()),
         priceMax: z.number().optional(),
         area: z.object({ lat: z.number(), lon: z.number(), radiusM: z.number() }).optional(),
+        popularityMax: z.number().optional(),
+        michelin: z.boolean().optional(),
+        openDay: z.enum(WEEKDAY_NAMES).optional(),
       }),
     })
     .optional(),
@@ -272,6 +300,13 @@ export async function* findPlacesTool(
   const target: SlotTarget | undefined = input.target
     ? slotTarget(input.target, { startDate: ctx.trip.startDate ?? undefined, destinationName: ctx.destination.name })
     : undefined;
+  const openDay = openDayOf({ target: input.target, dayHint: input.day_hint, category: askCategory, trip: ctx.trip });
+  // Kept on the ask, so a rerun (remove_place, the UI's replace) stays the same search.
+  const filters: AskFilters = {
+    ...(input.discovery === "less_known" ? { popularityMax: LESS_KNOWN_POPULARITY_MAX } : {}),
+    ...(input.michelin ? { michelin: true } : {}),
+    ...(openDay ? { openDay } : {}),
+  };
   const label = askLabel(input.intent, target?.label ?? input.day_hint);
   const terms = searchTerms(input.tags, split.text);
   const basedOn = basedOnFavorites(ctx.signals.favoritesUsed.map((f) => f.clientName));
@@ -286,6 +321,7 @@ export async function* findPlacesTool(
     ...(input.day_hint ? { day: input.day_hint } : {}),
     // The slot this ask is for (Ask.target): lib/trips reads it back from the query.
     ...(input.target ? { target: { day: input.target.day, slot: input.target.slot } } : {}),
+    ...filters,
     take,
   };
   // Keyed by toolCallId: a retried step gets the same ask, and its checkpoint.
@@ -327,6 +363,7 @@ export async function* findPlacesTool(
     noun: categoryNoun(askCategory, 2),
     ...(terms.length ? { terms } : {}),
     ...(target ? { target } : {}),
+    ...(openDay ? { openDay } : {}),
     ...extra,
   });
   const failAsk = () => finishAsk(turn, ask.id, { status: "failed", elapsedMs: elapsed(), loosened: [], resultCount: 0 });
@@ -390,6 +427,7 @@ export async function* findPlacesTool(
             signals: ctx.signals.signals,
             ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
             ...(input.price_max ? { priceMax: input.price_max } : {}),
+            ...filters,
             ...(ctx.excludeIds.length ? { excludeIds: ctx.excludeIds } : {}),
             take,
           },
@@ -428,6 +466,7 @@ export async function* findPlacesTool(
                 tags: CATEGORY_FILTER_TAGS[askCategory],
                 tagsOperator: "union",
                 ...(input.price_max ? { priceMax: input.price_max } : {}),
+                ...filters,
                 ...(fillExcludeIds.length ? { excludeIds: fillExcludeIds } : {}),
                 take: Math.min(50, room + 4),
               },
@@ -473,7 +512,7 @@ export async function* findPlacesTool(
         return tripPlaceId ? [rankedOf(ctx, tripPlaceId, item)] : [];
       });
       await persistAskPlaces(turn, ctx, ask.id, ranked);
-      constraints = askConstraints({ tagIds: resolved.ids, loosened, priceMax: input.price_max, area });
+      constraints = askConstraints({ tagIds: resolved.ids, loosened, priceMax: input.price_max, area, ...filters });
       const note = `${ranked.length} found · ${seconds(elapsed())}`;
       searchStep = { ...searchStep, state: "done", note };
       checkpoint.search = { ranked, loosened, details, ...(areaNote ? { areaNote } : {}), note, constraints };

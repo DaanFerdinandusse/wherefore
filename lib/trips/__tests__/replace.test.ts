@@ -61,6 +61,27 @@ const result = (entityId: string, primaryType: string | null): PlaceResult =>
   }) as unknown as PlaceResult;
 
 describe("replacementQuery", () => {
+  const filters = { popularityMax: 0.6, michelin: true, openDay: "monday" } as const;
+
+  it("keeps the ask's less known, Michelin and open day filters", () => {
+    const q = replacementQuery({
+      category: "eat",
+      placeTypes: [],
+      asks: [{ askId: "a", rank: 1, query: { tags: ["urn:tag:x"], ...filters } }],
+    });
+    expect(q).toMatchObject(filters);
+  });
+
+  it("keeps them when the ask stored no tags and the category answers instead", () => {
+    const q = replacementQuery({
+      category: "eat",
+      placeTypes: [],
+      asks: [{ askId: "a", rank: 1, query: { intent: "dinner", ...filters } }],
+    });
+    expect(q).toMatchObject({ ...filters, askId: "a" });
+    expect(q.tags.length).toBeGreaterThan(0);
+  });
+
   it("asks the ask again when the removed place came from one with tags", () => {
     const q = replacementQuery({
       category: "drink",
@@ -187,6 +208,51 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]).toMatchObject({ endpoint: "/v2/insights", source: `ask:${askId}`, count: 3, loosened: ["tags"] });
     expect(urls[1]!.searchParams.get("filter.exclude.entities")).toBe(params.get("filter.exclude.entities"));
+  });
+
+  it("reruns the ask's less known, Michelin and open day filters, and says what it had to loosen", async () => {
+    const placeIds = await upsertPlaces([
+      { entityId: entity("filtered"), name: "Filtered place", primaryType: "urn:tag:genre:place:restaurant" },
+    ]);
+    const placeId = placeIds[entity("filtered")]!;
+    const written = await upsertTripPlaces(
+      tripId,
+      [{ placeId, source: "ask", category: "eat", bestAffinity: 0.7, bestScore: 50 }],
+      run.owner,
+    );
+    const filteredId = written[placeId]!;
+    const ask = await createAsk(
+      tripId,
+      {
+        label: "Dinner",
+        query: { tags: ["urn:tag:category:place:restaurant"], popularityMax: 0.6, michelin: true, openDay: "monday" },
+      },
+      run.owner,
+    );
+    await addAskPlaces(ask.id, [{ tripPlaceId: filteredId, rank: 1, score: 50 }], run.owner);
+
+    const raw = {
+      ...rawPlace(entity("hidden-gem"), "Hidden gem", 0.8, favs),
+      popularity: 0.02,
+      external: { michelin: [{ id: "530293", stars: null }] },
+    };
+    const { client, urls } = fakeClient([raw]);
+    const notes: string[] = [];
+    const card = await replaceTripPlace(tripId, filteredId, run.owner, { client, onNote: (note) => notes.push(note) });
+
+    const params = urls[0]!.searchParams;
+    expect(params.get("filter.popularity.max")).toBe("0.6");
+    expect(params.get("filter.external.exists")).toBe("michelin");
+    expect(params.get("filter.hours")).toBe("monday");
+    // One place back on every step, so every filter went, the open day last.
+    expect(urls.at(-1)!.searchParams.has("filter.hours")).toBe(false);
+    expect(notes).toEqual([
+      "Too few less known places, so check which of these carry the Less known chip. " +
+        "Too few Michelin places, so check which of these carry the Michelin chip. " +
+        "Too few places are open on Monday, so check the hours on these.",
+    ]);
+    // The facts reach the card from places.properties.
+    expect(card).toMatchObject({ name: "Hidden gem", popularity: 0.02, michelin: true });
   });
 
   it("returns null when nothing new comes back, and the removal stands", async () => {

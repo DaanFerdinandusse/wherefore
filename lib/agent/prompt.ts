@@ -1,5 +1,6 @@
 import type { TripContextOutput } from "@/lib/contracts";
 
+import { dateOfDay, weekdayShort } from "./tools/labels";
 import { asTripData } from "./tools/model-output";
 
 // The system prompt: who the agent is, the rules it may not break, and the
@@ -27,6 +28,9 @@ How a trip gets planned:
 - Never one big search for everything. Never more than three searches in one reply.
 - When the advisor names a slot ("Friday dinner", "lunch on day 2"), pass it as target {day, slot} to find_places and recommend_place. Trip day 1 is the first date of the trip. Slots are morning, lunch, afternoon, dinner, night (late drinks) and stay.
 - Places in the itinerary sharpen later searches. Searches leave them out, and the places the advisor removed, so a search never repeats them. A place that was only shown earlier can come back for another slot.
+- Use discovery "less_known" on find_places when the brief wants something off the usual list. When you plan several slots, at least one pick should be less known: a place marked less_known in the results.
+- Use michelin on find_places only when the advisor asks for Michelin. A place marked michelin is listed by Michelin, which does not tell you it has stars.
+- A search for a dated slot or a named weekday keeps to places open that day on its own. When a search says it loosened something, tell the advisor in one short sentence and do not call a place open that day unless a tool said so.
 - Do not put places in the itinerary on your own. The card lets the advisor add the pick. Use set_itinerary only when the advisor asks you to add or move places.
 
 Tools:
@@ -76,16 +80,14 @@ export function renderTripHeader(context: TripContextOutput | undefined): string
 /** "day 1 Fri 2027-05-14", one per trip day, so the model maps "Friday" to a day number. */
 export function tripDayList(trip: TripContextOutput["trip"]): string[] | undefined {
   if (trip.datesMode !== "exact" || !trip.startDate || !trip.endDate) return undefined;
-  const start = Date.parse(`${trip.startDate.slice(0, 10)}T00:00:00Z`);
-  const end = Date.parse(`${trip.endDate.slice(0, 10)}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return undefined;
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const end = trip.endDate.slice(0, 10);
   const out: string[] = [];
-  for (let t = start, day = 1; t <= end && day <= 60; t += 86_400_000, day++) {
-    const date = new Date(t);
-    out.push(`day ${day} ${names[date.getUTCDay()]} ${date.toISOString().slice(0, 10)}`);
+  for (let day = 1; day <= 60; day++) {
+    const date = dateOfDay(trip.startDate, day);
+    if (!date || date > end) break;
+    out.push(`day ${day} ${weekdayShort(date)} ${date}`);
   }
-  return out;
+  return out.length > 0 ? out : undefined;
 }
 
 export function buildInstructions(context: TripContextOutput | undefined, options: { today?: Date } = {}): string {

@@ -16,13 +16,16 @@ import {
   CATEGORY_FILTER_TAGS,
   findPlaces,
   QlooLocalityMismatchError,
+  WEEKDAY_NAMES,
   type PlaceResult,
 } from "@/lib/qloo";
 import { upsertPlaces } from "@/lib/places";
 import { saveReplacement, setSlots, setTripPlaceStatus, type SlotInput } from "@/lib/trips";
+import { askFiltersOfQuery } from "@/lib/trips/map";
 
 import { cacheWrite, guarded, type TurnRef } from "../writes";
 
+import { replacementNote } from "./labels";
 import { cleanAgentNote } from "./notes";
 import {
   cardsInOrder,
@@ -41,7 +44,6 @@ import { loadToolTrip, logCalls } from "./trip-data";
 // ------------------------------------------------------------ lookup_place
 
 const MAX_DESCRIPTION = 400;
-const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -55,7 +57,7 @@ function clip(value: string, max: number): string {
 export function hoursOf(raw: unknown): Record<string, string> | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const out: Record<string, string> = {};
-  for (const day of DAYS) {
+  for (const day of WEEKDAY_NAMES) {
     const spans = (raw as Record<string, unknown>)[day];
     if (!Array.isArray(spans) || spans.length === 0) continue;
     const parts = spans.flatMap((span) => {
@@ -235,6 +237,7 @@ export async function removePlaceTool(
         ? CATEGORY_FILTER_TAGS[removed.category]
         : [];
   const priceMax = typeof query.priceMax === "number" ? query.priceMax : undefined;
+  const filters = askFiltersOfQuery(query);
 
   const onTrip = await db
     .select({ entityId: places.entityId })
@@ -244,6 +247,7 @@ export async function removePlaceTool(
   const excludeIds = searchExclusions(onTrip.map((r) => r.entityId));
 
   let results: PlaceResult[];
+  let note: string | undefined;
   try {
     const result = await findPlaces(
       {
@@ -251,6 +255,7 @@ export async function removePlaceTool(
         signals: ctx.signals.signals,
         ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
         ...(priceMax ? { priceMax } : {}),
+        ...filters,
         excludeIds,
         take: 5,
       },
@@ -258,6 +263,7 @@ export async function removePlaceTool(
     );
     await logCalls(turn, ctx, result.calls, origin ? `ask:${origin.askId}` : "manual", { toolCallId, step: "replace" }, result.loosened);
     results = result.results;
+    note = replacementNote(result.loosened, filters.openDay);
   } catch (error) {
     if (error instanceof QlooLocalityMismatchError) return { removed, note: "No replacement: the search came back from another city." };
     throw new FatalError(`Removed ${removed.name}, but the search for a replacement did not answer. Ask again for one.`);
@@ -312,5 +318,5 @@ export async function removePlaceTool(
   );
   if (!tripPlaceId) return { removed, note: "The replacement could not be saved." };
   const [replacement] = await cardsInOrder(ctx, [tripPlaceId]);
-  return { removed, ...(replacement ? { replacement } : {}) };
+  return { removed, ...(replacement ? { replacement, ...(note ? { note } : {}) } : {}) };
 }

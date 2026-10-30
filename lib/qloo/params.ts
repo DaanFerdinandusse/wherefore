@@ -4,6 +4,7 @@
 // (QLOO_API_FINDINGS.md) are on the list; adding one means testing it first.
 
 import { QlooParamError } from "./errors";
+import { WEEKDAY_NAMES } from "./normalize";
 
 export type QlooEndpoint = "/search" | "/v2/insights" | "/v2/tags" | "/entities";
 
@@ -16,6 +17,7 @@ type ParamSpec =
   | { kind: "list" }
   | { kind: "bool" }
   | { kind: "int"; min: number; max: number }
+  | { kind: "number"; min: number; max: number }
   | { kind: "enum"; values: readonly string[] }
   | { kind: "point" }
   | { kind: "latlon" };
@@ -43,6 +45,12 @@ export const PARAM_ALLOWLIST: Record<QlooEndpoint, Record<string, ParamSpec>> = 
     "operator.filter.tags": { kind: "enum", values: ["union", "intersection"] },
     "filter.price_level.max": { kind: "int", min: 1, max: 4 },
     "filter.price_level.min": { kind: "int", min: 1, max: 4 },
+    // A 0 to 1 percentile, read at the top level of each entity.
+    "filter.popularity.max": { kind: "number", min: 0, max: 1 },
+    // Only Michelin is on the list: it is the only key tested live.
+    "filter.external.exists": { kind: "enum", values: ["michelin"] },
+    // A lower case weekday name. Places without an hours block do not pass.
+    "filter.hours": { kind: "enum", values: WEEKDAY_NAMES },
     "filter.exclude.entities": { kind: "list" },
     "filter.results.entities": { kind: "list" },
     "filter.tag.types": { kind: "list" },
@@ -116,6 +124,11 @@ function serializeValue(endpoint: string, key: string, spec: ParamSpec, value: P
     }
     case "int": {
       if (typeof value !== "number" || !Number.isInteger(value)) fail(endpoint, key, "must be an integer");
+      if (value < spec.min || value > spec.max) fail(endpoint, key, `must be between ${spec.min} and ${spec.max}`);
+      return String(value);
+    }
+    case "number": {
+      if (typeof value !== "number" || !Number.isFinite(value)) fail(endpoint, key, "must be a number");
       if (value < spec.min || value > spec.max) fail(endpoint, key, `must be between ${spec.min} and ${spec.max}`);
       return String(value);
     }

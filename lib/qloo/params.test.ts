@@ -43,6 +43,28 @@ describe("serializeParams", () => {
     expect(() => serializeParams("/v2/insights", { "feature.explainability": "true" })).toThrow(/boolean/);
   });
 
+  it("takes a popularity cap between 0 and 1", () => {
+    expect(serializeParams("/v2/insights", { "filter.popularity.max": 0.6 })).toEqual([["filter.popularity.max", "0.6"]]);
+    expect(() => serializeParams("/v2/insights", { "filter.popularity.max": 1.2 })).toThrow(/between 0 and 1/);
+    expect(() => serializeParams("/v2/insights", { "filter.popularity.max": "0.6" })).toThrow(/must be a number/);
+    expect(() => serializeParams("/v2/insights", { "filter.popularity.max": Number.NaN })).toThrow(/must be a number/);
+  });
+
+  it("takes Michelin as the only filter.external.exists value", () => {
+    expect(serializeParams("/v2/insights", { "filter.external.exists": "michelin" })).toEqual([["filter.external.exists", "michelin"]]);
+    expect(() => serializeParams("/v2/insights", { "filter.external.exists": "resy" })).toThrow(/michelin/);
+  });
+
+  it("takes filter.hours as a lower case weekday name", () => {
+    expect(serializeParams("/v2/insights", { "filter.hours": "monday" })).toEqual([["filter.hours", "monday"]]);
+    expect(() => serializeParams("/v2/insights", { "filter.hours": "Monday" })).toThrow(/must be one of/);
+    expect(() => serializeParams("/v2/insights", { "filter.hours": "mon" })).toThrow(/must be one of/);
+  });
+
+  it("allows the new filters on insights only", () => {
+    expect(() => serializeParams("/search", { "filter.hours": "monday" })).toThrow(/not an allowed param/);
+  });
+
   it("builds POINT longitude first", () => {
     expect(point(38.7426741, -9.1561145)).toBe("POINT(-9.15611 38.74267)");
     expect(serializeParams("/v2/insights", { "filter.location": point(38.74, -9.15) })).toEqual([
@@ -70,6 +92,19 @@ describe("cacheKey", () => {
     const b = serializeParams("/v2/insights", { "filter.type": "urn:entity:place", take: 10 });
     expect(cacheKey("/v2/insights", a)).toBe(cacheKey("/v2/insights", b));
     expect(cacheKey("/v2/insights", [...a].reverse())).toBe(cacheKey("/v2/insights", a));
+  });
+
+  it("keeps searches with other filters apart: every param is part of the key", () => {
+    const key = (params: Record<string, string | number>) =>
+      cacheKey("/v2/insights", serializeParams("/v2/insights", { "filter.type": "urn:entity:place", ...params }));
+    const keys = [
+      key({}),
+      key({ "filter.popularity.max": 0.6 }),
+      key({ "filter.external.exists": "michelin" }),
+      key({ "filter.hours": "monday" }),
+      key({ "filter.hours": "tuesday" }),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("differs by endpoint and by value, and treats array and joined string alike", () => {

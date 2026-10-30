@@ -39,6 +39,11 @@ Each result carries `query.affinity` and a rich `properties` block: `short_descr
 
 Note: affinity scores are bunched (0.79 to 0.80 for the top 10), so show rank or relative bars rather than raw decimals.
 
+Three more filters on `/v2/insights`, tested live 2026-10-30. All three keep explainability and combine with each other:
+- `filter.popularity.max=0.6`: popularity is a 0 to 1 percentile at the top level of each entity. In Lisbon it surfaced Ceia at 0.02, rating 4.9. The app calls below 0.6 "less known".
+- `filter.external.exists=michelin`: `external.michelin` is a list of `{ id, stars }` in insights and one `{ id }` under `properties.external` in `/search` and `/entities`. `stars` is often null, so the key means listed, not starred.
+- `filter.hours=monday`: a lower case weekday name. 8 of the top 20 Lisbon restaurants dropped out. A closed day reads `monday: [{ opens: null, closes: null, closed: true }]`. Places with no `hours` block do not pass the filter either.
+
 ### 3. Category grouping: `filter.tags`
 ```
 &filter.tags=urn:tag:category:place:cocktail_bar

@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, asc, eq, ne } from "drizzle-orm";
 
+import { replacementNote } from "@/lib/agent/tools/labels";
 import { driversFor } from "@/lib/agent/tools/signals";
 import { NotFoundError } from "@/lib/auth/errors";
 import type { ScopeInput } from "@/lib/auth/scope";
@@ -14,7 +15,7 @@ import type { FindPlaces, PlaceResult } from "@/lib/qloo/contracts";
 import { CATEGORY_FILTER_TAGS, categoryOf, displayScore, sharedTagsFor } from "@/lib/qloo/normalize";
 
 import { signalSetHash } from "./evidence";
-import { asCategory } from "./map";
+import { askFiltersOfQuery, asCategory, type AskFilters } from "./map";
 import { logTripCall, saveReplacement, setTripPlaceStatus } from "./mutations";
 import { getTrip, listTripPlaceCards } from "./queries";
 import { loadTripSignals } from "./trip-signals";
@@ -33,7 +34,7 @@ import type { TurnGuard } from "./turn-guard";
 
 const TAKE = 10;
 
-export type ReplacementQuery = {
+export type ReplacementQuery = AskFilters & {
   tags: string[];
   priceMax?: number;
   /** The ask whose tab the replacement joins, when the removed place came from one. */
@@ -65,13 +66,14 @@ export function replacementQuery(input: {
     return {
       tags,
       ...(typeof price === "number" && price >= 1 && price <= 4 ? { priceMax: price } : {}),
+      ...askFiltersOfQuery(ask.query),
       askId: ask.askId,
       rank: ask.rank,
     };
   }
   const tags = input.category !== "other" ? CATEGORY_FILTER_TAGS[input.category] : input.placeTypes.slice(0, 1);
   const ask = input.asks[0];
-  return { tags: [...tags], ...(ask ? { askId: ask.askId, rank: ask.rank } : {}) };
+  return { tags: [...tags], ...(ask ? { ...askFiltersOfQuery(ask.query), askId: ask.askId, rank: ask.rank } : {}) };
 }
 
 /**
@@ -98,6 +100,8 @@ export type ReplaceDeps = {
   key?: string;
   /** An agent turn: every write lands only while it holds the chat (turn-guard.ts). */
   turn?: TurnGuard;
+  /** Told what the search had to loosen, in the advisor's words, when a replacement came back. */
+  onNote?: (note: string) => void;
 };
 
 /**
@@ -173,6 +177,9 @@ export async function replaceTripPlace(
       tagsOperator: query.tags.length > 1 ? "union" : undefined,
       excludeIds,
       priceMax: query.priceMax,
+      popularityMax: query.popularityMax,
+      michelin: query.michelin,
+      openDay: query.openDay,
       take: TAKE,
     },
     { tripId, client: deps.client },
@@ -233,6 +240,8 @@ export async function replaceTripPlace(
   );
   if (!newTripPlaceId) return null;
 
+  const note = replacementNote(found.loosened, query.openDay);
+  if (note) deps.onNote?.(note);
   const [card] = await listTripPlaceCards(tripId, scope, { tripPlaceIds: [newTripPlaceId] });
   return card ?? null;
 }

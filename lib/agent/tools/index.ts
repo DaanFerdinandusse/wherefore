@@ -94,6 +94,11 @@ function realTools(turn: TurnRef) {
         area: z.string().max(60).optional().describe("A neighborhood inside the destination"),
         day_hint: z.string().max(30).optional().describe("The day or time when it is not a slot, e.g. 'Saturday'"),
         target: targetSchema.optional(),
+        discovery: z
+          .literal("less_known")
+          .optional()
+          .describe("'less_known' keeps to places off the usual list. Use it when the brief asks for that, and for at least one pick when planning several slots"),
+        michelin: z.boolean().optional().describe("True keeps to places Michelin lists. Only when the advisor asks for Michelin"),
         take: z.number().int().min(3).max(8).optional().describe("How many candidates, 3 to 8, default 5"),
       }),
       execute: (input, { toolCallId, abortSignal }) => findPlacesStep(input, turn, toolCallId, abortSignal),

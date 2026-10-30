@@ -9,7 +9,7 @@ import type {
   TripPlaceCard,
 } from "@/lib/contracts";
 
-import { favoriteDrivers } from "@/lib/qloo/normalize";
+import { favoriteDrivers, isLessKnown } from "@/lib/qloo/normalize";
 
 import { CATEGORY_NAME, loosenedCopy } from "./labels";
 
@@ -51,6 +51,8 @@ export function cardForModel(card: TripPlaceCard) {
     shared_tags: card.sharedTags.map((t) => t.name),
     ...(card.yourPlace ? { your_place: true, advisor_note: card.yourPlace.note } : {}),
     ...(card.reason ? { reason: card.reason } : {}),
+    ...(isLessKnown(card.popularity) ? { less_known: true } : {}),
+    ...(card.michelin ? { michelin: true } : {}),
   };
 }
 
@@ -85,7 +87,7 @@ export function findPlacesForModel(output: FindPlacesOutput): ModelText {
     ...(output.target ? { for_slot: output.target.label } : {}),
     count: output.count,
     elapsed_ms: output.elapsedMs,
-    ...(output.loosened.length ? { loosened: loosenedCopy(output.loosened) } : {}),
+    ...(output.loosened.length ? { loosened: loosenedCopy(output.loosened, output.openDay) } : {}),
     ...(output.error ? { problem: output.error } : {}),
     ...(output.progress ? { note: output.progress } : {}),
     places: output.places.map(cardForModel),

@@ -9,6 +9,8 @@ export type TripPlaceSource = "seed" | "ask" | "advisor" | "manual";
 export type TripPlaceStatus = "suggested" | "added" | "removed";
 export type SlotName = "morning" | "lunch" | "afternoon" | "dinner" | "night" | "stay";
 export type TripStage = "planning" | "shared" | "traveling" | "done";
+/** A day of the week, lower case: "only places open that day" on a search. */
+export type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 
 export type TasteTag = { tagId: string; name: string; type?: string; score?: number };
 export type PlaceTag = { tagId: string; name: string; type?: string };
@@ -83,6 +85,10 @@ export type TripPlaceCard = {
   dishes?: string[];
   /** 1 to 4. */
   priceLevel?: number;
+  /** How known the place is, 0 to 1 (provider percentile). Absent when unknown. Never shown as a number. */
+  popularity?: number;
+  /** The provider links the place to Michelin. Says nothing about stars. */
+  michelin?: boolean;
 };
 
 export type Ask = {
@@ -258,6 +264,8 @@ export type FindPlacesOutput = {
   noun?: string;
   /** The advisor's words as short chips ("seafood, lively"). */
   terms?: string[];
+  /** The weekday the search keeps to places open on, so a loosened note can name it. */
+  openDay?: Weekday;
 };
 
 /** An itinerary slot a search or a recommendation is for. */
@@ -331,7 +339,7 @@ export type LookupPlaceOutput = {
 export type RemovePlaceOutput = {
   removed?: Pick<TripPlaceCard, "tripPlaceId" | "placeId" | "name" | "category">;
   replacement?: TripPlaceCard;
-  /** Why no replacement came back, in plain words. */
+  /** Why no replacement came back, or what the search had to loosen to find it, in plain words. */
   note?: string;
   error?: string;
 };

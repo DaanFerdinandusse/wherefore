@@ -2,10 +2,31 @@
 // category, the card score and the "because they loved" shares. No I/O, so the
 // UI can import it too (it never names the provider).
 
-import type { Category, Destination, Explainability, PlaceTag, TasteTag } from "@/lib/contracts";
+import type { Category, Destination, Explainability, PlaceTag, TasteTag, Weekday } from "@/lib/contracts";
 
 import type { LocalityCandidate, LocalityCheck, NormalizedPlace, PlaceResult, SignalScore } from "./contracts";
 import type { RawLocality, RawPlace } from "./types";
+
+// --------------------------------------------------------- less known, open day
+
+/** "Less known" means a popularity percentile (0 to 1) below this. The search filter and the card chip share it. */
+export const LESS_KNOWN_POPULARITY_MAX = 0.6;
+
+/** An unknown popularity is not less known. */
+export function isLessKnown(popularity: number | undefined): boolean {
+  return popularity !== undefined && popularity < LESS_KNOWN_POPULARITY_MAX;
+}
+
+/** The hours block's keys and the values filter.hours takes. */
+export const WEEKDAY_NAMES: readonly Weekday[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
 
 // ---------------------------------------------------------------- places row
 

@@ -96,6 +96,8 @@ function cardsQuery(where: SQL | undefined) {
       // Only the two blocks the card reads, not the whole properties document.
       keywordsRaw: sql<unknown>`${places.properties} -> 'keywords'`,
       dishesRaw: sql<unknown>`${places.properties} -> 'specialty_dishes'`,
+      popularityRaw: sql<unknown>`${places.properties} -> 'popularity'`,
+      michelinRaw: sql<unknown>`${places.properties} -> 'external' -> 'michelin'`,
       yourPlaceId: advisorPlaces.id,
       yourPlaceNote: advisorPlaces.note,
     })
@@ -131,7 +133,12 @@ function askIdsByTripPlace(rows: { askId: string; tripPlaceId: string }[]): Map<
 
 function toCard(row: CardRow, askIds: string[]): TripPlaceCard {
   const tp = row.tripPlace;
-  const facts = placeFactsFromProperties({ keywords: row.keywordsRaw, specialty_dishes: row.dishesRaw });
+  const facts = placeFactsFromProperties({
+    keywords: row.keywordsRaw,
+    specialty_dishes: row.dishesRaw,
+    popularity: row.popularityRaw,
+    external: { michelin: row.michelinRaw },
+  });
   const priceLevel = cardPriceLevel(row.priceLevel);
   return {
     ...facts,
