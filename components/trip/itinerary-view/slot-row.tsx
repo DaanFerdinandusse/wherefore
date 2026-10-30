@@ -25,6 +25,7 @@ import {
   subLine,
   suggestionHint,
   tasteBadges,
+  type PartDrop,
   type SlotReasons,
   type SlotView,
 } from "./itinerary-model";
@@ -383,6 +384,34 @@ function OpenRow({ view, hint, actions }: { view: SlotView; hint: boolean; actio
         </div>
       </div>
     </li>
+  );
+}
+
+/** The row a drop makes: it opens at the end of a part while a place hovers over the part. */
+export function NewRow({ label, drop }: { label: string; drop: PartDrop }) {
+  const armed = drop === "armed";
+  const open = armed || drop === "offered";
+  const part = label.toLowerCase();
+  return (
+    <div
+      aria-hidden={!open}
+      data-testid="new-row"
+      data-drop={drop}
+      className={cn(
+        "grid transition-[grid-template-rows] ease-[var(--ease-out-expo)] motion-reduce:transition-none",
+        open ? "grid-rows-[1fr] duration-200" : "grid-rows-[0fr] duration-100",
+      )}
+    >
+      <div className="min-h-0 overflow-hidden">
+        <div className={cn(COLUMNS, "border-t border-ink/7 transition-colors", armed && "bg-why/70")}>
+          <span className="label-caps hidden font-semibold tracking-[0.12em] text-amber-deep @[440px]:block">New</span>
+          <span aria-hidden className={cn("h-10 rounded-[10px] border-[1.5px] border-dashed", armed ? "border-glow" : "border-ink/15")} />
+          <p className={cn("text-ui", armed ? "font-medium text-amber-deep" : "text-text-2")}>
+            {armed ? `Drop to add to ${part}` : `Or drop here to add to ${part}`}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 

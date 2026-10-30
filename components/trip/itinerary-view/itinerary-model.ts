@@ -186,6 +186,24 @@ export function suggestionsBySlot(state: ModelState): Map<string, TripPlaceCard>
   return out;
 }
 
+/**
+ * What a part does with a place hovering over it. `armed`: a drop makes a new
+ * row at the end of the part. `offered`: a row under the pointer takes the drop
+ * and the new row shows next to it. `refused`: the part's open slot may not
+ * hold the place. `none`: a row takes it and there is nothing to add, or the
+ * card came from this open slot and a new row would only reorder it.
+ */
+export type PartDrop = "none" | "offered" | "armed" | "refused";
+
+export function partDrop(
+  add: Pick<SlotRef, "day" | "slot">,
+  drag: { category: Category | null; from: Pick<SlotRef, "day" | "slot"> | null; rowTakes: boolean },
+): PartDrop {
+  if (drag.category && !slotHolds(add.slot, drag.category)) return drag.rowTakes ? "none" : "refused";
+  if (drag.from?.day === add.day && drag.from.slot === add.slot) return "none";
+  return drag.rowTakes ? "offered" : "armed";
+}
+
 /** Most common value, ties to the earliest. Blank values do not count. */
 export function mostCommon(values: (string | undefined)[]): string | undefined {
   const counts = new Map<string, number>();

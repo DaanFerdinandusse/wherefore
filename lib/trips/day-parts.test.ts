@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addPosition, appendPositions, isOpenSlot, nextPosition, overflowSlot, slotHolds, slotRule } from "./day-parts";
+import { addPosition, appendPositions, isOpenSlot, nextPosition, overflowSlot, partOpenSlot, slotHolds, slotRule } from "./day-parts";
 
 const row = (slot: "lunch" | "afternoon", position: number, tripPlaceId?: string, note = "") => ({
   day: 1,
@@ -81,5 +81,13 @@ describe("appendPositions", () => {
     const lunch = { day: 1, slot: "lunch" as const };
     expect(appendPositions([{ ...lunch, tripPlaceId: "b" }], [row("lunch", 0, "a")])).toEqual([0]);
     expect(appendPositions([{ ...lunch, tripPlaceId: "a" }, { ...lunch, tripPlaceId: "b" }], [])).toEqual([0, 1]);
+  });
+});
+
+describe("partOpenSlot", () => {
+  it("finds the open slot of a meal and of an open slot, and none for the stay", () => {
+    expect(partOpenSlot("lunch")).toBe("afternoon");
+    expect(partOpenSlot("night")).toBe("night");
+    expect(partOpenSlot("stay")).toBeNull();
   });
 });

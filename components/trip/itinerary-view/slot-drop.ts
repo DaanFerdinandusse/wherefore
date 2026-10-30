@@ -2,18 +2,34 @@
 
 import { useState, type DragEvent } from "react";
 
-import { slotHolds, slotRule } from "@/lib/trips/day-parts";
+import { partOpenSlot, slotHolds, slotRule } from "@/lib/trips/day-parts";
 
-import { carriesPlace, carriesSlot, draggedCategory, draggedPlace, draggedSlot } from "../workspace/dnd";
+import { carriesPlace, carriesSlot, draggedCategory, draggedFrom, draggedPlace, draggedSlot } from "../workspace/dnd";
 import type { SlotRef } from "../workspace/reducer";
 import type { WorkspaceActions } from "../workspace/use-workspace-actions";
+
+import { partDrop, type PartDrop } from "./itinerary-model";
+
+function dropOn(e: DragEvent, target: SlotRef, actions: WorkspaceActions) {
+  const from = draggedSlot(e);
+  if (from) {
+    e.preventDefault();
+    void actions.moveToSlot(from, target);
+    return;
+  }
+  const tripPlaceId = draggedPlace(e);
+  if (tripPlaceId) {
+    e.preventDefault();
+    void actions.addToSlot(tripPlaceId, target.day, target.slot, target.position ?? 0);
+  }
+}
 
 // A slot as a drop target. It takes a place dragged from the chat (a tile or
 // a full card, TRIP_PLACE_TYPE) and a place card dragged from another slot
 // (SLOT_TYPE): within a day the two slots swap, across days the places trade.
 // A place the slot may not hold (slotHolds) is refused while it hovers: no
 // preventDefault means the browser shows no-drop and the drop never lands, and
-// `refusal` says why.
+// `refusal` says why, unless the part around the slot takes the place instead.
 export function useSlotDrop(target: SlotRef, actions: WorkspaceActions) {
   const [over, setOver] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -26,7 +42,8 @@ export function useSlotDrop(target: SlotRef, actions: WorkspaceActions) {
         const category = draggedCategory(e);
         if (category && !slotHolds(target.slot, category)) {
           e.dataTransfer.dropEffect = "none";
-          if (!refusal) setRefusal(slotRule(category));
+          const open = partOpenSlot(target.slot);
+          if (!refusal && !(open && slotHolds(open, category))) setRefusal(slotRule(category));
           return;
         }
         e.preventDefault();
@@ -42,17 +59,47 @@ export function useSlotDrop(target: SlotRef, actions: WorkspaceActions) {
       onDrop: (e: DragEvent) => {
         setOver(false);
         setRefusal(null);
-        const from = draggedSlot(e);
-        if (from) {
-          e.preventDefault();
-          void actions.moveToSlot(from, target);
-          return;
-        }
-        const tripPlaceId = draggedPlace(e);
-        if (tripPlaceId) {
-          e.preventDefault();
-          void actions.addToSlot(tripPlaceId, target.day, target.slot, target.position ?? 0);
-        }
+        // What this slot refuses goes on to the part around it.
+        const category = draggedCategory(e);
+        if (category && !slotHolds(target.slot, category)) return;
+        dropOn(e, target, actions);
+      },
+    },
+  };
+}
+
+// A part as a drop target, around its rows. Events reach it after the row under
+// the pointer has had them, so a row that takes the drop has already called
+// preventDefault. Whatever is left lands on `add`, the part's next open row,
+// which has no row of its own until the drop makes one (partDrop).
+export function usePartDrop(add: Required<SlotRef>, actions: WorkspaceActions) {
+  const [state, setState] = useState<PartDrop>("none");
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const reset = () => {
+    setState("none");
+    setRefusal(null);
+  };
+  return {
+    state,
+    refusal,
+    handlers: {
+      onDragOver: (e: DragEvent) => {
+        if (!carriesSlot(e) && !carriesPlace(e)) return;
+        const category = draggedCategory(e);
+        const next = partDrop(add, { category, from: draggedFrom(e), rowTakes: e.defaultPrevented });
+        setState(next);
+        setRefusal(next === "refused" && category ? slotRule(category) : null);
+        if (next !== "armed") return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = carriesSlot(e) ? "move" : "copy";
+      },
+      onDragLeave: (e: DragEvent) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        reset();
+      },
+      onDrop: (e: DragEvent) => {
+        reset();
+        if (!e.defaultPrevented) dropOn(e, add, actions);
       },
     },
   };

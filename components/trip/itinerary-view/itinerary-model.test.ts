@@ -19,6 +19,7 @@ import {
   findingLabel,
   mostCommon,
   openDay,
+  partDrop,
   priceLabel,
   slotReasons,
   subLine,
@@ -420,5 +421,39 @@ describe("suggestions after the agent has weighed", () => {
 
   it("offers nothing when only rejected places are left", () => {
     expect(suggestionsBySlot(state([place("rejected", 90)], [verdict("rejected", "out")])).size).toBe(0);
+  });
+});
+
+describe("partDrop", () => {
+  const afternoon = { day: 2, slot: "afternoon" as const };
+  const drag = { category: "see" as const, from: null, rowTakes: false };
+
+  it("arms a new row when no row under the pointer takes the place", () => {
+    expect(partDrop(afternoon, drag)).toBe("armed");
+    expect(partDrop(afternoon, { ...drag, from: { day: 1, slot: "afternoon" } })).toBe("armed");
+    expect(partDrop(afternoon, { ...drag, from: { day: 2, slot: "morning" } })).toBe("armed");
+  });
+
+  it("offers the new row next to a row that takes the place", () => {
+    expect(partDrop(afternoon, { ...drag, rowTakes: true })).toBe("offered");
+  });
+
+  it("offers no new row to a card from the same open slot", () => {
+    expect(partDrop(afternoon, { ...drag, from: afternoon })).toBe("none");
+    expect(partDrop(afternoon, { ...drag, from: afternoon, rowTakes: true })).toBe("none");
+  });
+
+  it("offers a new row to a cafe leaving the meal of the same part", () => {
+    expect(partDrop(afternoon, { ...drag, category: "coffee", from: { day: 2, slot: "lunch" } })).toBe("armed");
+  });
+
+  it("refuses what the open slot may not hold, unless a row takes it", () => {
+    expect(partDrop(afternoon, { ...drag, category: "eat" })).toBe("refused");
+    expect(partDrop(afternoon, { ...drag, category: "stay" })).toBe("refused");
+    expect(partDrop(afternoon, { ...drag, category: "eat", rowTakes: true })).toBe("none");
+  });
+
+  it("takes a drag that names no category", () => {
+    expect(partDrop(afternoon, { ...drag, category: null })).toBe("armed");
   });
 });

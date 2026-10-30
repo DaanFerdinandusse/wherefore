@@ -39,6 +39,11 @@ export function isOpenSlot(slot: SlotName): boolean {
   return DAY_PARTS.some((p) => p.open === slot);
 }
 
+/** The open slot of the part a slot belongs to. The stay belongs to no part. */
+export function partOpenSlot(slot: SlotName): SlotName | null {
+  return DAY_PARTS.find((p) => p.meal === slot || p.open === slot)?.open ?? null;
+}
+
 /**
  * What a slot may hold. A meal is for a restaurant or a cafe. Morning,
  * afternoon and night are for everything that is not a meal, and a cafe. The
