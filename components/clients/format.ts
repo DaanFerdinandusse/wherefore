@@ -111,23 +111,23 @@ export function plural(count: number, one: string, many: string = `${one}s`): st
   return `${count} ${count === 1 ? one : many}`;
 }
 
-/** Where a client stands on the Clients page filters. */
-export type ClientTripState = "upcoming" | "traveling" | "none";
-
 /**
- * From the client's next trip (the soonest one that has not ended): none
- * without one, traveling once it has started, upcoming otherwise.
+ * "Updated today", or "Added today" while nothing changed since the client
+ * was created that day (the card line "Berlin · 1 trip · Added today").
  */
-export function clientTripState(nextTrip: { startDate: string | null } | null, today: string = todayIso()): ClientTripState {
-  if (!nextTrip) return "none";
-  if (nextTrip.startDate && nextTrip.startDate <= today) return "traveling";
-  return "upcoming";
+export function activityLine(lastActivityAt: Date, createdAt: Date, now: Date = new Date()): string {
+  const label = activityLabel(lastActivityAt, now);
+  return todayIso(lastActivityAt) === todayIso(createdAt) ? label.replace(/^Updated/, "Added") : label;
 }
 
+/**
+ * The Clients page filters. "Trip coming up" is any client with a trip that
+ * has not ended (traveling now included); "No trip yet" is a client without
+ * any trip. A client whose trips are all past is only under All.
+ */
 export const CLIENT_FILTERS = [
   { key: "all", label: "All" },
   { key: "upcoming", label: "Trip coming up" },
-  { key: "traveling", label: "Traveling now" },
   { key: "none", label: "No trip yet" },
 ] as const;
 
@@ -137,9 +137,19 @@ export function isClientFilter(value: unknown): value is ClientFilter {
   return CLIENT_FILTERS.some((filter) => filter.key === value);
 }
 
-/** Counts per filter, for the pill labels. */
-export function filterCounts(states: readonly ClientTripState[]): Record<ClientFilter, number> {
-  const counts: Record<ClientFilter, number> = { all: states.length, upcoming: 0, traveling: 0, none: 0 };
-  for (const state of states) counts[state] += 1;
+type FilterFields = { nextTrip: unknown; tripCount: number };
+
+export function inClientFilter(client: FilterFields, filter: ClientFilter): boolean {
+  if (filter === "upcoming") return client.nextTrip !== null;
+  if (filter === "none") return client.tripCount === 0;
+  return true;
+}
+
+/** Counts per filter, for the segment labels ("All 24"). */
+export function filterCounts(clients: readonly FilterFields[]): Record<ClientFilter, number> {
+  const counts: Record<ClientFilter, number> = { all: 0, upcoming: 0, none: 0 };
+  for (const client of clients) {
+    for (const { key } of CLIENT_FILTERS) if (inClientFilter(client, key)) counts[key] += 1;
+  }
   return counts;
 }

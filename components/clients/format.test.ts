@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   activityLabel,
-  clientTripState,
+  activityLine,
   daysUntil,
   filterCounts,
+  inClientFilter,
   firstName,
   inDaysLabel,
   monthYear,
@@ -80,17 +81,30 @@ describe("names and months", () => {
   });
 });
 
-describe("clientTripState and filterCounts", () => {
-  it("sorts clients into the filter pills", () => {
-    expect(clientTripState(null, TODAY)).toBe("none");
-    expect(clientTripState({ startDate: null }, TODAY)).toBe("upcoming");
-    expect(clientTripState({ startDate: "2026-11-12" }, TODAY)).toBe("upcoming");
-    expect(clientTripState({ startDate: "2026-10-20" }, TODAY)).toBe("traveling");
-    expect(filterCounts(["none", "upcoming", "upcoming", "traveling"])).toEqual({
-      all: 4,
-      upcoming: 2,
-      traveling: 1,
-      none: 1,
-    });
+describe("activityLine", () => {
+  const now = new Date("2026-10-21T15:00:00Z");
+  it("says Added while the last activity is the day the client was created", () => {
+    expect(activityLine(new Date("2026-10-21T09:00:00Z"), new Date("2026-10-21T08:00:00Z"), now)).toBe("Added today");
+    expect(activityLine(new Date("2026-10-21T09:00:00Z"), new Date("2026-03-01T08:00:00Z"), now)).toBe("Updated today");
+    expect(activityLine(new Date("2026-10-18T09:00:00Z"), new Date("2026-10-18T08:00:00Z"), now)).toBe("Added 3 days ago");
+  });
+});
+
+describe("client filters", () => {
+  const upcoming = { nextTrip: { id: "t1" }, tripCount: 2 };
+  const never = { nextTrip: null, tripCount: 0 };
+  const pastOnly = { nextTrip: null, tripCount: 3 };
+
+  it("puts a client with a trip ahead under Trip coming up and one without trips under No trip yet", () => {
+    expect(inClientFilter(upcoming, "upcoming")).toBe(true);
+    expect(inClientFilter(upcoming, "none")).toBe(false);
+    expect(inClientFilter(never, "none")).toBe(true);
+    expect(inClientFilter(pastOnly, "upcoming")).toBe(false);
+    expect(inClientFilter(pastOnly, "none")).toBe(false);
+    expect(inClientFilter(pastOnly, "all")).toBe(true);
+  });
+
+  it("counts every client under All and only matching ones elsewhere", () => {
+    expect(filterCounts([upcoming, never, pastOnly, upcoming])).toEqual({ all: 4, upcoming: 2, none: 1 });
   });
 });

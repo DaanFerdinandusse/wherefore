@@ -3,12 +3,13 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
-import { FilterPill } from "@/components/ui/filter-pill";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 
 import { CLIENT_FILTERS, type ClientFilter } from "../format";
 
-// All / Trip coming up / Traveling now / No trip yet, with counts. The choice
-// lives in ?show= so the server filters and the back button works.
+// All / Trip coming up / No trip yet, with counts, as the panel header's
+// segmented switch. The choice lives in ?show= so the server filters and the
+// back button works.
 export function ClientsFilters({ active, counts }: { active: ClientFilter; counts: Record<ClientFilter, number> }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -25,16 +26,12 @@ export function ClientsFilters({ active, counts }: { active: ClientFilter; count
   }
 
   return (
-    <div role="group" aria-label="Filter clients" className="flex items-center gap-2">
-      {CLIENT_FILTERS.map((filter) => (
-        <FilterPill
-          key={filter.key}
-          label={filter.label}
-          count={counts[filter.key]}
-          active={active === filter.key}
-          onClick={() => choose(filter.key)}
-        />
-      ))}
-    </div>
+    <SegmentedToggle
+      variant="panel"
+      label="Filter clients"
+      value={active}
+      onValueChange={choose}
+      options={CLIENT_FILTERS.map((filter) => ({ value: filter.key, label: `${filter.label} ${counts[filter.key]}` }))}
+    />
   );
 }

@@ -7,9 +7,9 @@ import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StarburstOrnament } from "@/components/ui/starburst-ornament";
 import { requirePageUser } from "@/lib/auth/server";
-import { countClientTrips, listClients, listClientTripCards } from "@/lib/clients";
+import { listClients, listClientTripCards } from "@/lib/clients";
 
-import { clientTripState, filterCounts, isClientFilter, plural, todayIso } from "../format";
+import { filterCounts, inClientFilter, isClientFilter, plural, todayIso } from "../format";
 import { ClientCard } from "./client-card";
 import { ClientsFilters } from "./clients-filters";
 import { ClientsSearch } from "./clients-search";
@@ -36,10 +36,7 @@ function hrefWith(params: SearchParams, extra: Record<string, string>): string {
   return `/clients?${next.toString()}`;
 }
 
-const addClientClasses = buttonClasses({
-  variant: "outline-strong",
-  className: "h-[35px]! gap-1.5! px-4!",
-});
+const addClientClasses = buttonClasses({ className: "h-[38px]! gap-2! px-[18px]!" });
 
 export async function ClientsScreen({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const user = await requirePageUser();
@@ -52,47 +49,39 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
   const now = new Date();
   const today = todayIso(now);
   const clients = await listClients(user, { q });
-  const states = clients.map((client) => clientTripState(client.nextTrip, today));
-  const counts = filterCounts(states);
-  const filtered = clients.filter((_, i) => show === "all" || states[i] === show);
+  const counts = filterCounts(clients);
+  const filtered = clients.filter((client) => inClientFilter(client, show));
   const visible = showAll ? filtered : filtered.slice(0, PAGE_SIZE);
   const hidden = filtered.length - visible.length;
 
-  const [tripCards, tripCounts] = await Promise.all([
-    listClientTripCards(
-      visible.flatMap((client) => (client.nextTrip ? [client.nextTrip.id] : [])),
-      user,
-    ),
-    countClientTrips(
-      visible.map((client) => client.id),
-      user,
-    ),
-  ]);
+  const tripCards = await listClientTripCards(
+    visible.flatMap((client) => (client.nextTrip ? [client.nextTrip.id] : [])),
+    user,
+  );
   const cardById = new Map(tripCards.map((card) => [card.id, card]));
 
   const subtitle = q
     ? `${plural(clients.length, "client")} match “${q}”.`
     : clients.length === 0
       ? "Add a client and the places they love. Every new trip starts from them."
-      : `${plural(clients.length, "client")}. Their favorite places are saved, so every new trip starts from what they love.`;
+      : "Their favorite places are saved, so every new trip starts from their taste.";
 
   return (
-    <AppPage section="clients" detail={plural(clients.length, "client")}>
+    <AppPage
+      section="clients"
+      detail={plural(clients.length, "client")}
+      toolbar={clients.length > 0 || show !== "all" ? <ClientsFilters active={show} counts={counts} /> : null}
+      actions={
+        <Link href="/clients/new" className={addClientClasses}>
+          <Plus size={14} strokeWidth={2.4} aria-hidden />
+          Add client
+        </Link>
+      }
+    >
       <PageHeader
         title="Clients"
         subtitle={subtitle}
-        className="pb-5!"
-        actions={
-          <>
-            <ClientsSearch initialQuery={q} />
-            {clients.length > 0 ? <ClientsFilters active={show} counts={counts} /> : null}
-            <span aria-hidden className="h-6 w-px shrink-0 bg-rule-strong" />
-            <Link href="/clients/new" className={addClientClasses}>
-              <Plus size={14} strokeWidth={2.4} aria-hidden />
-              Add client
-            </Link>
-          </>
-        }
+        actions={clients.length > 0 || q ? <ClientsSearch initialQuery={q} /> : null}
       />
 
       {visible.length === 0 ? (
@@ -132,7 +121,6 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
                 key={client.id}
                 client={client}
                 nextTrip={client.nextTrip ? (cardById.get(client.nextTrip.id) ?? null) : null}
-                tripCount={tripCounts[client.id] ?? 0}
                 startTripHref={hrefWith(params, {
                   new: "1",
                   client: client.id,
