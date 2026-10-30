@@ -7,3 +7,5 @@
 The workspace supplies its actions so chat and itinerary writes share the same queue. `trip_asks.target` persists the slot; `query.pick` persists the chosen place. `toAsk` restores both, including legacy targets in `query.target`. A reload must preserve the recommendation even when a different result scores higher.
 
 Paper defines the 720px desktop chat column and 112px opening clearance. Smaller columns stack the place-card details so keyword bars and visit facts remain readable. Google tabs end their loading state on failure and show the existing unavailable-data copy.
+
+Both transcript views share `streaming-parts.tsx`: new words fade into ink without delaying the stream, readable reasoning summaries open while streaming and collapse when done (unless toggled by the reader). Encrypted provider metadata is never rendered. `chat-activity.ts` keeps a status visible before the first delta and between steps, including empty assistant messages and quiet tools. Reduced motion shows all content and static activity marks immediately.

@@ -5,10 +5,12 @@ import { isToolUIPart } from "ai";
 import type { AppUIMessage } from "@/lib/contracts";
 
 import { ToolCard } from "./tool-card";
+import { needsThinkingIndicator } from "./chat-activity";
+import { StreamingText, ThinkingIndicator, ThinkingSummary } from "./streaming-parts";
 
 // The transcript: user bubbles, assistant text with a streaming cursor, and a
-// tool card per tool part, in part order. Reasoning parts are kept in the
-// message (Codex needs them replayed) but never shown. Hidden messages (the
+// tool card per tool part, in part order. Readable reasoning summaries are
+// expandable. Hidden messages (the
 // seed turn's synthetic prompt) are not rendered. Scrolling belongs to the
 // dock (chat-dock.tsx), which keeps the list pinned to the bottom.
 
@@ -21,9 +23,6 @@ type Props = {
   placeName?: (tripPlaceId: string) => string | undefined;
 };
 
-function Cursor() {
-  return <span aria-hidden data-testid="stream-cursor" className="ml-0.5 inline-block h-[1em] w-[2px] translate-y-[2px] animate-pulse bg-amber" />;
-}
 
 export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, onPlaceClick, placeName }: Props) {
   const visible = messages.filter((m) => !m.metadata?.hidden);
@@ -45,11 +44,13 @@ export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, on
         return (
           <li key={message.id} data-testid="assistant-message" data-stopped={message.metadata?.stopped ? "true" : "false"} className="flex flex-col gap-2">
             {message.parts.map((part, index) => {
+              if (part.type === "reasoning") {
+                return <ThinkingSummary key={`${message.id}-${index}`} text={part.text} active={isLive && part.state === "streaming"} />;
+              }
               if (part.type === "text") {
                 return (
                   <p key={`${message.id}-${index}`} data-testid="assistant-text" className="whitespace-pre-wrap text-ink">
-                    {part.text}
-                    {isLive && index === lastTextIndex && part.state === "streaming" ? <Cursor /> : null}
+                    <StreamingText text={part.text} active={isLive && index === lastTextIndex && part.state === "streaming"} />
                   </p>
                 );
               }
@@ -71,12 +72,7 @@ export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, on
           </li>
         );
       })}
-      {streaming && last?.role === "user" ? (
-        <li className="text-text-2" data-testid="thinking">
-          Working on it
-          <Cursor />
-        </li>
-      ) : null}
+      {needsThinkingIndicator(messages, streaming) ? <li><ThinkingIndicator /></li> : null}
     </ol>
   );
 }

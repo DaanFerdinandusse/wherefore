@@ -14,6 +14,8 @@ import { toolErrorText } from "./chat-errors";
 import { readPlacesOutput, readRecommendOutput } from "./chat-places";
 import type { Recommendation } from "./chat-format";
 import { ToolCard } from "./tool-card";
+import { needsThinkingIndicator } from "./chat-activity";
+import { StreamingText, ThinkingIndicator, ThinkingSummary } from "./streaming-parts";
 import type { PlaceHandlers } from "./tool-cards/parts";
 import { SearchRow } from "./tool-cards/search-row";
 
@@ -22,7 +24,7 @@ import { SearchRow } from "./tool-cards/search-row";
 // as dark ink bubbles on the right, agent text as soft surface blocks, a
 // search row per find_places, and the recommendation: the latest as the full
 // place card, earlier ones as one line ("Added to Fri dinner · 92 match").
-// Reasoning parts stay in the message (Codex replays them) but never show.
+// Readable reasoning summaries appear in expandable disclosures.
 // Reading tools (trip context, a place's facts) show only when they fail.
 
 const QUIET_TOOLS = new Set(["get_trip_context", "lookup_place"]);
@@ -42,9 +44,6 @@ type Props = PlaceHandlers & {
   placeName?: (tripPlaceId: string) => string | undefined;
 };
 
-function Cursor() {
-  return <span aria-hidden data-testid="stream-cursor" className="ml-0.5 inline-block h-[1em] w-[2px] translate-y-[2px] animate-pulse bg-amber" />;
-}
 
 export function OpeningMessage({ opening }: { opening: ChatOpening }) {
   return (
@@ -137,6 +136,9 @@ export function Thread({
             className="flex flex-col gap-3.5"
           >
             {message.parts.map((part, index) => {
+              if (part.type === "reasoning") {
+                return <ThinkingSummary key={`${message.id}-${index}`} text={part.text} active={isLive && part.state === "streaming"} />;
+              }
               if (part.type === "text") {
                 if (!part.text.trim() && !(isLive && index === lastTextIndex)) return null;
                 return (
@@ -145,8 +147,7 @@ export function Thread({
                     data-testid="assistant-text"
                     className="rounded-[22px] bg-surface px-5 py-3.5 text-chat whitespace-pre-wrap text-ink"
                   >
-                    {part.text}
-                    {isLive && index === lastTextIndex && part.state === "streaming" ? <Cursor /> : null}
+                    <StreamingText text={part.text} active={isLive && index === lastTextIndex && part.state === "streaming"} />
                   </p>
                 );
               }
@@ -207,12 +208,7 @@ export function Thread({
           </li>
         );
       })}
-      {streaming && last?.role === "user" ? (
-        <li className="px-1 text-text-2" data-testid="thinking">
-          Working on it
-          <Cursor />
-        </li>
-      ) : null}
+      {needsThinkingIndicator(messages, streaming) ? <li><ThinkingIndicator /></li> : null}
     </ol>
   );
 }

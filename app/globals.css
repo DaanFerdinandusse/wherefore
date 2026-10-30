@@ -337,3 +337,22 @@ textarea {
 @utility arch-top-fluid {
   border-radius: 50cqi 50cqi 24px 24px;
 }
+
+/* Chat feedback: new words resolve into ink without delaying the stream. */
+@keyframes chat-word-reveal {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+@keyframes chat-thinking-pulse {
+  0%, 80%, 100% { opacity: 0.35; }
+  40% { opacity: 1; }
+}
+
+.chat-word-reveal { animation: chat-word-reveal 220ms ease-out; }
+.chat-thinking-dot { animation: chat-thinking-pulse 1.4s ease-in-out infinite; }
+.chat-stream-cursor { animation: chat-thinking-pulse 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-word-reveal, .chat-thinking-dot, .chat-stream-cursor { animation: none; }
+}
