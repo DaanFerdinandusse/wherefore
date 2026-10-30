@@ -223,10 +223,17 @@ export function ChatColumn({
         ref={scrollRef}
         data-testid="chat-scroll"
         onScroll={onScroll}
+        onClickCapture={(event) => {
+          if (event.target instanceof Element && event.target.closest("[data-photo-toggle]")) {
+            pinned.current = false;
+            setShowJump(true);
+          }
+        }}
         onWheel={markUserScroll}
         onTouchMove={markUserScroll}
         onKeyDown={markUserScroll}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        className="-mr-5 -ml-7 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-5 pl-7 max-xl:-ml-4 max-xl:pl-4"
+        style={{ overflowAnchor: "none" }}
       >
         <div ref={contentRef} className="flex min-h-full flex-col justify-end pt-9 pb-28">
           <Thread

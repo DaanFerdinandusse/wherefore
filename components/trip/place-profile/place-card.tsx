@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useId, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import {
-  ArrowLeft,
+  ChevronUp,
   BedDouble,
   Bookmark,
   Check,
@@ -36,8 +36,8 @@ import { SlotPicker } from "./slot-picker";
 import { useGoogleDetails, useTripPlaceProfile } from "./use-profile-data";
 
 // The place card in the chat (Paper J1, J1b, J1c; variant A of "J1 card
-// variants"): a photo strip with chips, the name, three tabs (For Ana, Visit
-// info, Reviews) and the actions. The same card is the recommendation in the
+// variants"): the name, three tabs (For Ana, Visit info, Reviews), a photo
+// strip with chips and the actions. The same card is the recommendation in the
 // thread and the place opened from the itinerary or the map (variant
 // "overlay", closable). Every word is code over facts: review keywords with
 // counts, the favorites and their shares, shared tags, the advisor's notes,
@@ -99,6 +99,7 @@ export function PlaceCard({
   const client = firstName(trip.clientName);
   const [tab, setTab] = useState<Tab>("for");
   const [gallery, setGallery] = useState(false);
+  const galleryId = useId();
   const { profile, failed: profileFailed } = useTripPlaceProfile(true, card.tripPlaceId);
   const place = profile?.place ?? null;
   const wantFull = tab !== "for" || gallery;
@@ -132,32 +133,10 @@ export function PlaceCard({
       onMouseLeave={() => onHover?.(null)}
       className={cn("@container rise-in flex flex-col gap-3.5", removed && "opacity-60")}
     >
-      <PhotoStrip
-        photos={photos}
-        loading={(!profile && !profileFailed) || basicLoading}
-        name={card.name}
-        tall={variant === "overlay"}
-        tripPlaceId={card.tripPlaceId}
-        onOpenGallery={() => setGallery(true)}
-        chips={
-          <>
-            <PhotoChip icon={CATEGORY_ICON[card.category]}>{kind}</PhotoChip>
-            {neighborhood ? <PhotoChip icon={MapPin}>{neighborhood}</PhotoChip> : null}
-            {price ? (
-              <PhotoChip>
-                <span className="sr-only">Price level </span>
-                {price}
-              </PhotoChip>
-            ) : null}
-            {card.yourPlace ? <PhotoChip icon={Bookmark}>Your place</PhotoChip> : null}
-          </>
-        }
-      />
-
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
         <h3 className="min-w-0 text-card-xs font-semibold text-ink">{card.name}</h3>
         <div className="flex items-center gap-2">
-          {gallery ? null : <CardTabs value={tab} onChange={setTab} client={client} />}
+          <CardTabs value={tab} onChange={setTab} client={client} />
           {onClose ? (
             <button
               type="button"
@@ -173,9 +152,42 @@ export function PlaceCard({
         </div>
       </div>
 
-      {gallery ? (
-        <Gallery photos={photos} name={card.name} onBack={() => setGallery(false)} />
-      ) : tab === "for" ? (
+      <div>
+        <PhotoStrip
+          photos={photos}
+          loading={(!profile && !profileFailed) || basicLoading}
+          name={card.name}
+          tall={variant === "overlay"}
+          tripPlaceId={card.tripPlaceId}
+          expanded={gallery}
+          galleryId={galleryId}
+          onOpenGallery={() => setGallery((open) => !open)}
+          chips={
+            <>
+              <PhotoChip icon={CATEGORY_ICON[card.category]}>{kind}</PhotoChip>
+              {neighborhood ? <PhotoChip icon={MapPin}>{neighborhood}</PhotoChip> : null}
+              {price ? (
+                <PhotoChip>
+                  <span className="sr-only">Price level </span>
+                  {price}
+                </PhotoChip>
+              ) : null}
+              {card.yourPlace ? <PhotoChip icon={Bookmark}>Your place</PhotoChip> : null}
+            </>
+          }
+        />
+
+        <Gallery id={galleryId} photos={photos.slice(3)} name={card.name} expanded={gallery} />
+        {gallery && photos.length > 3 ? (
+          <button type="button" data-photo-toggle aria-expanded={gallery} aria-controls={galleryId} onClick={() => setGallery(false)}
+            className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-pill bg-track px-3 py-1.5 text-ui-sm font-semibold text-ink hover:bg-rule">
+            <ChevronUp aria-hidden className="size-3.5" />
+            Show fewer photos
+          </button>
+        ) : null}
+      </div>
+
+      {tab === "for" ? (
         <ForPanel card={card} client={client} drivers={profile?.drivers ?? []} clientNote={clientNote} />
       ) : tab === "visit" ? (
         <VisitPanel
@@ -228,6 +240,8 @@ function PhotoStrip({
   chips,
   tripPlaceId,
   onOpenGallery,
+  expanded,
+  galleryId,
 }: {
   photos: CardPhoto[];
   loading: boolean;
@@ -236,6 +250,8 @@ function PhotoStrip({
   chips: ReactNode;
   tripPlaceId: string;
   onOpenGallery: () => void;
+  expanded: boolean;
+  galleryId: string;
 }) {
   const shown = photos.slice(0, 3);
   const slotCount = loading ? 3 : shown.length;
@@ -273,12 +289,16 @@ function PhotoStrip({
       {slotCount > 2 ? (
         <button
           type="button"
+          data-photo-toggle
           onClick={onOpenGallery}
-          aria-label={`See all ${photos.length} photos of ${name}`}
+          aria-label={more ? `${expanded ? "Show fewer photos" : "Show more photos"} of ${name}` : `Photo 3 of ${name}`}
+          aria-expanded={more ? expanded : undefined}
+          aria-controls={more ? galleryId : undefined}
+          disabled={!more}
           className="relative grow overflow-hidden rounded-l-lg rounded-r-photo bg-avatar"
         >
           <LoadingPhoto key={shown[2]?.src ?? "pending"} photo={shown[2]} sizes="140px" />
-          {more ? (
+          {more && !expanded ? (
             <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-ink/50 text-white">
               <span className="text-2xl leading-7 font-semibold">{more}</span>
               <span className="text-ui-sm leading-4 font-semibold">photos</span>
@@ -292,25 +312,23 @@ function PhotoStrip({
   );
 }
 
-function Gallery({ photos, name, onBack }: { photos: CardPhoto[]; name: string; onBack: () => void }) {
+function Gallery({ id, photos, name, expanded }: { id: string; photos: CardPhoto[]; name: string; expanded: boolean }) {
   return (
-    <div className="flex flex-col gap-3">
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex w-fit items-center gap-1.5 rounded-pill bg-ink px-3 py-1.5 text-ui-sm font-semibold text-surface"
-      >
-        <ArrowLeft aria-hidden className="size-3.5" strokeWidth={2.2} />
-        Back to details
-      </button>
-      <ul className="grid grid-cols-3 gap-1.5" aria-label={`Photos of ${name}`}>
-        {photos.map((photo) => (
-          <li key={photo.src} className="relative aspect-[4/5] overflow-hidden rounded-lg bg-avatar">
-            <FilmImage src={photo.src} alt={photo.alt} sizes="240px" unoptimized />
-            <GoogleCredit attributions={photo.attributions} />
-          </li>
-        ))}
-      </ul>
+    <div id={id} className="place-photos-reveal" data-expanded={expanded} inert={!expanded} aria-hidden={!expanded}>
+      <div className="place-photos-clip">
+        <div className="pt-1.5">
+          <div className="place-photos-scroll" role="region" aria-label={`More photos of ${name}`} tabIndex={expanded ? 0 : -1} data-testid="place-card-gallery">
+            <ul className="place-photos-grid">
+              {photos.map((photo) => (
+                <li key={photo.src} className="relative min-w-0 overflow-hidden rounded-lg bg-avatar">
+                  <FilmImage src={photo.src} alt={photo.alt} sizes="240px" unoptimized />
+                  <GoogleCredit attributions={photo.attributions} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
