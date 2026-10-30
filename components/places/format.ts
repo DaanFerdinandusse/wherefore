@@ -1,6 +1,8 @@
-// Pure helpers for the My places screen: card lines, note quoting, city
-// grouping and the page URL. No I/O and no server-only import, so client
-// components and tests use them directly.
+// Pure helpers for the My places screen: card lines, note quoting and the
+// page URL. No I/O and no server-only import, so client components and tests
+// use them directly. City and category rules live in city.ts.
+
+import type { CategoryFilter } from "./city";
 
 /** The fields of a saved place these helpers read. */
 export type CardFields = {
@@ -9,7 +11,7 @@ export type CardFields = {
   neighborhood: string | null;
   note: string;
   inTrips: number;
-  lastTripTitle: string | null;
+  lastClientName: string | null;
   savedAt: Date | string;
   lat: number | null;
   lon: number | null;
@@ -41,14 +43,21 @@ export function cleanNote(note: string): string {
 }
 
 /**
- * The note in curly quotes, as the cards show it, or null when there is none.
- * Quotes the advisor typed around the note are dropped so they never double.
+ * The note without quotes the advisor typed around it, or null when there is
+ * none. Cards set it in italics after their own quote mark, so typed quotes
+ * would double.
  */
-export function quoteNote(note: string | null | undefined): string | null {
+export function noteText(note: string | null | undefined): string | null {
   const text = (note ?? "")
     .trim()
     .replace(/^["“”']+|["“”']+$/g, "")
     .trim();
+  return text || null;
+}
+
+/** The note in curly quotes, or null when there is none. */
+export function quoteNote(note: string | null | undefined): string | null {
+  const text = noteText(note);
   return text ? `“${text}”` : null;
 }
 
@@ -74,40 +83,9 @@ export function savedAgo(savedAt: Date | string, now: Date = new Date()): string
   return `Saved ${saved.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })}`;
 }
 
-/** The right side of a card footer: the last trip it was used for, else when it was saved. */
-export function lastUseLine(place: Pick<CardFields, "lastTripTitle" | "savedAt">, now?: Date): string {
-  return place.lastTripTitle ? `Last for ${place.lastTripTitle}` : savedAgo(place.savedAt, now);
-}
-
-export type CityGroup<T> = { city: string; places: T[] };
-
-/**
- * Places grouped by city, in `order` (the advisor's cities, most places
- * first) and then by name for any city `order` does not list. Cities compare
- * case-insensitively; the first spelling seen names the group. Places keep
- * their order inside a group. A blank city groups under "Other".
- */
-export function groupByCity<T extends Pick<CardFields, "city">>(
-  places: readonly T[],
-  order: readonly string[] = [],
-): CityGroup<T>[] {
-  const groups = new Map<string, CityGroup<T>>();
-  for (const place of places) {
-    const name = place.city.trim() || "Other";
-    const key = name.toLowerCase();
-    const group = groups.get(key) ?? { city: name, places: [] };
-    group.places.push(place);
-    groups.set(key, group);
-  }
-  const rank = new Map(order.map((city, i) => [city.trim().toLowerCase(), i]));
-  return [...groups.entries()]
-    .sort(([a, ga], [b, gb]) => {
-      const ra = rank.get(a) ?? Number.POSITIVE_INFINITY;
-      const rb = rank.get(b) ?? Number.POSITIVE_INFINITY;
-      if (ra !== rb) return ra - rb;
-      return ga.city.localeCompare(gb.city);
-    })
-    .map(([, group]) => group);
+/** The right side of a card footer: the client of the last trip it was used on, else when it was saved. */
+export function lastUseLine(place: Pick<CardFields, "lastClientName" | "savedAt">, now?: Date): string {
+  return place.lastClientName ? `Last for ${place.lastClientName}` : savedAgo(place.savedAt, now);
 }
 
 /** The middle of a city's saved places, to bias "Save a place" search toward it. */
@@ -125,16 +103,23 @@ export function cityCenter(
   return { lat: Math.round(lat * 1e5) / 1e5, lon: Math.round(lon * 1e5) / 1e5 };
 }
 
-export type PlacesQuery = { city?: string | null; q?: string | null; list?: "mine" | "team" | null };
+/** The page state the URL keeps. `client: "none"` turns scoring off. */
+export type PlacesQuery = {
+  city?: string | null;
+  category?: CategoryFilter | null;
+  client?: string | null;
+  list?: "mine" | "team" | null;
+};
 
-/** `/places` with only the filters that are set, so "All" is the bare path. */
+/** `/places` with only the parts that are set, so the default view is the bare path. */
 export function placesHref(query: PlacesQuery): string {
   const params = new URLSearchParams();
   const city = query.city?.trim();
-  const q = query.q?.trim();
+  const client = query.client?.trim();
   if (query.list === "team") params.set("list", "team");
   if (city) params.set("city", city);
-  if (q) params.set("q", q);
+  if (query.category) params.set("category", query.category);
+  if (client) params.set("client", client);
   const search = params.toString();
   return search ? `/places?${search}` : "/places";
 }

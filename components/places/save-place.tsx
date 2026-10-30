@@ -68,7 +68,7 @@ export function SavePlaceButton({
           {...props}
           variant={variant}
           icon={<Plus size={14} strokeWidth={2.4} aria-hidden />}
-          className="h-9! gap-1.5! px-4!"
+          className={variant === "primary" ? "h-[38px]! gap-2! px-4.5!" : "h-9! gap-1.5! px-4!"}
         >
           Save a place
         </Button>
@@ -149,7 +149,9 @@ function SavePlacePanel({ city, near, onDone }: { city: string | null; near: Nea
   function choose(candidate: Candidate) {
     setChosen(candidate);
     setNote("");
-    setCityValue(candidate.place?.city ?? city ?? "");
+    // The city in view wins, so a place saved on "Lisboa" lands there even
+    // when the provider spells its city "Lisbon".
+    setCityValue(city ?? candidate.place?.city ?? "");
     setSaveError(null);
   }
 

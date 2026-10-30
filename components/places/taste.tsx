@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
+import { Popover } from "@/components/ui/popover";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { Switch } from "@/components/ui/switch";
 import { setBlendMyTasteAction } from "@/lib/places/actions";
@@ -14,49 +15,63 @@ import { cn } from "@/lib/ui/cn";
 import { placesHref, type PlacesQuery } from "./format";
 import { usePlaces } from "./places-provider";
 
+// The controls that used to live in the My places rail, now in the panel
+// header: Mine / Team (only for advisors in an organization) and "Your
+// taste", a popover with the advisor's taste tags, Refresh and the
+// "Blend my taste into searches" switch.
+
 const TASTE_TAGS_SHOWN = 10;
 
 type ListValue = "mine" | "team";
 
-/**
- * Mine / Team. Team shares one list across an organization; until the
- * advisor belongs to one it is shown disabled with how to get there.
- */
-export function ListToggle({
-  query,
-  mineCount,
-  teamEnabled,
-}: {
-  query: Required<PlacesQuery>;
-  mineCount: number | null;
-  teamEnabled: boolean;
-}) {
+/** Mine / Team. Team shares one list across an organization. */
+export function ListToggle({ query }: { query: PlacesQuery }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const value: ListValue = query.list === "team" && teamEnabled ? "team" : "mine";
-
+  const value: ListValue = query.list === "team" ? "team" : "mine";
   return (
-    <div className="flex flex-col items-start gap-2">
-      <SegmentedToggle<ListValue>
-        label="Whose places"
-        value={value}
-        onValueChange={(next) => {
-          if (next === "team" && !teamEnabled) return;
-          startTransition(() => router.replace(placesHref({ ...query, list: next }), { scroll: false }));
-        }}
-        options={[
-          { value: "mine", label: mineCount === null ? "Mine" : `Mine ${mineCount}` },
-          { value: "team", label: "Team" },
-        ]}
-        className={cn(
-          !teamEnabled &&
-            "[&>button:last-child]:cursor-not-allowed [&>button:last-child]:opacity-45 [&>button:last-child]:hover:bg-transparent",
-        )}
-      />
-      {!teamEnabled ? (
-        <p className="text-ui-sm text-text-2">Invite your team to share one list.</p>
-      ) : null}
-    </div>
+    <SegmentedToggle<ListValue>
+      label="Whose places"
+      variant="panel"
+      value={value}
+      onValueChange={(next) => {
+        // Another list has other cities: start from its default city.
+        startTransition(() => router.replace(placesHref({ list: next }), { scroll: false }));
+      }}
+      options={[
+        { value: "mine", label: "Mine" },
+        { value: "team", label: "Team" },
+      ]}
+    />
+  );
+}
+
+/** "Your taste" in the header: opens the taste tags and the blend switch. */
+export function TasteButton({ placeCount, blendMyTaste }: { placeCount: number; blendMyTaste: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      label="Your taste"
+      align="end"
+      panelClassName="w-[380px] p-5! flex flex-col gap-5"
+      trigger={(props) => (
+        <Button {...props} variant="ghost" icon={<Sparkles size={14} strokeWidth={2} aria-hidden />} className="h-[38px]! px-3.5!">
+          Your taste
+        </Button>
+      )}
+    >
+      <TastePanel placeCount={placeCount} />
+      <section className="flex flex-col gap-2.5 border-t border-rule pt-5">
+        <BlendSwitch initial={blendMyTaste} />
+        <p className="text-ui leading-5 text-text-2">
+          Your places become extra signals next to the client{"'"}s favorites. Cards then say which of yours
+          helped.
+        </p>
+        <p className="text-ui-sm text-text-muted">Off by default. We are still testing how much weight your places should get.</p>
+      </section>
+    </Popover>
   );
 }
 
@@ -67,9 +82,9 @@ export function TastePanel({ placeCount }: { placeCount: number }) {
   const shown = taste.tags.slice(0, TASTE_TAGS_SHOWN);
 
   return (
-    <section aria-labelledby="your-taste" className="flex flex-col gap-3.5">
+    <section aria-labelledby="your-taste" className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 id="your-taste" className="font-display text-section text-ink">
+        <h2 id="your-taste" className="font-display text-tile text-ink">
           Your taste
         </h2>
         {placeCount > 0 ? (

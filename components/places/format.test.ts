@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   cityCenter,
   cleanNote,
-  groupByCity,
+  noteText,
   lastUseLine,
   placeTypeLabel,
   placesHref,
@@ -38,6 +38,8 @@ describe("note formatting", () => {
     expect(quoteNote("“Already curly”")).toBe("“Already curly”");
     expect(quoteNote("   ")).toBeNull();
     expect(quoteNote(null)).toBeNull();
+    expect(noteText(" \"Sit at the bar\" ")).toBe("Sit at the bar");
+    expect(noteText("")).toBeNull();
   });
 
   it("cleans a note for storage", () => {
@@ -50,8 +52,8 @@ describe("note formatting", () => {
     expect(tripsLine(1)).toBe("In 1 trip");
     expect(tripsLine(6)).toBe("In 6 trips");
     const now = new Date("2026-10-21T12:00:00Z");
-    expect(lastUseLine({ lastTripTitle: "Lisbon for Ana", savedAt: now }, now)).toBe("Last for Lisbon for Ana");
-    expect(lastUseLine({ lastTripTitle: null, savedAt: "2026-10-07T12:00:00Z" }, now)).toBe("Saved 2 weeks ago");
+    expect(lastUseLine({ lastClientName: "Ana Ruiz", savedAt: now }, now)).toBe("Last for Ana Ruiz");
+    expect(lastUseLine({ lastClientName: null, savedAt: "2026-10-07T12:00:00Z" }, now)).toBe("Saved 2 weeks ago");
   });
 
   it("words the saved date", () => {
@@ -61,26 +63,6 @@ describe("note formatting", () => {
     expect(savedAgo("2026-10-17T12:00:00Z", now)).toBe("Saved 4 days ago");
     expect(savedAgo("2026-10-13T12:00:00Z", now)).toBe("Saved 1 week ago");
     expect(savedAgo("2025-03-10T12:00:00Z", now)).toBe("Saved March 2025");
-  });
-});
-
-describe("groupByCity", () => {
-  const places = [
-    { id: "1", city: "Lisbon" },
-    { id: "2", city: "Mexico City" },
-    { id: "3", city: "lisbon" },
-    { id: "4", city: "" },
-    { id: "5", city: "Tokyo" },
-  ];
-
-  it("follows the given city order, then names, keeping places in order", () => {
-    const groups = groupByCity(places, ["Mexico City", "Lisbon"]);
-    expect(groups.map((g) => g.city)).toEqual(["Mexico City", "Lisbon", "Other", "Tokyo"]);
-    expect(groups[1]?.places.map((p) => p.id)).toEqual(["1", "3"]);
-  });
-
-  it("sorts by name without an order", () => {
-    expect(groupByCity(places).map((g) => g.city)).toEqual(["Lisbon", "Mexico City", "Other", "Tokyo"]);
   });
 });
 
@@ -101,10 +83,12 @@ describe("cityCenter", () => {
 });
 
 describe("placesHref", () => {
-  it("keeps only the filters that are set", () => {
+  it("keeps only the parts that are set", () => {
     expect(placesHref({})).toBe("/places");
-    expect(placesHref({ city: "Lisbon", q: " wine " })).toBe("/places?city=Lisbon&q=wine");
+    expect(placesHref({ city: "Lisboa", category: "hotels", client: "c1" })).toBe(
+      "/places?city=Lisboa&category=hotels&client=c1",
+    );
     expect(placesHref({ city: "Mexico City", list: "team" })).toBe("/places?list=team&city=Mexico+City");
-    expect(placesHref({ city: "", q: "", list: "mine" })).toBe("/places");
+    expect(placesHref({ city: "", category: null, client: " ", list: "mine" })).toBe("/places");
   });
 });
