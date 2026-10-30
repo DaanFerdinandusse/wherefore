@@ -6,7 +6,7 @@ import fullFixture from "./__fixtures__/place-details-full.json";
 import { GoogleApiError, GoogleInputError, GoogleNotConfiguredError, GooglePhotoTooLargeError } from "./errors";
 import { googleErrorResponse } from "./http";
 import { MAX_PHOTO_BYTES, fetchPhoto, isPhotoName, limitBytes, photoProxyUrl } from "./photos";
-import { createPlaceDetails, fieldMask } from "./places";
+import { createPlaceDetails, fieldMask, priceRangeOf } from "./places";
 
 const PLACE_ID = "ChIJh32rQULLHg0RkgF8wCakjIk";
 const PHOTO = fullFixture.photos[0].name;
@@ -208,6 +208,16 @@ describe("photos", () => {
     const fetch = fakeFetch(() => new Response(upstream, { headers: { "content-type": "image/jpeg" } }));
     const photo = await fetchPhoto(PHOTO, 800, { fetch: fetch });
     await expect(new Response(photo.body).arrayBuffer()).rejects.toBeInstanceOf(GooglePhotoTooLargeError);
+  });
+
+  it("reads Google's price range as whole units, or nothing without a currency", () => {
+    expect(priceRangeOf({ startPrice: { currencyCode: "EUR", units: "20" }, endPrice: { currencyCode: "EUR", units: "30" } })).toEqual({
+      currency: "EUR",
+      start: 20,
+      end: 30,
+    });
+    expect(priceRangeOf({ startPrice: { units: "20" } })).toBeUndefined();
+    expect(priceRangeOf(undefined)).toBeUndefined();
   });
 
   it("passes a body under the cap through unchanged", async () => {

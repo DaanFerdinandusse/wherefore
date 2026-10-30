@@ -5,9 +5,9 @@ import { getWorkflowMetadata, getWritable } from "workflow";
 import { finalizeTurnRecords, getChat, markPendingSave, releaseTurn, saveTurnMessage } from "@/lib/agent/chat-store";
 import { trimHistory } from "@/lib/agent/history";
 import { finalizeTurnMessage, hasContent, toModelHistory } from "@/lib/agent/messages";
-import { buildInstructions, seedTurnInstructions } from "@/lib/agent/prompt";
+import { buildInstructions } from "@/lib/agent/prompt";
 import { assistantMessageIdFor, type ChatStreamPart } from "@/lib/agent/stream";
-import { activeToolsFor, createChatTools, historyTools, SEED_TOOL } from "@/lib/agent/tools";
+import { activeToolsFor, createChatTools, historyTools } from "@/lib/agent/tools";
 import { loadTurnModeStep } from "@/lib/agent/tools/steps";
 import { loadTripContext } from "@/lib/agent/trip-context";
 import { readTurnMessage } from "@/lib/agent/turn-stream";
@@ -177,10 +177,11 @@ export async function chatTurn({ chatId, turnId }: { chatId: string; turnId: str
       controller.abort();
     });
 
-    // Seed turn (the synthetic first message): seed_trip is forced on step 0
-    // and hidden afterwards; step 1 writes the first message (PLAN 8).
+    // v3: no seed turn. A new trip waits for the advisor's brief, then the
+    // agent searches in small steps (lib/agent/prompt.ts).
     const mode = await loadTurnModeStep(chatId);
     const tools = createChatTools({ chatId, tripId: input.tripId, turnId, devTools: mode.devTools });
+    const activeTools = activeToolsFor(tools) as (keyof typeof tools)[];
     const agent = new WorkflowAgent({
       // A serializable handle; a string would go to the AI Gateway and a
       // provider object would lose codexFetch (lib/codex/workflow-model.ts).
@@ -189,16 +190,7 @@ export async function chatTurn({ chatId, turnId }: { chatId: string; turnId: str
       tools,
       stopWhen: [isLoopFinished(), isStepCount(12)],
       providerOptions: input.providerOptions,
-      prepareStep: ({ messages, stepNumber }) => {
-        const activeTools = activeToolsFor(tools, { seed: mode.seed, stepNumber }) as (keyof typeof tools)[];
-        if (!mode.seed) return { messages: trimHistory(messages), activeTools };
-        return {
-          messages: trimHistory(messages),
-          system: seedTurnInstructions(input.instructions),
-          activeTools,
-          toolChoice: stepNumber === 0 ? { type: "tool" as const, toolName: SEED_TOOL } : ("none" as const),
-        };
-      },
+      prepareStep: ({ messages }) => ({ messages: trimHistory(messages), activeTools }),
     });
 
     let streamError: string | undefined;

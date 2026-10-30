@@ -8,6 +8,7 @@ import {
   findPlacesForModel,
   lookupPlaceForModel,
   modelText,
+  recommendPlaceForModel,
   removePlaceForModel,
   scorePlacesForModel,
   setItineraryForModel,
@@ -19,6 +20,7 @@ import {
   findPlacesStep,
   getTripContextStep,
   lookupPlaceStep,
+  recommendPlaceStep,
   removePlaceStep,
   scorePlacesStep,
   seedTripStep,
@@ -47,15 +49,29 @@ export const SEED_TOOL = "seed_trip";
 const categorySchema = z.enum(["eat", "drink", "coffee", "see", "stay"]);
 const slotSchema = z.enum(["morning", "lunch", "afternoon", "dinner", "night", "stay"]);
 
+const targetSchema = z
+  .object({
+    day: z.number().int().min(1).max(60).describe("Trip day number, 1 is the first day"),
+    slot: slotSchema,
+  })
+  .describe("The itinerary slot this is for, when the advisor named one (Friday dinner is the day of that Friday, slot dinner)");
+
+/**
+ * The first-turn seed (seed_trip) is retired in v3: a new trip waits for the
+ * advisor's brief. The tool body stays for the dev labs (seedTripStep), and
+ * saved seed_trip parts still convert for history (historyTools).
+ */
+export function seedTool(turn: TurnRef) {
+  return tool({
+    description: "Build the trip's first list. Dev labs only.",
+    inputSchema: z.object({}),
+    execute: (_input, { toolCallId, abortSignal }) => seedTripStep(turn, toolCallId, abortSignal),
+    toModelOutput: ({ output }) => findPlacesForModel(output),
+  });
+}
+
 function realTools(turn: TurnRef) {
   return {
-    seed_trip: tool({
-      description:
-        "Build the trip's first list from the travelers' favorites: places to eat, drink, coffee, see and stay, plus the advisor's own places in the city with their scores. Only on the trip's first turn.",
-      inputSchema: z.object({}),
-      execute: (_input, { toolCallId, abortSignal }) => seedTripStep(turn, toolCallId, abortSignal),
-      toModelOutput: ({ output }) => findPlacesForModel(output),
-    }),
     get_trip_context: tool({
       description:
         "Load the trip: travelers with their favorites, taste tags and ground rules, the advisor's own places in this city with their scores, board counts, asks and the itinerary.",
@@ -65,18 +81,34 @@ function realTools(turn: TurnRef) {
     }),
     find_places: tool({
       description:
-        "Search places for the client that match an ask, for example natural wine bars for Saturday. Adds a tab to the board and the map, scores the advisor's own places for the same ask, and explains each pick.",
+        "Look at a few places for one slot or one kind of place, for example seafood restaurants for Friday dinner. Small on purpose: about 5 candidates, scored for the client, the advisor's own places included when they fit. Shows a row of places in the chat. Follow it with recommend_place for the best one.",
       inputSchema: z.object({
-        intent: z.string().min(2).max(120).describe("The ask in the advisor's words, without the day, e.g. 'natural wine bars'"),
+        intent: z.string().min(2).max(120).describe("The ask in the advisor's words, without the day, e.g. 'seafood restaurants'"),
         category: categorySchema.optional().describe("The board category when it is clear"),
-        tags: z.array(z.string().max(60)).max(4).optional().describe("Extra constraints as short phrases, e.g. 'vegetarian'"),
+        tags: z
+          .array(z.string().max(60))
+          .max(4)
+          .optional()
+          .describe("The advisor's own words as short phrases, e.g. 'seafood', 'lively'"),
         price_max: z.number().int().min(1).max(4).optional().describe("Highest price level, 1 to 4"),
         area: z.string().max(60).optional().describe("A neighborhood inside the destination"),
-        day_hint: z.string().max(30).optional().describe("The day or time, e.g. 'Saturday' or 'day 2 lunch'"),
-        take: z.number().int().min(8).max(20).optional().describe("How many places, 8 to 20, default 12"),
+        day_hint: z.string().max(30).optional().describe("The day or time when it is not a slot, e.g. 'Saturday'"),
+        target: targetSchema.optional(),
+        take: z.number().int().min(3).max(8).optional().describe("How many candidates, 3 to 8, default 5"),
       }),
       execute: (input, { toolCallId, abortSignal }) => findPlacesStep(input, turn, toolCallId, abortSignal),
       toModelOutput: ({ output }) => findPlacesForModel(output),
+    }),
+    recommend_place: tool({
+      description:
+        "Recommend one place from a search result as the pick for the client. The chat shows it as a full place card with photos, the match and visit facts, and buttons to add it or drop it. Call once per search, right after find_places, with the best fit. Does not change the itinerary.",
+      inputSchema: z.object({
+        place_id: z.string().describe("The id of a place from the search result"),
+        ask_id: z.string().optional().describe("The ask_id of that search"),
+        target: targetSchema.optional(),
+      }),
+      execute: (input) => recommendPlaceStep(input, turn),
+      toModelOutput: ({ output }) => recommendPlaceForModel(output),
     }),
     score_places: tool({
       description:
@@ -179,6 +211,7 @@ export function historyTools() {
     seed_trip: forHistory(findPlacesForModel),
     get_trip_context: forHistory(tripContextForModel),
     find_places: forHistory(findPlacesForModel),
+    recommend_place: forHistory(recommendPlaceForModel),
     score_places: forHistory(scorePlacesForModel),
     lookup_place: forHistory(lookupPlaceForModel),
     set_itinerary: forHistory(setItineraryForModel),
@@ -194,11 +227,7 @@ export function createChatTools(ctx: ChatToolContext) {
 export type ChatTools = ReturnType<typeof createChatTools>;
 export type ChatToolName = keyof ReturnType<typeof realTools> | keyof ReturnType<typeof devTools>;
 
-/** Tools offered on a step: never seed_trip outside the seed turn's first step. */
-export function activeToolsFor(
-  tools: Record<string, unknown>,
-  { seed, stepNumber }: { seed: boolean; stepNumber: number },
-): string[] {
-  if (seed && stepNumber === 0) return [SEED_TOOL];
+/** Tools offered on a step: every tool of the turn, never seed_trip (retired in v3). */
+export function activeToolsFor(tools: Record<string, unknown>): string[] {
   return Object.keys(tools).filter((name) => name !== SEED_TOOL);
 }

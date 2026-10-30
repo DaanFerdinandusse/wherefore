@@ -83,7 +83,7 @@ test("9. a reconnect after another tab started a new turn resets cleanly", async
 
   await expect(page.getByTestId("assistant-message")).toHaveCount(2, { timeout: 60_000 });
   await expect(page.getByTestId("user-message")).toHaveCount(2);
-  await expect(page.getByTestId("chat-dock")).toHaveAttribute("data-busy", "false", { timeout: 60_000 });
+  await expect(page.getByTestId("chat-column")).toHaveAttribute("data-busy", "false", { timeout: 60_000 });
   const shown = (await page.getByTestId("assistant-text").allInnerTexts()).join(" ").toLowerCase();
   expect(shown.match(/alpha/g)?.length ?? 0).toBe(1);
   expect(shown.match(/bravo/g)?.length ?? 0).toBe(1);

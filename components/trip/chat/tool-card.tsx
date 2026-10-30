@@ -11,6 +11,7 @@ import type {
   SetItineraryOutput,
 } from "@/lib/contracts";
 
+import { toolErrorText } from "./chat-errors";
 import { readPlacesOutput } from "./chat-places";
 import type { PlaceHandlers } from "./tool-cards/parts";
 import { ScoreCard } from "./tool-cards/score-card";
@@ -99,7 +100,7 @@ function PlainCard({ part, name, onRetry, ...handlers }: { part: ToolPart; name:
       {failed ? (
         <div className="mt-1.5 flex items-start gap-3">
           <p className="text-text-3" data-testid="tool-error">
-            {part.errorText}
+            {toolErrorText(part.errorText, "step")}
           </p>
           {onRetry ? (
             <button

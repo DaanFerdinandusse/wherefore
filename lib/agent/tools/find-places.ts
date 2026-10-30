@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { FatalError } from "workflow";
 import { z } from "zod";
 
-import type { Category, FindPlacesOutput, ToolStep, TripPlaceCard } from "@/lib/contracts";
+import type { Category, FindPlacesOutput, SlotName, SlotTarget, ToolStep, TripPlaceCard } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { tripAsks } from "@/lib/db/schema";
 import { createAsk, updateAsk } from "@/lib/trips";
@@ -26,10 +26,13 @@ import { assertTurn, finishAsk, guarded, TurnSupersededError, type TurnRef } fro
 import {
   askLabel,
   basedOnFavorites,
+  categoryNoun,
   cleanIntent,
+  rowTitle,
   searchDetails,
-  searchTitle,
+  searchTerms,
   seconds,
+  slotTarget,
   WIDENED_IN_CATEGORY,
   type SearchCategory,
 } from "./labels";
@@ -63,10 +66,18 @@ export type FindPlacesInput = {
   price_max?: number;
   area?: string;
   day_hint?: string;
+  /** The itinerary slot this search is for: the ask carries it, the workspace highlights it. */
+  target?: { day: number; slot: SlotName };
   take?: number;
 };
 
-const DEFAULT_TAKE = 12;
+// Small searches (v3): one slot or one kind of place at a time, a handful of
+// candidates, then one recommendation (recommend_place).
+export const DEFAULT_TAKE = 5;
+export const MIN_TAKE = 3;
+export const MAX_TAKE = 8;
+/** At most this many of the advisor's own places join a small search beyond its results. */
+const MAX_ADVISOR_EXTRAS = 2;
 const AREA_RADIUS_M = 1_500;
 const GENERIC_NOUNS: Record<string, SearchCategory> = {
   bar: "drink",
@@ -89,6 +100,18 @@ const GENERIC_NOUNS: Record<string, SearchCategory> = {
   hotels: "stay",
 };
 const FILLER = new Set(["places", "place", "spots", "spot", "options", "ideas", "good", "best", "some", "great"]);
+
+/** The category a slot implies when the ask names none: a meal is a restaurant, the stay a hotel. */
+export function slotCategory(slot: SlotName | undefined): SearchCategory | undefined {
+  if (slot === "lunch" || slot === "dinner") return "eat";
+  if (slot === "stay") return "stay";
+  return undefined;
+}
+
+/** The number of places a search asks for: 3 to 8, default 5. */
+export function clampTake(take: number | undefined): number {
+  return Math.min(MAX_TAKE, Math.max(MIN_TAKE, Math.round(take ?? DEFAULT_TAKE)));
+}
 
 /** "natural wine bars" -> { text: "natural wine", category: "drink" }. */
 export function splitIntent(intent: string): { text: string; category?: SearchCategory } {
@@ -241,10 +264,14 @@ export async function* findPlacesTool(
   const started = Date.now();
   const elapsed = () => Date.now() - started;
   const ctx = await loadToolTrip(turn.tripId);
-  const take = Math.min(20, Math.max(8, Math.round(input.take ?? DEFAULT_TAKE)));
-  const label = askLabel(input.intent, input.day_hint);
+  const take = clampTake(input.take);
   const split = splitIntent(cleanIntent(input.intent, input.day_hint));
-  const askCategory: SearchCategory | undefined = input.category ?? split.category;
+  const askCategory: SearchCategory | undefined = input.category ?? split.category ?? slotCategory(input.target?.slot);
+  const target: SlotTarget | undefined = input.target
+    ? slotTarget(input.target, { startDate: ctx.trip.startDate ?? undefined, destinationName: ctx.destination.name })
+    : undefined;
+  const label = askLabel(input.intent, target?.label ?? input.day_hint);
+  const terms = searchTerms(input.tags, split.text);
   const basedOn = basedOnFavorites(ctx.signals.favoritesUsed.map((f) => f.clientName));
   const key = (step: string) => ({ toolCallId, step });
 
@@ -255,6 +282,8 @@ export async function* findPlacesTool(
     ...(input.price_max ? { priceMax: input.price_max } : {}),
     ...(input.area ? { area: input.area } : {}),
     ...(input.day_hint ? { day: input.day_hint } : {}),
+    // The slot this ask is for (Ask.target): lib/trips reads it back from the query.
+    ...(input.target ? { target: { day: input.target.day, slot: input.target.slot } } : {}),
     take,
   };
   // Keyed by toolCallId: a retried step gets the same ask, and its checkpoint.
@@ -278,7 +307,13 @@ export async function* findPlacesTool(
     kind: "ask",
     askId: ask.id,
     label,
-    title: searchTitle(input.intent, phase !== "done", input.day_hint),
+    title: rowTitle({
+      phase: phase === "done" ? "done" : cards.length === 0 ? "pending" : "running",
+      count: phase === "done" ? cards.length : Math.max(cards.length, take),
+      category: askCategory,
+      target,
+      dayHint: input.day_hint,
+    }),
     details,
     count: cards.length,
     total: cards.length,
@@ -286,6 +321,10 @@ export async function* findPlacesTool(
     loosened,
     places: cards,
     steps: steps(searchStep, scoreStep, explainStep),
+    take,
+    noun: categoryNoun(askCategory, 2),
+    ...(terms.length ? { terms } : {}),
+    ...(target ? { target } : {}),
     ...extra,
   });
   const failAsk = () => finishAsk(turn, ask.id, { status: "failed", elapsedMs: elapsed(), loosened: [], resultCount: 0 });
@@ -477,7 +516,12 @@ export async function* findPlacesTool(
         );
         // In-result advisor places already carry the link (persistBoardItems);
         // the others join the board and the ask, ranked by affinity.
-        const extra = kept.filter((s) => !inResults.has(s.item.place.entityId)).map((s) => s.item);
+        // A small search keeps its size: the best few of them only.
+        const extra = kept
+          .filter((s) => !inResults.has(s.item.place.entityId))
+          .map((s) => s.item)
+          .sort((a, b) => b.affinity - a.affinity)
+          .slice(0, MAX_ADVISOR_EXTRAS);
         const extraIds = await persistBoardItems(turn, ctx, extra);
         ranked = [
           ...ranked,

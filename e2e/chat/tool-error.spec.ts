@@ -17,7 +17,7 @@ test("7. a tool error renders Retry, and Retry starts the ask again", async ({ p
   await expect(failedCard.first()).toBeVisible({ timeout: 90_000 });
   await expect(failedCard.first().getByTestId("tool-error")).toContainText("Try the search again");
   await waitForIdle(request, chatId);
-  await expect(page.getByTestId("chat-dock")).toHaveAttribute("data-busy", "false");
+  await expect(page.getByTestId("chat-column")).toHaveAttribute("data-busy", "false");
 
   const retry = failedCard.first().getByRole("button", { name: "Retry" });
   await expect(retry).toBeVisible();

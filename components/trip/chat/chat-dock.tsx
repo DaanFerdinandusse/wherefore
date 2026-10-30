@@ -326,7 +326,7 @@ export function ChatDock({
       ) : null}
 
       <div className="shrink-0">
-        <Composer busy={busy} stopping={stopping} onSend={sendAndFollow} onStop={() => void stop()} />
+        <Composer busy={busy} stopping={stopping} placeholder="Ask for places, or press / to type" onSend={sendAndFollow} onStop={() => void stop()} />
       </div>
     </section>
   );

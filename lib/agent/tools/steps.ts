@@ -3,6 +3,7 @@ import { FatalError } from "workflow";
 import type {
   FindPlacesOutput,
   LookupPlaceOutput,
+  RecommendPlaceOutput,
   RemovePlaceOutput,
   ScorePlacesOutput,
   SetItineraryOutput,
@@ -15,6 +16,7 @@ import { assertTurn, type TurnRef } from "../writes";
 
 import { findPlacesTool, type FindPlacesInput } from "./find-places";
 import { lookupPlaceTool, removePlaceTool, setItineraryTool, type SetItineraryInput } from "./place-tools";
+import { recommendPlaceTool, type RecommendPlaceInput } from "./recommend";
 import { runToolGenerator } from "./run-tool";
 import { scorePlacesTool, type ScorePlacesInput } from "./score-places";
 import { seedTripTool } from "./seed-trip";
@@ -26,7 +28,11 @@ import { seedTripTool } from "./seed-trip";
 // server-only code reaches the workflow sandbox (lib/agent/README.md).
 
 export type TurnMode = {
-  /** The turn answers the synthetic seed message: seed_trip is forced on step 0. */
+  /**
+   * The turn answers the synthetic seed message. v3 never starts one (the
+   * messages route answers a seed message without a run); kept so an old
+   * chat that has one still reads.
+   */
   seed: boolean;
   /** The spike tools (echo_places, slow_count), for the chat-lab e2e specs only. */
   devTools: boolean;
@@ -86,6 +92,12 @@ export async function setItineraryStep(
   "use step";
   await assertTurn(turn);
   return setItineraryTool(input, turn, toolCallId);
+}
+
+export async function recommendPlaceStep(input: RecommendPlaceInput, turn: TurnRef): Promise<RecommendPlaceOutput> {
+  "use step";
+  await assertTurn(turn);
+  return recommendPlaceTool(input, turn);
 }
 
 export async function removePlaceStep(

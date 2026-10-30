@@ -1,6 +1,7 @@
 import type {
   FindPlacesOutput,
   LookupPlaceOutput,
+  RecommendPlaceOutput,
   RemovePlaceOutput,
   ScorePlacesOutput,
   SetItineraryOutput,
@@ -79,12 +80,23 @@ export function findPlacesForModel(output: FindPlacesOutput): ModelText {
   return modelText({
     ask_id: output.askId,
     label: output.label,
+    ...(output.target ? { for_slot: output.target.label } : {}),
     count: output.count,
     elapsed_ms: output.elapsedMs,
     ...(output.loosened.length ? { loosened: loosenedCopy(output.loosened) } : {}),
     ...(output.error ? { problem: output.error } : {}),
     ...(output.progress ? { note: output.progress } : {}),
     places: output.places.map(cardForModel),
+  });
+}
+
+export function recommendPlaceForModel(output: RecommendPlaceOutput): ModelText {
+  if (!output.card) return modelText({ problem: output.error ?? "No place was recommended." });
+  return modelText({
+    recommended: cardForModel(output.card),
+    ...(output.target ? { for_slot: output.target.label, in_itinerary: false } : {}),
+    shown_to_advisor:
+      "The card in the chat shows the photos, the match, the favorites behind it, what reviews mention and the visit facts. Do not repeat them.",
   });
 }
 

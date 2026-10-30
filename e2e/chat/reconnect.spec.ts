@@ -46,12 +46,12 @@ test("2. refresh mid-stream: the stream continues with no duplicate text", async
   // Refresh once while the tool runs and once while the text streams.
   await expect(page.locator('[data-testid="tool-card"][data-tool="slow_count"]')).toBeVisible();
   await page.reload();
-  await expect(page.getByTestId("chat-dock")).toBeVisible();
+  await expect(page.getByTestId("chat-column")).toBeVisible();
   await expect
     .poll(async () => (await page.getByTestId("assistant-text").allInnerTexts()).join("").length, { timeout: 90_000 })
     .toBeGreaterThan(30);
   await page.reload();
-  await expect(page.getByTestId("chat-dock")).toBeVisible();
+  await expect(page.getByTestId("chat-column")).toBeVisible();
 
   const chat = await waitForIdle(request, chatId);
   const replies = assistantMessages(chat);
@@ -61,7 +61,7 @@ test("2. refresh mid-stream: the stream continues with no duplicate text", async
   // The opening of the list appears once: a replay did not append it twice.
   expect(saved.match(/one,\s*two,\s*three/gi)?.length ?? 0).toBe(1);
 
-  await expect(page.getByTestId("chat-dock")).toHaveAttribute("data-busy", "false");
+  await expect(page.getByTestId("chat-column")).toHaveAttribute("data-busy", "false");
   await expect(page.getByTestId("assistant-message")).toHaveCount(1);
   await expect(page.locator('[data-testid="tool-card"][data-tool="slow_count"]')).toHaveCount(1);
   const shown = (await page.getByTestId("assistant-text").allInnerTexts()).join("");

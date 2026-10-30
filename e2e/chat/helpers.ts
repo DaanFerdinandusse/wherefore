@@ -31,13 +31,13 @@ export async function newChat(request: APIRequestContext): Promise<string> {
 
 export async function openChat(page: Page, chatId: string): Promise<void> {
   await page.goto(`/chat-lab?chat=${chatId}`);
-  await expect(page.getByTestId("chat-dock")).toBeVisible();
+  await expect(page.getByTestId("chat-column")).toBeVisible();
 }
 
 export async function send(page: Page, text: string): Promise<void> {
   await page.getByTestId("composer").fill(text);
   await page.getByTestId("composer").press("Enter");
-  await expect(page.getByTestId("chat-dock")).toHaveAttribute("data-busy", "true");
+  await expect(page.getByTestId("chat-column")).toHaveAttribute("data-busy", "true");
 }
 
 export async function snapshot(request: APIRequestContext, chatId: string): Promise<Snapshot> {

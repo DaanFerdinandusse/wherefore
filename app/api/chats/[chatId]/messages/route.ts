@@ -12,6 +12,7 @@ import {
   takeTurnLock,
   type ChatTurnRow,
 } from "@/lib/agent/chat-store";
+import { settleSeedStatus } from "@/lib/agent/opening-data";
 import { chatRoute } from "@/lib/agent/route-handler";
 import { assistantMessageIdFor, messageToUIChunks } from "@/lib/agent/stream";
 import { resolveDuplicateTurn } from "@/lib/agent/turn-state";
@@ -164,6 +165,13 @@ export const POST = chatRoute(async ({ request, chatId, user }) => {
   }
   const { turnId } = parsed.data;
   const row = await healChat(await loadOwnedChat(chatId, user));
+
+  // v3: no seed turn. A trip waits for the advisor's brief, so the hidden
+  // "Set up the trip" message starts nothing; the seed status is settled.
+  if (parsed.data.message.metadata?.kind === "seed") {
+    await settleSeedStatus(row.tripId);
+    return new Response(null, { status: 204, headers: { "x-chat-turn": "seed-skipped" } });
+  }
 
   const recorded = await getTurn(turnId);
   if (recorded) return duplicateResponse(row.id, recorded);

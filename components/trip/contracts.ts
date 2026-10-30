@@ -73,6 +73,8 @@ export type PlacesMeta = {
   loosened?: string[];
   /** The itinerary slot the search is for, when the advisor named one. */
   target?: Ask["target"];
+  /** recommend_place: the one pick of the ask, suggested for target. */
+  pickTripPlaceId?: string;
 };
 
 /** The glass chat dock. Owned by the chat runtime. */
