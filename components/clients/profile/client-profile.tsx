@@ -1,48 +1,41 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { X } from "lucide-react";
 
-import { Avatar } from "@/components/ui/avatar";
-import { Button, buttonClasses } from "@/components/ui/button";
-import { createClientAction, updateClientFieldsAction, type ClientFieldsInput } from "@/lib/clients/actions";
+import { updateClientFieldsAction, type ClientFieldsInput } from "@/lib/clients/actions";
 
 import type { SaveResult } from "../autosave";
 import { firstName, monthYear, plural } from "../format";
-import { matchedCount } from "../favorites";
+import { InitialsAvatar } from "../initials-avatar";
+import { useClientModal } from "../modal/client-modal";
+import { FavoritesSection } from "./favorites-section";
+import { GroundRules } from "./ground-rules";
 import { HomeCityField, type HomeCity } from "./home-city-field";
 import { InlineText } from "./inline-text";
 import { NotesField } from "./notes-field";
+import { ProfileFooter } from "./profile-footer";
 import { SaveStatus } from "./save-status";
-import { TastePanel } from "./taste-panel";
-import { TripsPanel } from "./trips-panel";
+import { TasteCard } from "./taste-card";
 import type { ClientProfileData } from "./types";
 import { useAutosave } from "./use-autosave";
+import { useClientTaste } from "./use-client-taste";
 import { useSaveTracker } from "./use-save-tracker";
 
-// C and C2: one screen for an existing client and a new one, edited in place
-// and saved as you type. On /clients/new the first keystroke of the name
-// creates the client and the URL becomes /clients/<id> without a reload.
+// C2 the client profile, in its sheet over the Clients list: who they are
+// (name and home city edit in place), the places, artists and films they
+// love, the taste those add up to, your private notes and ground rules, and
+// their trips. Everything saves as you type; the header says so.
 
 const FIELDS_DEBOUNCE_MS = 600;
 
 type Near = { lat: number; lon: number } | null;
 
-export function ClientProfile({
-  initial,
-  isNew,
-  today,
-}: {
-  initial: ClientProfileData;
-  isNew: boolean;
-  /** Today (YYYY-MM-DD) from the server, for the trip cards; null on /clients/new, which has none. */
-  today: string | null;
-}) {
+export function ClientProfile({ initial, today }: { initial: ClientProfileData; today: string }) {
+  const modal = useClientModal();
   const { state, report, runOp } = useSaveTracker();
+  const clientId = initial.id;
 
-  const [clientId, setClientId] = useState(initial.id);
-  const idRef = useRef(initial.id);
   const [name, setName] = useState(initial.name);
   const [savedName, setSavedName] = useState(initial.name);
   const nameAtFocus = useRef(initial.name);
@@ -50,21 +43,20 @@ export function ClientProfile({
   const [near, setNear] = useState<Near>(
     initial.homeLat !== null && initial.homeLon !== null ? { lat: initial.homeLat, lon: initial.homeLon } : null,
   );
-  const [editing, setEditing] = useState(false);
-  const [matched, setMatched] = useState(matchedCount(initial.favorites));
+
+  const taste = useClientTaste({
+    clientId,
+    near,
+    initialFavorites: initial.favorites,
+    initialMedia: initial.mediaFavorites,
+    initialRules: initial.groundRules,
+    initialTags: initial.tasteTags,
+    runOp,
+  });
 
   async function saveFields(patch: Partial<ClientFieldsInput>): Promise<SaveResult> {
-    const id = idRef.current;
-    if (!id) {
-      const created = await createClientAction(patch);
-      if (!created.ok) return created;
-      idRef.current = created.data.id;
-      setClientId(created.data.id);
-      window.history.replaceState(null, "", `/clients/${created.data.id}`);
-    } else {
-      const updated = await updateClientFieldsAction(id, patch);
-      if (!updated.ok) return updated;
-    }
+    const updated = await updateClientFieldsAction(clientId, patch);
+    if (!updated.ok) return updated;
     if (patch.name) setSavedName(patch.name);
     return { ok: true };
   }
@@ -81,19 +73,16 @@ export function ClientProfile({
       fields.cancel();
       return;
     }
-    fields.schedule({ name: trimmed }, { immediate: !idRef.current && !fields.busy() });
+    fields.schedule({ name: trimmed });
   }
 
   function onNameCommit() {
-    setEditing(false);
     if (!name.trim()) setName(savedName);
     void fields.flush();
   }
 
   function onNameCancel() {
-    setEditing(false);
     const before = nameAtFocus.current;
-    if (!before.trim()) return; // A new client's first name: Escape keeps what was typed.
     setName(before);
     if (before.trim() !== savedName.trim()) fields.schedule({ name: before.trim() }, { immediate: true });
     else fields.cancel();
@@ -106,94 +95,78 @@ export function ClientProfile({
   }
 
   const shownName = name.trim() || savedName;
-  // Once the client exists the URL is /clients/<id> on both routes (/new replaces it).
-  const newTripHref = clientId ? `/clients/${clientId}?new=1&client=${clientId}` : null;
+  const first = firstName(shownName);
   const tripCount = initial.trips.upcoming.length + initial.trips.past.length;
-  const newTripLabel = shownName ? `New trip for ${firstName(shownName)}` : "New trip";
+  const photos = taste.favorites.flatMap((favorite) =>
+    favorite.match === "resolved" && favorite.imageUrl ? [favorite.imageUrl] : [],
+  );
 
   return (
-    <div className="flex flex-col">
-      <header className="flex items-center justify-between gap-8 px-7 pt-2 pb-7">
-        <div className="flex min-w-0 items-center gap-[22px]">
-          <Avatar name={shownName || "New client"} size="profile" tone={isNew ? "dashed" : "soft"} />
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <nav aria-label="Breadcrumb" className="text-ui text-text-muted">
-              <Link href="/clients" className="hover:text-ink">
-                Clients
-              </Link>
-              {" / "}
-              <span aria-current="page">{isNew ? "New client" : savedName}</span>
-            </nav>
-            <InlineText
-              value={name}
-              onValueChange={onNameChange}
-              onFocus={() => {
-                nameAtFocus.current = name;
-                setEditing(true);
-              }}
-              onCommit={onNameCommit}
-              onCancel={onNameCancel}
-              label="Client name"
-              placeholder="Client name"
-              underline={!name}
-              autoFocus={isNew && !initial.id}
-              maxLength={120}
-              className="self-start"
-              inputClassName="font-display text-name leading-[62px] text-ink"
-            />
-            <p className="flex flex-wrap items-baseline gap-x-1 text-body leading-[22px] text-text-3">
-              <span>Lives in</span>
-              <HomeCityField
-                value={city}
-                disabled={!clientId}
-                placeholder={clientId ? "add home city" : "add a name first"}
-                onEditingChange={setEditing}
-                onCommit={onCityCommit}
+    <div className="flex min-h-0 grow flex-col">
+      <div className="flex min-h-0 grow flex-col gap-6 overflow-y-auto px-10 pt-7 pb-8 max-lg:px-7">
+        <header className="flex items-center justify-between gap-6 border-b border-ink/8 pb-5">
+          <div className="flex min-w-0 items-center gap-[18px]">
+            <InitialsAvatar name={shownName} size={64} tone="avatar" />
+            <div className="flex min-w-0 flex-col gap-1">
+              <InlineText
+                value={name}
+                onValueChange={onNameChange}
+                onFocus={() => {
+                  nameAtFocus.current = name;
+                }}
+                onCommit={onNameCommit}
+                onCancel={onNameCancel}
+                label="Client name"
+                placeholder="Client name"
+                maxLength={120}
+                className="self-start"
+                inputClassName="font-display text-[40px] leading-[44px] tracking-[-0.02em] text-ink"
               />
-              {initial.createdAt ? <span>· Client since {monthYear(new Date(initial.createdAt))}</span> : null}
-              {tripCount > 0 ? <span>· {plural(tripCount, "trip")} with you</span> : null}
-            </p>
+              <p className="flex flex-wrap items-baseline gap-x-1 text-body leading-5 text-text-2">
+                <span>Lives in</span>
+                <HomeCityField
+                  value={city}
+                  disabled={false}
+                  placeholder="add home city"
+                  onEditingChange={() => undefined}
+                  onCommit={onCityCommit}
+                />
+                {initial.createdAt ? <span>· Client since {monthYear(new Date(initial.createdAt))}</span> : null}
+                {tripCount > 0 ? <span>· {plural(tripCount, "trip")} with you</span> : null}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex shrink-0 items-center gap-2.5">
-          <SaveStatus state={state} editing={editing || (isNew && !clientId)} />
-          {newTripHref ? (
-            <Link href={newTripHref} className={buttonClasses({ size: "lg", className: "h-11!" })}>
-              <Plus size={16} strokeWidth={2.4} aria-hidden />
-              {newTripLabel}
-            </Link>
-          ) : (
-            <Button size="lg" disabled className="h-11!" icon={<Plus size={16} strokeWidth={2.4} aria-hidden />}>
-              {newTripLabel}
-            </Button>
-          )}
-        </div>
-      </header>
+          <div className="flex shrink-0 items-center gap-4">
+            <SaveStatus state={state} />
+            <button
+              type="button"
+              aria-label="Close"
+              title="Close"
+              onClick={() => modal.close()}
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-pill border border-ink/16 text-ink transition-colors hover:border-ink hover:bg-ink/5"
+            >
+              <X size={16} strokeWidth={2} aria-hidden />
+            </button>
+          </div>
+        </header>
 
-      <div className="grid grid-cols-[minmax(0,880fr)_minmax(380px,480fr)] items-start gap-6 px-7 pb-7">
-        <div className="flex min-w-0 flex-col gap-6">
-          <TripsPanel
-            clientName={shownName}
-            trips={initial.trips}
-            newTripHref={newTripHref}
-            matchedFavorites={matched}
-            today={today}
-          />
-          <NotesField clientId={clientId} initialNotes={initial.notes} report={report} />
+        <div className="grid grid-cols-[minmax(0,688fr)_minmax(280px,360fr)] items-start gap-8 max-lg:gap-6">
+          <FavoritesSection title={`Places ${first} loves`} near={near} taste={taste} />
+          <aside className="flex min-w-0 flex-col gap-4 pt-[60px]">
+            <TasteCard first={first} tags={taste.tags} matched={taste.matched} photos={photos} updating={taste.tagsUpdating} />
+            <NotesField clientId={clientId} initialNotes={initial.notes} report={report} />
+            <GroundRules rules={taste.rules} disabled={false} onChange={taste.saveRules} />
+          </aside>
         </div>
-        <TastePanel
-          clientId={clientId}
-          homeCity={city}
-          near={near}
-          initialFavorites={initial.favorites}
-          initialMedia={initial.mediaFavorites}
-          initialRules={initial.groundRules}
-          initialTags={initial.tasteTags}
-          runOp={runOp}
-          onMatchedChange={setMatched}
-        />
       </div>
+
+      <ProfileFooter
+        first={first}
+        trips={initial.trips}
+        today={today}
+        newTripHref={`/clients?new=1&client=${encodeURIComponent(clientId)}`}
+      />
     </div>
   );
 }

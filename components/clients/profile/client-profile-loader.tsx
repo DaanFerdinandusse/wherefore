@@ -8,8 +8,8 @@ import { todayIso } from "../format";
 import { ClientProfile } from "./client-profile";
 import type { ClientProfileData } from "./types";
 
-// Loads one client for C (the profile) on the server and hands the screen
-// plain data. Out of scope or unknown ids are a 404.
+// Loads one client for C2 on the server and hands the profile plain data.
+// Out of scope or unknown ids are a 404.
 export async function ClientProfileLoader({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePageUser();
   const { id } = await params;
@@ -37,5 +37,5 @@ export async function ClientProfileLoader({ params }: { params: Promise<{ id: st
   };
 
   // Keyed by id so a soft navigation to another client starts from its own data.
-  return <ClientProfile key={client.id} initial={data} isNew={false} today={todayIso()} />;
+  return <ClientProfile key={client.id} initial={data} today={todayIso()} />;
 }

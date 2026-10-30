@@ -6,9 +6,10 @@ import { z } from "zod";
 import { interleave, type SearchCandidate } from "@/lib/clients/candidates";
 
 // Debounced entity search through /api/entities/search for the favorites
-// picker and "Also into". One request per entity type (so every result knows
+// picker and the C2 search. One request per entity type (so every result knows
 // its type), biased to the client's home city when it is known. Responses
-// are validated; a stale response never overwrites a newer query.
+// are validated; a stale response never overwrites a newer query. Only
+// places are biased to a point: artists and films have no location.
 
 export type EntityType = "place" | "artist" | "movie";
 export type TypedCandidate = SearchCandidate & { type: EntityType };
@@ -74,7 +75,7 @@ export function useEntitySearch(
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const lists = await Promise.all(types.map((type) => fetchType(q, type, near, take, controller.signal)));
+        const lists = await Promise.all(types.map((type) => fetchType(q, type, type === "place" ? near : null, take, controller.signal)));
         setAnswer({ key, results: interleave(lists), failed: false });
       } catch (error) {
         if (controller.signal.aborted) return;

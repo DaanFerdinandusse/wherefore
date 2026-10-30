@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 
-import { ClientProfileLoader } from "@/components/clients/profile/client-profile-loader";
-import { ProfileSkeleton } from "@/components/clients/profile/profile-skeleton";
+import { ClientsList } from "@/components/clients/list/clients-list";
+import { ClientProfileSheet } from "@/components/clients/profile/client-profile-sheet";
 
 export const metadata: Metadata = { title: "Client · Tastebrief" };
 
-// C Client profile. Reads the session and the client at request time, so it
-// streams in behind Suspense.
-export default function ClientPage({ params }: { params: Promise<{ id: string }> }) {
+// C2 from a deep link: the Clients list with the client's profile sheet over
+// it. Closing goes to the list.
+export default function ClientPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   return (
-    <main className="flex flex-1 flex-col">
-      <Suspense fallback={<ProfileSkeleton />}>
-        <ClientProfileLoader params={params} />
-      </Suspense>
-    </main>
+    <>
+      <ClientsList searchParams={searchParams} />
+      <ClientProfileSheet params={params} intercepted={false} />
+    </>
   );
 }
