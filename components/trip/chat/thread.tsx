@@ -15,7 +15,7 @@ import { toolErrorText } from "./chat-errors";
 import { readPlacesOutput, readRecommendOutput } from "./chat-places";
 import { recommendationsOf, type Recommendation } from "./chat-format";
 import { ToolCard } from "./tool-card";
-import { chatActivity } from "./chat-activity";
+import { chatActivity, QUIET_TOOLS } from "./chat-activity";
 import { StreamingText, ThinkingIndicator, ThinkingSummary } from "./streaming-parts";
 import type { PlaceHandlers } from "./tool-cards/parts";
 import { SearchResults } from "./search-results";
@@ -26,9 +26,7 @@ import { SearchResults } from "./search-results";
 // search row per find_places, and the recommendation: the latest as the full
 // place card, earlier ones as one line ("Added to Fri dinner · 92 match").
 // Readable reasoning summaries appear in expandable disclosures.
-// Reading tools (trip context, a place's facts) show only when they fail.
-
-const QUIET_TOOLS = new Set(["get_trip_context", "lookup_place"]);
+// Reading tools (trip context, a place's facts) have no card unless they fail.
 
 type Props = PlaceHandlers & {
   messages: AppUIMessage[];
@@ -220,7 +218,7 @@ export function Thread({
           </li>
         );
       })}
-      <ThinkingIndicator activity={chatActivity(messages, streaming)} />
+      <ThinkingIndicator activity={chatActivity(messages, streaming, clientName)} />
     </ol>
   );
 }

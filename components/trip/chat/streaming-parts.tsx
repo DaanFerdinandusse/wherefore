@@ -19,7 +19,7 @@ export function StreamingText({ text, active }: { text: string; active: boolean 
 export function ThinkingIndicator({ activity }: { activity: ChatActivity | null }) {
   const [retained, setRetained] = useState(activity);
   const active = activity !== null;
-  if (activity && (activity.key !== retained?.key || activity.summary !== retained.summary || activity.kind !== retained.kind)) {
+  if (activity && (activity.key !== retained?.key || activity.label !== retained.label || activity.kind !== retained.kind)) {
     setRetained(activity);
   }
   useEffect(() => {
@@ -41,7 +41,7 @@ export function ThinkingIndicator({ activity }: { activity: ChatActivity | null 
         <span aria-hidden className="mt-2 flex shrink-0 gap-1 text-amber">
           {[0, 1, 2].map((dot) => <span key={dot} className="chat-thinking-dot size-1 rounded-full bg-current" style={{ animationDelay: `${dot * 140}ms` }} />)}
         </span>
-        <span className="min-w-0 leading-relaxed wrap-anywhere">{shown.label}</span>
+        <span key={shown.label} className="rise-in min-w-0 leading-relaxed wrap-anywhere">{shown.label}</span>
       </div>
     </li>
   );
