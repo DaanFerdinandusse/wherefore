@@ -184,6 +184,14 @@ export const trips = pgTable(
     stageOverride: text("stage_override"),
     shareToken: text("share_token"),
     sharedAt: timestamp("shared_at", { withTimezone: true }),
+    // When the traveler first and last opened the share link (/s/[token]).
+    // Link previews, prefetches and the advisor's own visits do not count.
+    // Cleared with the link.
+    shareFirstOpenedAt: timestamp("share_first_opened_at", { withTimezone: true }),
+    shareLastOpenedAt: timestamp("share_last_opened_at", { withTimezone: true }),
+    // True when the link was created after opens were recorded, so "not
+    // opened" is a fact. Links from before stay false: no claim about them.
+    shareOpensTracked: boolean("share_opens_tracked").notNull().default(false),
     chatId: uuid("chat_id"),
     // pending | running | done | failed
     seedStatus: text("seed_status").notNull().default("pending"),

@@ -29,6 +29,7 @@ import type {
   CreateAsk,
   CreateTrip,
   LogTripCall,
+  RecordShareOpen,
   RevokeShare,
   SetShareToken,
   SetSlots,
@@ -199,10 +200,30 @@ export const setShareToken: SetShareToken = (id, scope) =>
   setTripColumns(id, scope, {
     shareToken: sql`coalesce(${trips.shareToken}, ${newShareToken()})`,
     sharedAt: sql`coalesce(${trips.sharedAt}, now())`,
+    // A link created now has its opens recorded from the start.
+    shareOpensTracked: sql`(${trips.shareToken} is null or ${trips.shareOpensTracked})`,
   });
 
 export const revokeShare: RevokeShare = (id, scope) =>
-  setTripColumns(id, scope, { shareToken: null, sharedAt: null });
+  setTripColumns(id, scope, {
+    shareToken: null,
+    sharedAt: null,
+    shareFirstOpenedAt: null,
+    shareLastOpenedAt: null,
+    shareOpensTracked: false,
+  });
+
+export const recordShareOpen: RecordShareOpen = async (token, viewer) => {
+  if (!token) return;
+  await db
+    .update(trips)
+    .set({
+      shareFirstOpenedAt: sql`coalesce(${trips.shareFirstOpenedAt}, now())`,
+      shareLastOpenedAt: sql`now()`,
+    })
+    // coalesce: a null org_id makes the scope predicate null, not false.
+    .where(and(eq(trips.shareToken, token), viewer ? sql`not coalesce((${inScope(trips, viewer)}), false)` : undefined));
+};
 
 export const setStageOverride: SetStageOverride = (id, stage, scope) =>
   setTripColumns(id, scope, { stageOverride: stage });

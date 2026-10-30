@@ -1,6 +1,6 @@
 // Test fixtures for the Trips board helpers.
 
-import type {TripCard} from "@/lib/trips/contracts";
+import type { TripCard } from "@/lib/trips/contracts";
 import type { TripsBoardState } from "./columns";
 
 export function tripCard(
@@ -22,11 +22,17 @@ export function tripCard(
     stage: "planning",
     stageOverride: null,
     shareToken: null,
-    seedStatus: "done",
+    sharedAt: null,
+    shareFirstOpenedAt: null,
+    shareLastOpenedAt: null,
+    shareOpensTracked: true,
+    seedStatus: "pending",
     imageUrl: null,
+    clientFavorites: 4,
+    lastAsk: null,
     updatedAt: new Date("2026-10-01T10:00:00Z"),
     ...rest,
-    counts: { places: 20, added: 6, filledSlots: 6, days: 5, emptyDays: 2, ...counts },
+    counts: { places: 20, added: 6, filledSlots: 6, days: 5, emptyDays: 2, tonightFilled: 0, ...counts },
   };
 }
 

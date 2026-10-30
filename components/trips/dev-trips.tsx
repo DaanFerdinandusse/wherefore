@@ -11,7 +11,7 @@ import { cardDatesLabel } from "./format";
 export function DevTrips({ trips }: { trips: TripCard[] }) {
   if (trips.length === 0) return null;
   return (
-    <section aria-labelledby="dev-trips" className="mx-7 mt-10 flex flex-col gap-2.5 border-t border-rule-strong pt-5">
+    <section aria-labelledby="dev-trips" className="mt-6 flex flex-col gap-2.5 border-t border-rule-strong pt-5">
       <h2 id="dev-trips" className="label-caps text-text-muted">
         Dev
       </h2>

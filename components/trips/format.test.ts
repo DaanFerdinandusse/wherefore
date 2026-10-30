@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   cardDatesLabel,
-  cardStatus,
   daysUntil,
+  doneRowLabel,
   firstName,
   monthYearLabel,
   nightsCount,
@@ -67,27 +67,14 @@ describe("cardDatesLabel", () => {
   });
 });
 
-describe("cardStatus", () => {
-  it("shows filled days with a bar while planning", () => {
-    const status = cardStatus(tripCard(), "2027-01-01");
-    expect(status.text).toBe("20 places · 3 of 5 days filled");
-    expect(status.progress).toBeCloseTo(0.6);
-  });
-  it("shows the day of the trip while traveling", () => {
-    const status = cardStatus(tripCard({ stage: "traveling" }), "2027-05-15");
-    expect(status).toMatchObject({ text: "Day 2 of 5", barTone: "green" });
-  });
-  it("shows when a trip finished", () => {
-    expect(cardStatus(tripCard({ stage: "done", counts: { places: 9 } }), "2027-06-01").text).toBe(
-      "Finished 18 May · 9 places",
+describe("doneRowLabel", () => {
+  it("names the client and the month, with the year when it is another year", () => {
+    expect(doneRowLabel(tripCard({ clientName: "Elena Costa", startDate: "2026-09-14" }), "2026-10-29")).toBe(
+      "Elena Costa, Sep",
     );
-  });
-  it("warns when the first list failed", () => {
-    expect(cardStatus(tripCard({ seedStatus: "failed" }), "2027-01-01").tone).toBe("warning");
-  });
-  it("says when there are no places yet", () => {
-    expect(cardStatus(tripCard({ seedStatus: "pending", counts: { places: 0 } }), "2027-01-01").text).toBe(
-      "No places yet",
+    expect(doneRowLabel(tripCard({ clientName: "Ana Ruiz", startDate: "2025-03-06" }), "2026-10-29")).toBe(
+      "Ana Ruiz, Mar 2025",
     );
+    expect(doneRowLabel(tripCard({ clientName: "Ana Ruiz", startDate: null }), "2026-10-29")).toBe("Ana Ruiz");
   });
 });

@@ -1,68 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type DragEvent } from "react";
-import { Plus } from "lucide-react";
+import { useState, type DragEvent } from "react";
 
-import { Button, buttonClasses } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Toast } from "@/components/ui/toast";
 import type { TripStage } from "@/lib/contracts";
-import { moveTripToStage, resetTripStage } from "@/lib/trips/actions";
-import { computeStage } from "@/lib/trips/stage";
-import type { TripsBoardState } from "./columns";
 import { cn } from "@/lib/ui/cn";
 
-import { COLUMN_LIMIT, findCard, moveCard, restoreCard, STAGE_COLUMNS, stageLabel, totalTrips } from "./columns";
+import { columnLimit, findCard, STAGE_COLUMNS, type TripsBoardState } from "./columns";
 import { TripCard } from "./trip-card";
+import { TripsEmpty } from "./trips-empty";
+import { useTripMoves } from "./use-trip-moves";
 
 // The four stage columns. A drop on another column moves the card at once
 // and saves the stage override in the background; a failed save puts the
 // card back and says so. Each column shows its first cards and a "Show N
-// more" for the rest.
-export function TripsBoard({ initial, today }: { initial: TripsBoardState; today: string }) {
-  const [grouped, setGrouped] = useState(initial);
+// more" for the rest; past the loaded page it links to the list.
+
+const MORE_CLASSES = "self-start rounded-pill px-3 py-2 text-ui-sm font-semibold text-ink hover:bg-ink/5";
+
+export function TripsBoard({
+  initial,
+  totals,
+  today,
+  now,
+}: {
+  initial: TripsBoardState;
+  /** Every trip per stage, loaded or not. */
+  totals: Record<TripStage, number>;
+  today: string;
+  /** The server's clock as an ISO string, so server and client agree on "4 days". */
+  now: string;
+}) {
+  const { grouped, move, resetStage, announcement, error } = useTripMoves(initial, today);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<TripStage | null>(null);
   const [expanded, setExpanded] = useState<Partial<Record<TripStage, boolean>>>({});
-  const [announcement, setAnnouncement] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!error) return;
-    const timer = setTimeout(() => setError(null), 5000);
-    return () => clearTimeout(timer);
-  }, [error]);
-
-  async function move(tripId: string, to: TripStage) {
-    const card = findCard(grouped, tripId);
-    if (!card || card.stage === to) return;
-    setGrouped((current) => moveCard(current, tripId, to));
-    setAnnouncement(`Moved ${card.title} to ${stageLabel(to)}.`);
-    const result = await moveTripToStage(tripId, to);
-    if (!result.ok) {
-      setGrouped((current) => restoreCard(current, card));
-      setAnnouncement("");
-      setError(result.error);
-    }
-  }
-
-  /** Drops the override: the card moves to the stage its dates and share link give it. */
-  async function resetStage(tripId: string) {
-    const card = findCard(grouped, tripId);
-    if (!card || !card.stageOverride) return;
-    const to = computeStage({ ...card, stageOverride: null }, today);
-    setGrouped((current) => moveCard(current, tripId, to, null));
-    setAnnouncement(`${card.title} is back in ${stageLabel(to)}.`);
-    const result = await resetTripStage(tripId);
-    if (!result.ok) {
-      setGrouped((current) => restoreCard(current, card));
-      setAnnouncement("");
-      setError(result.error);
-    } else if (result.stage !== to) {
-      setGrouped((current) => moveCard(current, tripId, result.stage, null));
-    }
-  }
+  const clock = new Date(now);
 
   function onDrop(event: DragEvent<HTMLElement>, stage: TripStage) {
     event.preventDefault();
@@ -72,34 +46,21 @@ export function TripsBoard({ initial, today }: { initial: TripsBoardState; today
     if (tripId) void move(tripId, stage);
   }
 
-  if (totalTrips(grouped) === 0) {
-    return (
-      <div className="px-7 pt-2">
-        <EmptyState
-          title="Your trips will show up here"
-          body="Pick a client and a city. The first list of places builds from what they already love."
-          action={
-            <Link href="/trips?new=1" scroll={false} className={buttonClasses({ className: "mt-1" })}>
-              <Plus size={16} strokeWidth={2} aria-hidden />
-              New trip
-            </Link>
-          }
-          className="min-h-[360px]"
-        />
-      </div>
-    );
-  }
+  if (STAGE_COLUMNS.every((c) => grouped[c.stage].length === 0)) return <TripsEmpty />;
 
   const dragStage = dragId ? findCard(grouped, dragId)?.stage : undefined;
 
   return (
     <>
-      <div className="grid grid-cols-4 gap-4 px-7">
+      <div className="grid grid-cols-4 items-start gap-3">
         {STAGE_COLUMNS.map((column) => {
           const cards = grouped[column.stage];
+          const limit = columnLimit(column.stage);
           const showAll = expanded[column.stage] ?? false;
-          const visible = showAll ? cards : cards.slice(0, COLUMN_LIMIT);
-          const hidden = cards.length - visible.length;
+          const visible = showAll ? cards : cards.slice(0, limit);
+          // Moves change the loaded columns; the server total covers what is not loaded.
+          const total = Math.max(cards.length, totals[column.stage] + cards.length - initial[column.stage].length);
+          const hidden = total - visible.length;
           const isTarget = overStage === column.stage && dragStage !== undefined && dragStage !== column.stage;
           return (
             <section
@@ -116,14 +77,14 @@ export function TripsBoard({ initial, today }: { initial: TripsBoardState; today
               }}
               onDrop={(event) => onDrop(event, column.stage)}
               className={cn(
-                "flex min-w-0 flex-col gap-3 rounded-[26px] outline-2 outline-offset-4 outline-transparent transition-[outline-color]",
+                "flex min-h-[160px] min-w-0 flex-col gap-2.5 rounded-[22px] outline-2 outline-offset-4 outline-transparent transition-[outline-color]",
                 isTarget && "outline-dashed outline-pill-outline",
               )}
             >
               <h2 id={`stage-${column.stage}`} className="flex items-center gap-2 px-1">
                 <span aria-hidden className={cn("size-2 shrink-0 rounded-pill", column.dotClass)} />
-                <span className="flex-1 text-body leading-5 font-semibold text-ink">{column.label}</span>
-                <span className="text-ui text-text-muted">{cards.length}</span>
+                <span className="min-w-0 flex-1 truncate text-ui leading-[19px] font-semibold text-ink">{column.label}</span>
+                <span className="text-ui-sm text-text-muted">{total}</span>
               </h2>
 
               {visible.map((card, index) => (
@@ -131,8 +92,8 @@ export function TripsBoard({ initial, today }: { initial: TripsBoardState; today
                   key={card.id}
                   card={card}
                   today={today}
-                  eager={index < 3}
-                  onResetStage={(id) => void resetStage(id)}
+                  now={clock}
+                  eager={index < 2}
                   dragging={dragId === card.id}
                   onDragStart={setDragId}
                   onDragEnd={() => {
@@ -140,24 +101,38 @@ export function TripsBoard({ initial, today }: { initial: TripsBoardState; today
                     setOverStage(null);
                   }}
                   onMove={(id, stage) => void move(id, stage)}
+                  onResetStage={(id) => void resetStage(id)}
                 />
               ))}
 
               {cards.length === 0 ? (
-                <div className="flex h-[120px] items-center justify-center rounded-[22px] border border-dashed border-rule-strong px-6 text-center text-ui-sm text-text-muted">
-                  No trips here
-                </div>
+                <p className="flex h-[88px] items-center justify-center rounded-[18px] border-[1.5px] border-dashed border-ink/12 px-6 text-center text-ui-sm text-text-muted">
+                  {dragStage !== undefined ? "Drop a trip here" : "No trips here"}
+                </p>
               ) : null}
 
-              {hidden > 0 || showAll ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="self-start"
-                  onClick={() => setExpanded((e) => ({ ...e, [column.stage]: !showAll }))}
+              {!showAll && hidden > 0 && cards.length > visible.length ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((e) => ({ ...e, [column.stage]: true }))}
+                  className={MORE_CLASSES}
                 >
-                  {showAll ? "Show fewer" : `Show ${hidden} more`}
-                </Button>
+                  Show {hidden} more
+                </button>
+              ) : null}
+              {hidden > 0 && cards.length === visible.length ? (
+                <Link href="/trips?view=list" className={MORE_CLASSES}>
+                  See all {total} in the list
+                </Link>
+              ) : null}
+              {showAll && hidden <= 0 && cards.length > limit ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((e) => ({ ...e, [column.stage]: false }))}
+                  className="self-start rounded-pill px-3 py-2 text-ui-sm font-semibold text-text-3 hover:bg-ink/5 hover:text-ink"
+                >
+                  Show fewer
+                </button>
               ) : null}
             </section>
           );

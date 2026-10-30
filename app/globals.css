@@ -30,6 +30,8 @@
   --color-glow: #e2a85a;
   --color-glow-halo: rgb(233 176 96 / 0.6);
   --color-green: #5b6650;
+  /* The "Shared with client" dot and the "places ready" sparkle (v3 Trips board). */
+  --color-ochre: #c98a2e;
 
   /* Glass dock */
   --color-glass: rgb(241 237 230 / 0.6);
@@ -101,6 +103,13 @@
   --text-empty--letter-spacing: -0.02em;
   --text-initials: 40px;
   --text-initials--line-height: 40px;
+  /* City names on Trips board cards and done rows (v3 Trips board). */
+  --text-city: 24px;
+  --text-city--line-height: 28px;
+  --text-city--letter-spacing: -0.02em;
+  --text-city-sm: 18px;
+  --text-city-sm--line-height: 22px;
+  --text-city-sm--letter-spacing: -0.01em;
   --text-section: 34px;
   --text-section--line-height: 40px;
   --text-section--letter-spacing: -0.025em;
