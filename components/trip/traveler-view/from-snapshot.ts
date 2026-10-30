@@ -1,14 +1,28 @@
 import type { SharedTripView, TripSnapshot } from "@/lib/contracts";
 import { favoriteDrivers } from "@/lib/qloo/normalize";
-import { type SharedSlotRow, toSharedTripView } from "@/lib/trips/share";
+import { type SharedFavoriteRow, type SharedSlotRow, toSharedTripView } from "@/lib/trips/share";
 
 // The workspace's "Traveler view" tab renders before a share link exists, so
 // it cannot read the view by token. This projects the trip snapshot through
 // the same pure projection the public page uses (lib/trips/share.ts), so the
 // tab and /s/[token] can never show different things: no scores, no asks,
 // no removed places, no advisor place notes, slot notes only when marked for
-// the traveler.
-export function travelerViewFromSnapshot(snapshot: TripSnapshot, advisorName: string | null): SharedTripView {
+// the traveler. The snapshot carries one photo per place and no
+// descriptions, so the tab shows less than the link where the card has less.
+
+/** What the workspace may add that the snapshot does not hold. */
+export type TravelerViewExtras = {
+  /** The advisor's email, for the "Message" action. */
+  advisorEmail?: string | null;
+  /** The travelers' favorites with photos, for the favorites band and the reasons. */
+  favorites?: SharedFavoriteRow[];
+};
+
+export function travelerViewFromSnapshot(
+  snapshot: TripSnapshot,
+  advisorName: string | null,
+  extras: TravelerViewExtras = {},
+): SharedTripView {
   const cards = new Map(snapshot.places.map((card) => [card.tripPlaceId, card]));
   const rows: SharedSlotRow[] = snapshot.slots.map((slot) => {
     const card = slot.tripPlaceId ? cards.get(slot.tripPlaceId) : undefined;
@@ -23,6 +37,8 @@ export function travelerViewFromSnapshot(snapshot: TripSnapshot, advisorName: st
             explainability: favoriteDrivers(card.because),
             sharedTags: card.sharedTags,
             reason: card.reason ?? null,
+            keywords: card.keywords,
+            dishes: card.dishes,
           }
         : null;
     return {
@@ -44,7 +60,9 @@ export function travelerViewFromSnapshot(snapshot: TripSnapshot, advisorName: st
       endDate: snapshot.trip.endDate ?? null,
       clientName: snapshot.trip.clientName,
       advisorName,
+      advisorEmail: extras.advisorEmail ?? null,
     },
     rows,
+    extras.favorites ?? [],
   );
 }

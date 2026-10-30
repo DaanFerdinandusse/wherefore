@@ -119,7 +119,20 @@ export type SharedTripPlace = {
   because: { name: string; share: number }[];
   sharedTags: string[];
   reason?: string;
+  /** Up to three photo urls, the first one first. `imageUrl` is the first of them. */
+  images?: string[];
+  /** The provider's own short description, verbatim. */
+  description?: string;
+  /** Review keywords, most mentioned first ("Loved for ..."). */
+  keywords?: string[];
+  /** The place's own specialty dishes, in sentence case. */
+  dishes?: string[];
+  /** Hotel class (1 to 5) for a stay, when the provider has one. */
+  hotelClass?: number;
 };
+
+/** A favorite of the traveler that drove the picks: "Built from your favorites". */
+export type SharedFavorite = { name: string; imageUrl?: string };
 
 export type SharedTripSlot = {
   slot: SlotName;
@@ -139,6 +152,10 @@ export type SharedTripView = {
   /** The trip client's first name, for "Prepared for Ana". */
   preparedFor: string;
   advisorName: string | null;
+  /** Where "Message Sofía" writes to. Absent: the page shows no contact action. */
+  advisorEmail?: string;
+  /** The favorites behind the picks, most influential first, with a photo when we have one. */
+  favorites?: SharedFavorite[];
   days: SharedTripDay[];
 };
 

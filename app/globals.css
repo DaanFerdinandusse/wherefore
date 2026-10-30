@@ -124,6 +124,26 @@
   --text-card-xs--line-height: 28px;
   --text-tile: 24px;
   --text-tile--line-height: 28px;
+
+  /* Added for the traveler itinerary (components/trip/traveler-view). */
+  --color-sand: #f5e6cc;
+  --color-sand-ring: #c98a2e;
+  --text-wordmark-sm: 22px;
+  --text-wordmark-sm--line-height: 26px;
+  --text-wordmark-sm--letter-spacing: -0.02em;
+  --text-day: 72px;
+  --text-day--line-height: 76px;
+  --text-day--letter-spacing: -0.03em;
+  --text-reason: 28px;
+  --text-reason--line-height: 36px;
+  --text-reason--letter-spacing: -0.01em;
+  --text-reason-sm: 21px;
+  --text-reason-sm--line-height: 28px;
+  --text-intro: 24px;
+  --text-intro--line-height: 34px;
+  --text-intro--letter-spacing: -0.01em;
+  --text-prose: 17px;
+  --text-prose--line-height: 27px;
 }
 
 :root {
