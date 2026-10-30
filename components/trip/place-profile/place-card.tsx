@@ -250,13 +250,14 @@ function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGal
     <div className={cn("flex shrink-0 gap-1.5", height)} draggable onDragStart={onDragStart} data-testid="place-card-photos">
       {Array.from({ length: slotCount }, (_, index) => {
         const photo = photos[index];
+        const hasMore = index === 2 && photos.length > 3;
         return (
           <button
             key={index}
             type="button"
             disabled={!photo}
             onClick={() => photo && onOpenGallery(photo.src)}
-            aria-label={`View photo ${index + 1} of ${name}`}
+            aria-label={hasMore ? `Open more photos of ${name}` : `View photo ${index + 1} of ${name}`}
             aria-haspopup="dialog"
             className={cn(
               "relative overflow-hidden bg-avatar text-left enabled:cursor-zoom-in focus-visible:outline-offset-[-4px]",
@@ -265,6 +266,12 @@ function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGal
             )}
           >
             <LoadingPhoto key={photo?.src ?? "pending"} photo={photo} sizes={index === 0 ? "380px" : "200px"} />
+            {hasMore ? (
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-ink/50 px-2 text-center text-white">
+                <span className="text-card-xs font-semibold">+{photos.length - 3}</span>
+                <span className="text-ui-sm font-semibold">Open more photos</span>
+              </span>
+            ) : null}
             <GoogleCredit attributions={photo?.attributions} />
             {index === 0 ? <span className="absolute bottom-3.5 left-3.5 flex flex-wrap gap-1.5">{chips}</span> : null}
           </button>
