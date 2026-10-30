@@ -1,8 +1,7 @@
 "use client";
 
-import { useId, useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useMemo, useState, type DragEvent, type ReactNode } from "react";
 import {
-  ChevronUp,
   BedDouble,
   Bookmark,
   Check,
@@ -28,8 +27,9 @@ import { cn } from "@/lib/ui/cn";
 
 import { startPlaceDrag } from "../workspace/dnd";
 
+import { PhotoViewer } from "./photo-viewer";
 import { LoadingPhoto } from "./loading-photo";
-import { keywordBars, morePhotosLabel, shortAuthor } from "./card-format";
+import { keywordBars, shortAuthor } from "./card-format";
 import { ReviewsPanel, VisitPanel } from "./place-card-panels";
 import { firstName, namedDrivers, nextFreeSlot, priceSigns, tripDays, type SlotChoice } from "./profile-format";
 import { SlotPicker } from "./slot-picker";
@@ -98,11 +98,10 @@ export function PlaceCard({
 }: PlaceCardProps) {
   const client = firstName(trip.clientName);
   const [tab, setTab] = useState<Tab>("for");
-  const [gallery, setGallery] = useState(false);
-  const galleryId = useId();
+  const [gallery, setGallery] = useState<{ placeId: string; src: string } | null>(null);
   const { profile, failed: profileFailed } = useTripPlaceProfile(true, card.tripPlaceId);
   const place = profile?.place ?? null;
-  const wantFull = tab !== "for" || gallery;
+  const wantFull = tab !== "for";
   const { details, full, fullLoading, basicLoading } = useGoogleDetails(card.placeId, Boolean(place?.googlePlaceId), true, wantFull);
 
   const photos = useMemo<CardPhoto[]>(() => {
@@ -159,9 +158,7 @@ export function PlaceCard({
           name={card.name}
           tall={variant === "overlay"}
           tripPlaceId={card.tripPlaceId}
-          expanded={gallery}
-          galleryId={galleryId}
-          onOpenGallery={() => setGallery((open) => !open)}
+          onOpenGallery={(src) => setGallery({ placeId: card.placeId, src })}
           chips={
             <>
               <PhotoChip icon={CATEGORY_ICON[card.category]}>{kind}</PhotoChip>
@@ -177,13 +174,8 @@ export function PlaceCard({
           }
         />
 
-        <Gallery id={galleryId} photos={photos.slice(3)} name={card.name} expanded={gallery} />
-        {gallery && photos.length > 3 ? (
-          <button type="button" data-photo-toggle aria-expanded={gallery} aria-controls={galleryId} onClick={() => setGallery(false)}
-            className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-pill bg-track px-3 py-1.5 text-ui-sm font-semibold text-ink hover:bg-rule">
-            <ChevronUp aria-hidden className="size-3.5" />
-            Show fewer photos
-          </button>
+        {gallery?.placeId === card.placeId ? (
+          <PhotoViewer photos={photos} name={card.name} initialSrc={gallery.src} onClose={() => setGallery(null)} />
         ) : null}
       </div>
 
@@ -231,31 +223,17 @@ function GoogleCredit({ attributions }: { attributions?: GoogleAttribution[] }) 
   );
 }
 
-/** Big photo, second photo, and a third with "+N photos" (opens the gallery). */
-function PhotoStrip({
-  photos,
-  loading,
-  name,
-  tall,
-  chips,
-  tripPlaceId,
-  onOpenGallery,
-  expanded,
-  galleryId,
-}: {
+/** Photo frames reserve space while details load and open the selected image. */
+function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGallery }: {
   photos: CardPhoto[];
   loading: boolean;
   name: string;
   tall: boolean;
   chips: ReactNode;
   tripPlaceId: string;
-  onOpenGallery: () => void;
-  expanded: boolean;
-  galleryId: string;
+  onOpenGallery: (src: string) => void;
 }) {
-  const shown = photos.slice(0, 3);
-  const slotCount = loading ? 3 : shown.length;
-  const more = morePhotosLabel(photos.length, shown.length);
+  const slotCount = loading ? 3 : Math.min(photos.length, 3);
   const onDragStart = (event: DragEvent) => startPlaceDrag(event, tripPlaceId);
   const height = tall ? "h-62" : "h-50";
 
@@ -270,65 +248,28 @@ function PhotoStrip({
 
   return (
     <div className={cn("flex shrink-0 gap-1.5", height)} draggable onDragStart={onDragStart} data-testid="place-card-photos">
-      <div
-        className={cn(
-          "relative overflow-hidden bg-avatar",
-          slotCount === 1 ? "w-full rounded-photo" : "w-[52%] shrink-0 rounded-l-photo rounded-r-lg",
-        )}
-      >
-        <LoadingPhoto key={shown[0]?.src ?? "pending"} photo={shown[0]} sizes="380px" />
-        <GoogleCredit attributions={shown[0]?.attributions} />
-        <div className="absolute bottom-3.5 left-3.5 flex flex-wrap gap-1.5">{chips}</div>
-      </div>
-      {slotCount > 1 ? (
-        <div className={cn("relative overflow-hidden bg-avatar", slotCount === 2 ? "grow rounded-l-lg rounded-r-photo" : "w-[27.5%] shrink-0 rounded-lg")}>
-          <LoadingPhoto key={shown[1]?.src ?? "pending"} photo={shown[1]} sizes="200px" />
-          <GoogleCredit attributions={shown[1]?.attributions} />
-        </div>
-      ) : null}
-      {slotCount > 2 ? (
-        <button
-          type="button"
-          data-photo-toggle
-          onClick={onOpenGallery}
-          aria-label={more ? `${expanded ? "Show fewer photos" : "Show more photos"} of ${name}` : `Photo 3 of ${name}`}
-          aria-expanded={more ? expanded : undefined}
-          aria-controls={more ? galleryId : undefined}
-          disabled={!more}
-          className="relative grow overflow-hidden rounded-l-lg rounded-r-photo bg-avatar"
-        >
-          <LoadingPhoto key={shown[2]?.src ?? "pending"} photo={shown[2]} sizes="140px" />
-          {more && !expanded ? (
-            <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-ink/50 text-white">
-              <span className="text-2xl leading-7 font-semibold">{more}</span>
-              <span className="text-ui-sm leading-4 font-semibold">photos</span>
-            </span>
-          ) : (
-            <GoogleCredit attributions={shown[2]?.attributions} />
-          )}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function Gallery({ id, photos, name, expanded }: { id: string; photos: CardPhoto[]; name: string; expanded: boolean }) {
-  return (
-    <div id={id} className="place-photos-reveal" data-expanded={expanded} inert={!expanded} aria-hidden={!expanded}>
-      <div className="place-photos-clip">
-        <div className="pt-1.5">
-          <div className="place-photos-scroll" role="region" aria-label={`More photos of ${name}`} tabIndex={expanded ? 0 : -1} data-testid="place-card-gallery">
-            <ul className="place-photos-grid">
-              {photos.map((photo) => (
-                <li key={photo.src} className="relative min-w-0 overflow-hidden rounded-lg bg-avatar">
-                  <FilmImage src={photo.src} alt={photo.alt} sizes="240px" unoptimized />
-                  <GoogleCredit attributions={photo.attributions} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
+      {Array.from({ length: slotCount }, (_, index) => {
+        const photo = photos[index];
+        return (
+          <button
+            key={index}
+            type="button"
+            disabled={!photo}
+            onClick={() => photo && onOpenGallery(photo.src)}
+            aria-label={`View photo ${index + 1} of ${name}`}
+            aria-haspopup="dialog"
+            className={cn(
+              "relative overflow-hidden bg-avatar text-left enabled:cursor-zoom-in focus-visible:outline-offset-[-4px]",
+              slotCount === 1 ? "w-full rounded-photo" : index === 0 ? "w-[52%] shrink-0 rounded-l-photo rounded-r-lg" :
+                index === slotCount - 1 ? "min-w-0 grow rounded-l-lg rounded-r-photo" : "w-[27.5%] shrink-0 rounded-lg",
+            )}
+          >
+            <LoadingPhoto key={photo?.src ?? "pending"} photo={photo} sizes={index === 0 ? "380px" : "200px"} />
+            <GoogleCredit attributions={photo?.attributions} />
+            {index === 0 ? <span className="absolute bottom-3.5 left-3.5 flex flex-wrap gap-1.5">{chips}</span> : null}
+          </button>
+        );
+      })}
     </div>
   );
 }

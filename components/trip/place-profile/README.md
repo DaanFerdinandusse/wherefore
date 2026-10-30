@@ -5,6 +5,7 @@ The place profile sheet (Paper 03 and 03b). `PlaceProfile` takes `PlaceProfilePr
 | File | What it holds |
 |---|---|
 | `place-profile.tsx` | The sheet: photos left, the scroll column right (header, why, your pick, about, hours and contact, reviews), actions pinned below, compact header once the title scrolls out. |
+| `photo-viewer.tsx` | Modal for the selected card photo, full-image view, thumbnail strip, keyboard navigation and focus return. |
 | `profile-photos.tsx` | Arch photo, two small photos, "See all N photos" strip; Google photos carry "From Google" and the author. |
 | `profile-why.tsx` | Score, the "People who love ..." sentence, driver bars (width = share; "Other favorites" never shown as a favorite), shared taste tags. |
 | `profile-your-pick.tsx` | The advisor's note, saved date, trips used, Edit note in place. |
