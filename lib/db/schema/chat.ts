@@ -2,14 +2,18 @@ import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizz
 
 import type { AppUIMessage } from "@/lib/contracts";
 
-// One chat per trip. The full UIMessage[] transcript is overwritten on each
-// save; the Workflow stream is the live log. See docs/PLAN.md section 6.
+// A trip has one or more chats (trips.chat_id is the first one). The full
+// UIMessage[] transcript is overwritten on each save; the Workflow stream is
+// the live log. See docs/PLAN.md section 6.
 export const chats = pgTable(
   "chats",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     tripId: uuid("trip_id").notNull(),
     ownerId: text("owner_id").notNull(),
+    // The advisor's first message, cut to a short line. Set once, in the
+    // statement that takes the first turn's lock; null until then.
+    title: text("title"),
     // idle | running | failed
     status: text("status").notNull().default("idle"),
     // Client-minted idempotency key for the running turn; doubles as the lock.

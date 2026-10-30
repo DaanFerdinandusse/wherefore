@@ -305,6 +305,8 @@ export type ChatSnapshot = {
     activeRunId?: string;
     activeTurnId?: string;
     lastError?: string;
+    /** The advisor's first message as a short line; absent until the first turn. */
+    title?: string;
     messages: AppUIMessage[];
   };
 };

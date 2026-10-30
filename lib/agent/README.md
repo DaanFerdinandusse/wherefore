@@ -1,6 +1,9 @@
 # lib/agent: the durable chat runtime
 
-One chat per trip. A turn is one Workflow run (`workflows/chat-turn.ts`) that
+A trip has one or more chats (`trips.chat_id` is the first; the trip page opens
+`?chat=<id>` or the most recently active one). Everything below is per chat id:
+the lock, the run, the stream; tools write to the chat's trip. A chat's title
+is its first visible advisor message, set with the first turn's lock. A turn is one Workflow run (`workflows/chat-turn.ts`) that
 keeps going when the tab closes, refreshes or drops offline; any tab re-attaches
 to the run's durable stream. `chats.messages` is the transcript, the run stream
 is the live log. Structure follows Daan's agent-core (start, prompt, stop, get,
@@ -9,7 +12,8 @@ the Workflow run, its stream and a conditional UPDATE.
 
 | File | Owns |
 | --- | --- |
-| `chat-store.ts` | Every write to a `chats` row and its `chat_turns` record: turn lock, run id, message upsert, pending save, release, stop flag. |
+| `chat-store.ts` | Every write to a `chats` row and its `chat_turns` record: turn lock, run id, message upsert, pending save, release, stop flag, title. A trip's chats: list, default chat, create (reuses an empty one). |
+| `chat-title.ts` | `chatTitleFrom`: the first visible advisor message cut to a short line. Pure. |
 | `chat-routes.ts` | Route schemas, ownership check, lazy healing (lock and pending save), `loadChatSnapshot` for server components. |
 | `turn-state.ts` | Pure decisions: what a run status read means, which stream a reconnect gets, what a repeated turnId gets. |
 | `route-handler.ts` | `chatRoute()`: requireUser, typed errors to JSON. |
