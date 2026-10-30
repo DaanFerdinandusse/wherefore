@@ -117,6 +117,13 @@
   --shadow-panel: 0 30px 90px rgb(22 19 15 / 0.35);
   --shadow-pin: 0 3px 8px rgb(28 26 23 / 0.14);
   --shadow-pin-photo: 0 6px 16px rgb(28 26 23 / 0.22);
+
+  /* My places (v3): score pills and the city in view, card and tile names. */
+  --color-amber-wash: #f5e6cc;
+  --text-card-xs: 22px;
+  --text-card-xs--line-height: 28px;
+  --text-tile: 24px;
+  --text-tile--line-height: 28px;
 }
 
 :root {

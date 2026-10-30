@@ -1,44 +1,57 @@
 "use client";
 
-import { useState } from "react";
-import { MoreHorizontal, PencilLine, Trash2 } from "lucide-react";
+import { useState, type ComponentType } from "react";
+import { BedDouble, Coffee, Landmark, MapPin, Martini, PencilLine, Store, Utensils, type LucideProps } from "lucide-react";
 
-import { BookmarkMark } from "@/components/ui/bookmark-mark";
+import { BookmarkGlyph } from "@/components/ui/bookmark-mark";
 import { FilmImage } from "@/components/ui/film-image";
-import { IconButton } from "@/components/ui/icon-button";
-import { Menu, MenuItem } from "@/components/ui/menu";
+import type { Category } from "@/lib/contracts";
 import { updateNoteAction } from "@/lib/places/actions";
 import type { AdvisorPlaceRow } from "@/lib/places/contracts";
+import { cn } from "@/lib/ui/cn";
 
-import { cleanNote, lastUseLine, quoteNote, tripsLine, typeLine } from "./format";
+import { cleanNote, lastUseLine, noteText, placeTypeLabel, tripsLine } from "./format";
 import { NoteEditor } from "./note-editor";
 import { usePlaces } from "./places-provider";
+import { ScorePill } from "./scores";
 
-// One saved place on My places: the first provider photo (film grade) with
-// the bookmark mark, the type and neighborhood line, the name in Hanken 300,
-// the advisor's quoted note, and how it has been used. The menu edits the
-// note in place or removes the place (with Undo in the toast).
+// One saved place on My places (H4): the provider photo with the saved
+// bookmark (click to remove, with Undo), the type and neighborhood, the name
+// in Bodoni with the client's score, the advisor's note as an italic quote
+// (click to edit), and how the place has been used.
+
+const CATEGORY_ICON: Record<Category, ComponentType<LucideProps>> = {
+  stay: BedDouble,
+  eat: Utensils,
+  drink: Martini,
+  coffee: Coffee,
+  see: Landmark,
+  other: Store,
+};
+
 export function PlaceCard({
   place,
   now,
   onRemove,
   priority = false,
+  className,
 }: {
   place: AdvisorPlaceRow;
   now: Date;
   onRemove: (place: AdvisorPlaceRow) => void;
   priority?: boolean;
+  className?: string;
 }) {
   const { notify } = usePlaces();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [imageFailed, setImageFailed] = useState(false);
   // The note as last saved here, until the refreshed row arrives.
   const [note, setNote] = useState<string | null>(null);
   const shownNote = note ?? place.note;
-  const quoted = quoteNote(shownNote);
-  const line = typeLine(place);
+  const text = noteText(shownNote);
+  const type = placeTypeLabel(place.primaryType);
+  const neighborhood = place.neighborhood?.trim() || null;
+  const TypeIcon = CATEGORY_ICON[place.category];
 
   async function saveNote(next: string) {
     const clean = cleanNote(next);
@@ -59,84 +72,102 @@ export function PlaceCard({
   }
 
   return (
-    <article className="flex min-w-0 flex-col gap-3.5" aria-label={place.name}>
-      <div className="relative h-50 shrink-0 overflow-hidden rounded-[18px] bg-avatar">
-        {place.imageUrl && !imageFailed ? (
+    <article
+      aria-label={place.name}
+      className={cn(
+        "flex min-w-0 flex-col overflow-hidden rounded-[18px] bg-surface-raised shadow-[0_1px_3px_rgb(22_19_15/0.06),0_0_0_1px_rgb(22_19_15/0.04)]",
+        className,
+      )}
+    >
+      <div className="relative aspect-[3/2] shrink-0 bg-avatar">
+        {place.imageUrl ? (
           <FilmImage
-            onError={() => setImageFailed(true)}
             src={place.imageUrl}
             alt={place.name}
             priority={priority}
-            sizes="(min-width: 1440px) 320px, (min-width: 1024px) 30vw, 90vw"
+            sizes="(min-width: 1280px) 330px, (min-width: 1024px) 30vw, 90vw"
+            className="object-cover"
           />
         ) : null}
-        <BookmarkMark size={34} label="In your places" className="absolute top-3 right-3" />
-      </div>
-
-      <div className="flex items-start gap-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {line ? <p className="label-caps truncate leading-[14px] text-text-2">{line}</p> : null}
-          <h3 className="text-card-sm leading-[30px] font-light tracking-[-0.01em] text-ink">{place.name}</h3>
-        </div>
-        <Menu
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          label={`Actions for ${place.name}`}
-          align="end"
-          panelClassName="w-[272px] p-2!"
-          trigger={(props) => (
-            <IconButton
-              {...props}
-              label={`More actions for ${place.name}`}
-              icon={<MoreHorizontal size={18} strokeWidth={2} aria-hidden />}
-              variant="ghost"
-              size={32}
-              className="-mr-1.5"
-            />
-          )}
-        >
-          <MenuItem
-            leading={<PencilLine size={16} strokeWidth={2} aria-hidden className="shrink-0 text-ink" />}
-            title={shownNote.trim() ? "Edit note" : "Add a note"}
-            onSelect={() => {
-              setMenuOpen(false);
-              setEditing(true);
-            }}
-          />
-          <MenuItem
-            leading={<Trash2 size={16} strokeWidth={2} aria-hidden className="shrink-0 text-ink" />}
-            title="Remove from my places"
-            onSelect={() => {
-              setMenuOpen(false);
-              onRemove(place);
-            }}
-          />
-        </Menu>
-      </div>
-
-      {editing ? (
-        <NoteEditor
-          initialNote={shownNote}
-          placeName={place.name}
-          saving={saving}
-          onSave={saveNote}
-          onCancel={() => setEditing(false)}
-        />
-      ) : quoted ? (
-        <p className="text-body leading-[21px] text-text-4">{quoted}</p>
-      ) : (
         <button
           type="button"
-          onClick={() => setEditing(true)}
-          className="self-start text-body leading-[21px] text-text-muted underline decoration-rule-strong underline-offset-4 hover:text-ink hover:decoration-ink"
+          onClick={() => onRemove(place)}
+          aria-label={`Remove ${place.name} from my places`}
+          title="Saved. Click to remove from your places."
+          className="absolute top-2.5 right-2.5 flex size-7.5 items-center justify-center rounded-pill bg-ink/70 text-surface-raised transition-colors hover:bg-ink"
         >
-          Add a private note
+          <BookmarkGlyph size={12} />
         </button>
-      )}
+      </div>
 
-      <div className="mt-auto flex items-baseline justify-between gap-3 border-t border-rule pt-2.5">
-        <span className="text-ui-sm font-medium text-ink">{tripsLine(place.inTrips)}</span>
-        <span className="truncate text-ui-sm text-text-2">{lastUseLine(place, now)}</span>
+      <div className="flex grow flex-col gap-2 px-3.5 pt-3 pb-3.5">
+        {type || neighborhood ? (
+          <p className="flex min-w-0 items-center gap-3.5 text-ui-sm font-medium text-text-2">
+            {type ? (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <TypeIcon size={14} strokeWidth={2} aria-hidden className="shrink-0" />
+                <span className="truncate">{type}</span>
+              </span>
+            ) : null}
+            {neighborhood ? (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <MapPin size={14} strokeWidth={2} aria-hidden className="shrink-0" />
+                <span className="truncate">{neighborhood}</span>
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="min-w-0 font-display text-card-xs tracking-[-0.02em] text-ink">{place.name}</h3>
+          <ScorePill entityId={place.entityId} />
+        </div>
+
+        {editing ? (
+          <NoteEditor
+            initialNote={shownNote}
+            placeName={place.name}
+            saving={saving}
+            onSave={saveNote}
+            onCancel={() => setEditing(false)}
+            className="grow"
+          />
+        ) : text ? (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            aria-label={`Edit your note on ${place.name}: ${text}`}
+            className="group flex grow items-start gap-2 rounded-row text-left"
+          >
+            <span aria-hidden className="shrink-0 font-display text-card-md leading-7 text-amber">
+              {"“"}
+            </span>
+            <span className="min-w-0 flex-1 font-display text-body-lg leading-[22px] tracking-normal text-ink italic">
+              {text}
+            </span>
+            <PencilLine
+              size={14}
+              strokeWidth={2}
+              aria-hidden
+              className="mt-1 shrink-0 text-text-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+            />
+          </button>
+        ) : (
+          <div className="grow">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-ui-sm text-text-2 underline decoration-rule-strong underline-offset-4 hover:text-ink hover:decoration-ink"
+            >
+              Add a private note
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-baseline justify-between gap-3 border-t border-ink/8 pt-2">
+          <span className="shrink-0 text-meta font-semibold text-ink">{tripsLine(place.inTrips)}</span>
+          <span className="truncate text-meta text-text-2">{lastUseLine(place, now)}</span>
+        </div>
       </div>
     </article>
   );
