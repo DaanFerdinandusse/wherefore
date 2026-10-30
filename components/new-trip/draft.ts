@@ -7,6 +7,7 @@ import type { DateRange } from "@/lib/ui/dates";
 
 import { firstName, tripDatesLabel } from "@/components/trips/format";
 
+import { destinationLabel } from "./format";
 import type { CreateTripRequest } from "./request";
 
 export type DraftClient = {
@@ -117,8 +118,9 @@ export function whoSummary(draft: Draft): string | null {
   return draft.client?.name ?? null;
 }
 
+/** "Lisbon, Portugal" when the destination carries its country. */
 export function whereSummary(draft: Draft): string | null {
-  return draft.destination?.name ?? null;
+  return draft.destination ? destinationLabel(draft.destination) : null;
 }
 
 export function whenSummary(draft: Draft): string | null {
@@ -138,11 +140,6 @@ export function travelersSummary(draft: Draft): string | null {
 /** Create trip is enabled once who and where are set. */
 export function canCreate(draft: Draft): boolean {
   return Boolean(draft.client && draft.destination);
-}
-
-/** Guests whose taste will not shape the search (no profile, or no favorites yet). */
-export function guestsWithoutFavorites(draft: Draft): DraftGuest[] {
-  return draft.guests.filter((g) => !g.clientId || g.favoritesCount === 0);
 }
 
 /**

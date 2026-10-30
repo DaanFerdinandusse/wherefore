@@ -1,19 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { isoDay, yearMonthOf, type DateRange, type YearMonth } from "@/lib/ui/dates";
+import { yearMonthOf, type DateRange, type YearMonth } from "@/lib/ui/dates";
 
-// When (F3): the two-month range picker with Exact dates / Not set yet, the
+import { localToday } from "./today";
+
+// When (N3): the two-month range picker with Exact dates / Not set yet, the
 // footer line ("Fri 14 to Tue 18 May · 4 nights"), Clear and "Next:
 // travelers". Days before today are disabled.
-function localToday(): string {
-  const now = new Date();
-  return isoDay(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
 export function WhenMenu({
   range,
   mode,
@@ -43,8 +41,9 @@ export function WhenMenu({
       onClear={onClear}
       minDate={today}
       action={
-        <Button size="md" onClick={onNext}>
+        <Button size="md" onClick={onNext} className="h-11 text-action">
           Next: travelers
+          <ArrowRight size={16} strokeWidth={2} aria-hidden />
         </Button>
       }
     />

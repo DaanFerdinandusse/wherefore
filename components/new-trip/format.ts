@@ -1,80 +1,119 @@
-// Pure copy for the New trip menus: client rows, traveler rows, suggestions.
+// Pure copy for the New trip panel: client rows, traveler rows, city cards
+// and the line under the bar. Every part comes from a stored fact; a part
+// without one is left out (null), never guessed.
 
-import { firstName, longMonthYearLabel, plural } from "@/components/trips/format";
+import { firstName, plural } from "@/components/trips/format";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
 type NextTrip = { title: string; startDate: string | null } | null;
 
+function monthShort(iso: string): string {
+  return MONTHS_SHORT[Number(iso.slice(5, 7)) - 1] ?? "";
+}
+
 /**
- * "Lisbon in May" from the trip "Lisbon for Ana" starting in May; the default
- * " for <first name>" suffix is dropped because the row already names her.
+ * "Mexico City in Nov" from the trip "Mexico City for Ana" starting in
+ * November; the default " for <first name>" suffix is dropped because the row
+ * already names her. The next trip has not ended, so one that started on or
+ * before `today` is under way: "in Lisbon now".
  */
-export function nextTripLabel(nextTrip: NextTrip, clientName: string): string | null {
+export function nextTripLabel(nextTrip: NextTrip, clientName: string, today?: string): string | null {
   if (!nextTrip) return null;
   const suffix = ` for ${firstName(clientName)}`;
   const base = nextTrip.title.endsWith(suffix) ? nextTrip.title.slice(0, -suffix.length) : nextTrip.title;
   if (!nextTrip.startDate) return `${base}, no dates yet`;
-  const month = Number(nextTrip.startDate.slice(5, 7)) - 1;
-  return `${base} in ${MONTHS_SHORT[month]}`;
+  if (today && nextTrip.startDate <= today) return `in ${base} now`;
+  return `${base} in ${monthShort(nextTrip.startDate)}`;
 }
 
-/** "New York · 6 favorites · Mexico City in Nov". */
+/** The recent client row: "New York · Mexico City in Nov". Null when neither is known. */
+export function clientLine(
+  client: { name: string; homeCity: string | null; nextTrip: NextTrip },
+  today?: string,
+): string | null {
+  const parts = [client.homeCity, nextTripLabel(client.nextTrip, client.name, today)].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** A client match under "Add a traveler": "New York · 6 favorites · Mexico City in Nov". */
 export function clientDescription(client: {
   name: string;
   homeCity: string | null;
   favoritesCount: number;
   nextTrip: NextTrip;
 }): string {
-  return [
-    client.homeCity,
-    plural(client.favoritesCount, "favorite"),
-    nextTripLabel(client.nextTrip, client.name),
-  ]
+  return [client.homeCity, plural(client.favoritesCount, "favorite"), nextTripLabel(client.nextTrip, client.name)]
     .filter(Boolean)
     .join(" · ");
 }
 
-/** The client row in Travelers. */
-export function clientTravelerNote(favoritesCount: number): { text: string; warning: boolean } {
-  if (favoritesCount === 0) return { text: "Client · no favorites yet", warning: true };
-  return { text: `Client · ${plural(favoritesCount, "favorite")} drive the search`, warning: false };
+/** The client row in Travelers: "Ana's 5 favorites drive the search". */
+export function clientTravelerNote(name: string, favoritesCount: number): { text: string; warning: boolean } {
+  const first = firstName(name);
+  if (favoritesCount === 0) return { text: `${first} has no favorites yet`, warning: true };
+  const verb = favoritesCount === 1 ? "drives" : "drive";
+  return { text: `${first}'s ${plural(favoritesCount, "favorite")} ${verb} the search`, warning: false };
 }
 
-/** A guest row in Travelers. */
-export function guestTravelerNote(guest: { clientId: string | null; favoritesCount: number }): {
-  text: string;
-  warning: boolean;
-} {
-  if (!guest.clientId || guest.favoritesCount === 0) return { text: "Guest · no favorites yet", warning: true };
-  return { text: `Guest · ${plural(guest.favoritesCount, "favorite")} join the search`, warning: false };
+/**
+ * A companion row in Travelers. One of the advisor's clients brings their own
+ * favorites; a guest is a name on the trip and nothing more.
+ */
+export function companionNote(
+  companion: { name: string; clientId: string | null; favoritesCount: number },
+  clientName: string | null,
+): string | null {
+  if (!companion.clientId) return clientName ? `Travels with ${firstName(clientName)}` : null;
+  if (companion.favoritesCount === 0) return "No favorites yet";
+  const verb = companion.favoritesCount === 1 ? "joins" : "join";
+  return `${firstName(companion.name)}'s ${plural(companion.favoritesCount, "favorite")} ${verb} the search`;
 }
 
-/** "Clara has no favorites yet" / "Clara and Tom have no favorites yet". */
-export function missingFavoritesNote(names: string[], clientName: string | null): string | null {
-  if (names.length === 0) return null;
-  const firsts = names.map(firstName);
-  const who =
-    firsts.length === 1
-      ? firsts[0]
-      : `${firsts.slice(0, -1).join(", ")} and ${firsts[firsts.length - 1]}`;
-  const verb = firsts.length === 1 ? "has" : "have";
-  const follows = clientName ? ` The search follows ${firstName(clientName)}'s taste, and the trip notes who is missing.` : "";
-  return `${who} ${verb} no favorites yet.${follows}`;
+/** The line under the bar once the trip can be created. */
+export function createHint(clientName: string, favoritesCount: number): string {
+  const first = firstName(clientName);
+  const searches =
+    favoritesCount > 0 ? `it searches from ${first}'s favorites` : "it starts the search from there";
+  return `Creating the trip opens a chat. Tell it what ${first} wants and ${searches}. You can change anything later.`;
 }
 
-/** "11 of your places · Ana has not been". */
-export function citySuggestionDescription(count: number, clientName: string | null, wentBefore: boolean): string {
-  const head = `${count} of your places`;
-  if (!clientName) return head;
-  return `${head} · ${firstName(clientName)} ${wentBefore ? "went before" : "has not been"}`;
+/** "Portugal" for "PT"; null when the code is missing or unknown. */
+export function countryName(code: string | null | undefined): string | null {
+  if (!code || !/^[A-Za-z]{2}$/.test(code)) return null;
+  try {
+    const name = new Intl.DisplayNames(["en"], { type: "region" }).of(code.toUpperCase());
+    return name && name.toUpperCase() !== code.toUpperCase() ? name : null;
+  } catch {
+    return null;
+  }
 }
 
-/** "Last in March 2026 · 2 trips". */
-export function pastDestinationDescription(lastStartDate: string | null, tripCount: number): string {
-  const parts = [
-    lastStartDate ? `Last in ${longMonthYearLabel(lastStartDate)}` : "Dates not set",
-    tripCount > 1 ? plural(tripCount, "trip") : null,
-  ];
-  return parts.filter(Boolean).join(" · ");
+/** The Where segment: "Lisbon, Portugal" when the country is known and not already in the name. */
+export function destinationLabel(destination: { name: string; countryCode?: string | null }): string {
+  const country = countryName(destination.countryCode);
+  if (!country || destination.name.toLowerCase().includes(country.toLowerCase())) return destination.name;
+  return `${destination.name}, ${country}`;
+}
+
+/**
+ * The line under a city card: the advisor's place count (shown in amber) and
+ * whether the client went. `went` is the last trip's start date, null for a
+ * trip without dates, undefined when the client has not been.
+ */
+export function cityCardLine({
+  count,
+  clientName,
+  went,
+}: {
+  count: number;
+  clientName: string | null;
+  went: string | null | undefined;
+}): { places: string | null; rest: string | null } {
+  const places = count > 0 ? `${count} of your places` : null;
+  if (!clientName) return { places, rest: null };
+  const first = firstName(clientName);
+  if (went === undefined) return { places, rest: `${first} has not been` };
+  if (went === null) return { places, rest: `${first} went before` };
+  return { places, rest: `${first} went in ${monthShort(went)} ${went.slice(0, 4)}` };
 }
