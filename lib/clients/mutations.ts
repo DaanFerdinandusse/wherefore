@@ -71,6 +71,7 @@ export const createClient: CreateClient = async (input, scope) => {
       homeCity: input.homeCity ?? null,
       homeLat: input.homeLat ?? null,
       homeLon: input.homeLon ?? null,
+      email: input.email ?? null,
       avatarUrl: input.avatarUrl ?? null,
       notes: input.notes ?? "",
       status: input.status ?? "active",

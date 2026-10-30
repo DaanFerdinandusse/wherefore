@@ -1,16 +1,22 @@
 import type { Metadata } from "next";
 
-import { ClientProfile } from "@/components/clients/profile/client-profile";
-import { NEW_CLIENT } from "@/components/clients/profile/types";
+import { ClientsList } from "@/components/clients/list/clients-list";
+import { NewClientSheet } from "@/components/clients/new/new-client-sheet";
 
 export const metadata: Metadata = { title: "New client · Tastebrief" };
 
-// C2: the same screen as the profile, empty. The first keystroke of the name
-// creates the client (a server action) and the URL becomes /clients/<id>.
-export default function NewClientPage() {
+// C1 from a deep link (or the New trip panel's "New client"): the Clients
+// list with the New client sheet over it. Closing goes to the list, or back
+// to the page in ?return=.
+export default function NewClientPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   return (
-    <main className="flex flex-1 flex-col">
-      <ClientProfile initial={NEW_CLIENT} isNew today={null} />
-    </main>
+    <>
+      <ClientsList searchParams={searchParams} />
+      <NewClientSheet intercepted={false} />
+    </>
   );
 }

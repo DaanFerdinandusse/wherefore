@@ -153,6 +153,10 @@
   --text-intro--letter-spacing: -0.01em;
   --text-prose: 17px;
   --text-prose--line-height: 27px;
+
+  /* Added for the v3 Clients screens (amber-wash is shared with My places). */
+  --shadow-tile: 0 1px 3px rgb(22 19 15 / 0.06), 0 0 0 1px rgb(22 19 15 / 0.04);
+  --shadow-results: 0 12px 32px rgb(22 19 15 / 0.12), 0 0 0 1px rgb(22 19 15 / 0.06);
 }
 
 :root {

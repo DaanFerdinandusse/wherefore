@@ -34,7 +34,7 @@ export function GroundRules({
 
   return (
     <section aria-labelledby="ground-rules" className="flex flex-col gap-2.5">
-      <h3 id="ground-rules" className="label-caps leading-4 text-text-muted">
+      <h3 id="ground-rules" className="text-meta font-semibold tracking-[0.08em] text-text-2 uppercase">
         Ground rules
       </h3>
       <ul className="flex flex-wrap items-center gap-2">

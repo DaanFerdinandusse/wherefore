@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { z } from "zod";
 
 import { cn } from "@/lib/ui/cn";
 
+import {
+  fetchLocalities,
+  LOCALITY_DEBOUNCE_MS as DEBOUNCE_MS,
+  LOCALITY_MIN_QUERY as MIN_QUERY,
+  type HomeCity,
+  type Locality,
+} from "../localities";
 import { InlineText } from "./inline-text";
 
 // "Lives in New York": the home city as inline text with locality
@@ -13,23 +19,7 @@ import { InlineText } from "./inline-text";
 // highlighted suggestion (the first by default, arrow keys to change) is used
 // on Enter or blur. Escape puts the old city back.
 
-export type HomeCity = { name: string; lat: number | null; lon: number | null };
-
-const localitySchema = z.object({
-  candidates: z.array(
-    z.looseObject({ name: z.string(), disambiguation: z.string().optional(), lat: z.number(), lon: z.number() }),
-  ),
-});
-type Locality = z.infer<typeof localitySchema>["candidates"][number];
-
-const DEBOUNCE_MS = 250;
-const MIN_QUERY = 2;
-
-async function fetchLocalities(q: string, signal?: AbortSignal): Promise<Locality[]> {
-  const response = await fetch(`/api/localities/search?${new URLSearchParams({ q })}`, { signal });
-  if (!response.ok) return [];
-  return localitySchema.parse(await response.json()).candidates;
-}
+export type { HomeCity };
 
 export function HomeCityField({
   value,

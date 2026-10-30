@@ -1,26 +1,33 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type DragEvent, type KeyboardEvent } from "react";
-import { X } from "lucide-react";
+import { useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Film, Music, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { FilmImage } from "@/components/ui/film-image";
 import { Popover } from "@/components/ui/popover";
-import type { FavoriteTile } from "@/lib/clients/candidates";
-import type { FavoriteCandidate } from "@/lib/contracts";
+import { placeTypeLabel } from "@/components/places/format";
+import { MEDIA_KIND_LABEL, type FavoriteTile } from "@/lib/clients/candidates";
+import type { FavoriteCandidate, MediaFavorite } from "@/lib/contracts";
 import { cn } from "@/lib/ui/cn";
 
-// One favorite in "Places they love": a matched place (photo, name, city when
-// it is not the home city), or the dashed "no match" tile whose candidates
-// open in a popover. Tiles drag to reorder; Alt plus an arrow key moves the
-// focused tile for keyboard users.
+// The cells of the "Places Ana loves" photo grid (C2): a matched place
+// (photo, name, the provider's type), the dashed "no match" tile whose
+// candidates open in a popover, and an artist (round, with a music note) or
+// a film (a poster). Each cell is as wide as its aspect ratio in the row.
+// Places drag to reorder; Alt plus an arrow key moves the focused one.
 
 export type TileMoves = {
   index: number;
   count: number;
   onMove: (from: number, to: number) => void;
 };
+
+/** The flex cell: its width follows its ratio so a row shares one height. */
+function cellStyle(ratio: number): CSSProperties {
+  return { flexGrow: ratio, flexShrink: 1, flexBasis: 0, minWidth: 0 };
+}
 
 function dragProps({ index, count, onMove }: TileMoves, pending: boolean) {
   return {
@@ -52,7 +59,7 @@ function dragProps({ index, count, onMove }: TileMoves, pending: boolean) {
   };
 }
 
-function RemoveButton({ name, onRemove, disabled }: { name: string; onRemove: () => void; disabled: boolean }) {
+function RemoveButton({ name, onRemove, disabled, inset = "top-2.5 right-2.5" }: { name: string; onRemove: () => void; disabled: boolean; inset?: string }) {
   return (
     <button
       type="button"
@@ -60,54 +67,67 @@ function RemoveButton({ name, onRemove, disabled }: { name: string; onRemove: ()
       title={`Remove ${name}`}
       disabled={disabled}
       onClick={onRemove}
-      className="absolute top-1.5 right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-pill bg-surface/90 text-ink opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-surface focus-visible:opacity-100 disabled:hidden"
+      className={cn(
+        "absolute z-10 inline-flex size-[30px] items-center justify-center rounded-pill bg-ink/70 text-surface-raised transition-colors hover:bg-ink disabled:hidden",
+        inset,
+      )}
     >
-      <X size={12} strokeWidth={2.2} aria-hidden />
+      <X size={14} strokeWidth={2.4} aria-hidden />
     </button>
+  );
+}
+
+function Caption({ name, kind, icon, centered = false }: { name: string; kind: string | null; icon?: ReactNode; centered?: boolean }) {
+  return (
+    <span className={cn("flex min-w-0 items-baseline gap-2", centered && "items-center justify-center")}>
+      {icon}
+      <span className="truncate text-body leading-5 font-semibold text-ink">{name}</span>
+      {kind ? <span className="shrink-0 text-ui text-text-2">{kind}</span> : null}
+    </span>
   );
 }
 
 export function MatchedTile({
   favorite,
-  homeCity,
+  ratio,
   pending,
   moves,
   onRemove,
 }: {
   favorite: FavoriteTile;
-  homeCity: string;
+  ratio: number;
   pending: boolean;
   moves: TileMoves;
   onRemove: () => void;
 }) {
-  const showCity = favorite.city && favorite.city.toLowerCase() !== homeCity.trim().toLowerCase();
+  const kind = placeTypeLabel(favorite.primaryType);
   return (
     <li
       tabIndex={0}
-      aria-label={`${favorite.name}${favorite.city ? `, ${favorite.city}` : ""}. Drag, or press Alt and an arrow key, to move.`}
-      className={cn("group flex w-32 shrink-0 cursor-grab flex-col gap-1.5 rounded-2xl active:cursor-grabbing", pending && "opacity-60")}
+      aria-label={`${favorite.name}${kind ? `, ${kind}` : ""}. Drag, or press Alt and an arrow key, to move.`}
+      style={cellStyle(ratio)}
+      className={cn("group flex cursor-grab flex-col gap-2 rounded-[18px] active:cursor-grabbing", pending && "opacity-60")}
       {...dragProps(moves, pending)}
     >
-      <span className="relative h-24 shrink-0 overflow-hidden rounded-2xl bg-avatar">
-        {favorite.imageUrl ? <FilmImage src={favorite.imageUrl} alt="" sizes="128px" draggable={false} /> : null}
+      <span className="relative overflow-hidden rounded-[18px] bg-avatar" style={{ aspectRatio: ratio }}>
+        {favorite.imageUrl ? <FilmImage src={favorite.imageUrl} alt="" sizes="420px" draggable={false} /> : null}
         <RemoveButton name={favorite.name} onRemove={onRemove} disabled={pending} />
       </span>
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate text-ui leading-[18px] font-semibold text-ink">{favorite.name}</span>
-        {showCity ? <span className="truncate text-ui-sm text-text-muted">{favorite.city}</span> : null}
-      </span>
+      <Caption name={favorite.name} kind={kind} />
     </li>
   );
 }
 
 export function UnmatchedTile({
   favorite,
+  ratio,
   pending,
   moves,
   onResolve,
   onRemove,
 }: {
   favorite: FavoriteTile;
+  ratio: number;
   pending: boolean;
   moves: TileMoves;
   onResolve: (candidate: FavoriteCandidate) => void;
@@ -115,7 +135,7 @@ export function UnmatchedTile({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <li className={cn("flex w-32 shrink-0 flex-col gap-1.5", pending && "opacity-60")} {...dragProps(moves, pending)}>
+    <li style={cellStyle(ratio)} className={cn("flex flex-col gap-2", pending && "opacity-60")} {...dragProps(moves, pending)}>
       <Popover
         open={open}
         onOpenChange={setOpen}
@@ -128,11 +148,13 @@ export function UnmatchedTile({
             {...props}
             disabled={pending}
             aria-label={`${favorite.query}: no match. Pick the right place or remove it.`}
-            className="flex h-24 w-32 items-center justify-center rounded-2xl border-[1.5px] border-dashed border-amber transition-colors hover:bg-amber/5"
+            style={{ aspectRatio: ratio }}
+            className="flex w-full flex-col items-center justify-center gap-2 rounded-[18px] border-[1.5px] border-dashed border-amber px-3 text-center transition-colors hover:bg-amber/5"
           >
             <span className="inline-flex size-9 items-center justify-center rounded-pill border border-dashed border-amber text-body-lg leading-[18px] font-bold text-amber">
               ?
             </span>
+            <span className="text-ui-sm font-semibold text-amber">Pick the right place</span>
           </button>
         )}
       >
@@ -179,7 +201,30 @@ export function UnmatchedTile({
           </Button>
         </div>
       </Popover>
-      <span className="truncate text-ui leading-[18px] font-semibold text-amber">{favorite.query} · no match</span>
+      <span className="truncate text-body leading-5 font-semibold text-amber">{favorite.query} · no match</span>
+    </li>
+  );
+}
+
+export function MediaTile({ item, ratio, onRemove }: { item: MediaFavorite; ratio: number; onRemove: () => void }) {
+  const name = item.name ?? item.query;
+  const artist = item.kind === "artist";
+  const Icon = artist ? Music : Film;
+  return (
+    <li style={cellStyle(ratio)} className="flex flex-col gap-2">
+      <span
+        className={cn("relative overflow-hidden bg-avatar", artist ? "rounded-pill" : "rounded-[18px]")}
+        style={{ aspectRatio: ratio }}
+      >
+        {item.imageUrl ? <FilmImage src={item.imageUrl} alt="" sizes="200px" /> : null}
+        <RemoveButton name={name} onRemove={onRemove} disabled={false} inset={artist ? "top-3.5 right-3.5" : undefined} />
+      </span>
+      <Caption
+        name={name}
+        kind={MEDIA_KIND_LABEL[item.kind]}
+        centered={artist}
+        icon={<Icon size={14} strokeWidth={2} aria-hidden className="shrink-0 self-center text-amber" />}
+      />
     </li>
   );
 }

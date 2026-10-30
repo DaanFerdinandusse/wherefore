@@ -27,7 +27,7 @@ describe("toFavoriteTile", () => {
       favorite({
         match: "resolved",
         entityId: "E1",
-        place: { id: "p1", entityId: "E1", name: "Via Carota", city: "New York", imageUrl: "https://images.qloo.com/a.jpg" },
+        place: { id: "p1", entityId: "E1", name: "Via Carota", city: "New York", imageUrl: "https://images.qloo.com/a.jpg", primaryType: "urn:tag:genre:place:restaurant" },
       }),
     );
     expect(tile).toMatchObject({ name: "Via Carota", city: "New York", imageUrl: "https://images.qloo.com/a.jpg", match: "resolved" });

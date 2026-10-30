@@ -51,6 +51,9 @@ function summaryFields(scope: ScopeInput) {
     favoritesCount: sql<number>`(
     select count(*)::int from client_favorites f where f.client_id = ${outer.clientId}
   )`,
+    tripCount: sql<number>`(
+    select count(*)::int from trips t where t.client_id = ${outer.clientId} and ${tripInScope}
+  )`,
     favoriteImages: sql<string[]>`coalesce((
     select json_agg(x.url order by x.position)
     from (
@@ -87,6 +90,7 @@ function summaryFields(scope: ScopeInput) {
     lastActivityAt: sql<Date>`greatest(${outer.clientUpdatedAt}, (
     select max(t.updated_at) from trips t where t.client_id = ${outer.clientId} and ${tripInScope}
   ))`.mapWith(clients.updatedAt),
+    createdAt: clients.createdAt,
   };
 }
 
@@ -162,6 +166,7 @@ function favoritesQuery(clientId: string) {
         name: places.name,
         city: places.city,
         imageUrl: sql<string | null>`${places.images} -> 0 ->> 'url'`,
+        primaryType: places.primaryType,
       },
     })
     .from(clientFavorites)

@@ -16,16 +16,11 @@ import { addMedia, toMediaFavorite, unmatchedCandidates, type FavoriteTile, type
 import type { FavoriteCandidate, MediaFavorite, TasteTag } from "@/lib/contracts";
 
 import { isMatched, matchedCount, moveItem, removeById, upsertById } from "../favorites";
-import { AddPlaceTile } from "./add-place-tile";
-import { AlsoInto } from "./also-into";
-import { MatchedTile, UnmatchedTile } from "./favorite-tiles";
-import { GroundRules } from "./ground-rules";
-import { TasteTags } from "./taste-tags";
 import type { TypedCandidate } from "./use-entity-search";
 import type { RunOp } from "./use-save-tracker";
 
-// The right panel of the profile: places they love (add, match, reorder,
-// remove), artists and films, the taste tags recomputed after every
+// The client's taste as profile state: places they love (add, match,
+// reorder, remove), artists and films, the taste tags recomputed after every
 // favorites change, and the ground rules. Every change shows at once and
 // saves through a server action; a failure puts the list back and the
 // header names the problem.
@@ -34,26 +29,24 @@ const TASTE_DEBOUNCE_MS = 1200;
 
 type Near = { lat: number; lon: number } | null;
 
-export function TastePanel({
+export type ClientTaste = ReturnType<typeof useClientTaste>;
+
+export function useClientTaste({
   clientId,
-  homeCity,
   near,
   initialFavorites,
   initialMedia,
   initialRules,
   initialTags,
   runOp,
-  onMatchedChange,
 }: {
-  clientId: string | null;
-  homeCity: string;
+  clientId: string;
   near: Near;
   initialFavorites: FavoriteTile[];
   initialMedia: MediaFavorite[];
   initialRules: string[];
   initialTags: TasteTag[];
   runOp: RunOp;
-  onMatchedChange: (matched: number) => void;
 }) {
   const [favorites, setFavorites] = useState(initialFavorites);
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
@@ -65,8 +58,6 @@ export function TastePanel({
   const tasteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tasteRun = useRef(0);
 
-  const matched = matchedCount(favorites);
-  useEffect(() => onMatchedChange(matched), [matched, onMatchedChange]);
   useEffect(() => () => {
     if (tasteTimer.current) clearTimeout(tasteTimer.current);
   }, []);
@@ -81,7 +72,6 @@ export function TastePanel({
   }
 
   function scheduleTaste() {
-    if (!clientId) return;
     if (tasteTimer.current) clearTimeout(tasteTimer.current);
     setTagsUpdating(true);
     tasteTimer.current = setTimeout(async () => {
@@ -109,19 +99,36 @@ export function TastePanel({
     if (ok) scheduleTaste();
   }
 
-  function addPicked(candidate: TypedCandidate, query: string) {
-    if (!clientId) return;
+  function addPlace(candidate: TypedCandidate, query: string) {
+    if (favorites.some((favorite) => favorite.entityId === candidate.entityId)) return;
     const text = query || candidate.name;
     void addOptimistic(
-      { query: text, match: "resolved", name: candidate.name, city: null, imageUrl: candidate.imageUrl ?? null, candidates: [] },
+      {
+        query: text,
+        entityId: candidate.entityId,
+        match: "resolved",
+        name: candidate.name,
+        city: null,
+        imageUrl: candidate.imageUrl ?? null,
+        primaryType: null,
+        candidates: [],
+      },
       () => addFavoriteAction(clientId, { query: text, entityId: candidate.entityId, near }),
     );
   }
 
   function addTyped(query: string, results: TypedCandidate[]) {
-    if (!clientId) return;
     void addOptimistic(
-      { query, match: "unmatched", name: query, city: null, imageUrl: null, candidates: unmatchedCandidates(results) },
+      {
+        query,
+        entityId: null,
+        match: "unmatched",
+        name: query,
+        city: null,
+        imageUrl: null,
+        primaryType: null,
+        candidates: unmatchedCandidates(results.filter((r) => r.type === "place")),
+      },
       () => addUnmatchedFavoriteAction(clientId, { query, near }),
     );
   }
@@ -129,7 +136,7 @@ export function TastePanel({
   async function resolve(favorite: FavoriteTile, candidate: FavoriteCandidate) {
     const before = favorite;
     setFavorites((list) =>
-      upsertById(list, { ...favorite, match: "resolved", name: candidate.name, imageUrl: candidate.imageUrl ?? null, city: null }),
+      upsertById(list, { ...favorite, entityId: candidate.entityId, match: "resolved", name: candidate.name, imageUrl: candidate.imageUrl ?? null, city: null }),
     );
     markPending(favorite.id, true);
     const out: { tile?: FavoriteTile } = {};
@@ -159,7 +166,7 @@ export function TastePanel({
   }
 
   async function move(from: number, to: number) {
-    if (!clientId || from === to) return;
+    if (from === to) return;
     const before = favorites;
     const next = moveItem(favorites, from, to);
     setFavorites(next);
@@ -169,81 +176,42 @@ export function TastePanel({
   }
 
   async function saveMedia(next: MediaFavorite[]) {
-    if (!clientId) return;
     const before = media;
     setMedia(next);
     const ok = await runOp("media", () => setMediaFavoritesAction(clientId, next));
     if (!ok) setMedia(before);
   }
 
+  function addMediaPick(candidate: TypedCandidate, kind: MediaKind, query: string) {
+    void saveMedia(addMedia(media, toMediaFavorite(candidate, kind, query)));
+  }
+
+  function removeMedia(index: number) {
+    void saveMedia(media.filter((_, i) => i !== index));
+  }
+
   async function saveRules(next: string[]) {
-    if (!clientId) return;
     const before = rules;
     setRules(next);
     const ok = await runOp("rules", () => setGroundRulesAction(clientId, next));
     if (!ok) setRules(before);
   }
 
-  const disabledReason = clientId ? null : "Add a name first";
-  const placesLabel = homeCity.trim() ? `Places they love · ${homeCity.trim()}` : "Places they love";
-
-  return (
-    <section aria-labelledby="taste-title" className="flex min-w-0 grow flex-col gap-[22px] self-start rounded-sheet bg-surface p-6">
-      <div className="flex flex-col gap-1">
-        <h2 id="taste-title" className="font-display text-[28px] leading-[34px] text-ink">
-          Taste profile
-        </h2>
-        <p className="text-ui leading-5 text-text-muted">
-          {favorites.length === 0
-            ? "Add the places they love. Each one is matched to a real place, so every trip starts from their taste."
-            : "Saved once, used for every new trip. Each favorite is matched to a real place."}
-        </p>
-      </div>
-
-      <section aria-labelledby="places-they-love" className="flex flex-col gap-3">
-        <h3 id="places-they-love" className="label-caps leading-4 text-text-muted">
-          {placesLabel}
-        </h3>
-        <ul className="relative flex flex-wrap gap-3">
-          {favorites.map((favorite, index) => {
-            const moves = { index, count: favorites.length, onMove: move };
-            const isPending = pending.has(favorite.id) || favorite.id.startsWith("tmp-");
-            return isMatched(favorite) ? (
-              <MatchedTile
-                key={favorite.id}
-                favorite={favorite}
-                homeCity={homeCity}
-                pending={isPending}
-                moves={moves}
-                onRemove={() => void remove(favorite)}
-              />
-            ) : (
-              <UnmatchedTile
-                key={favorite.id}
-                favorite={favorite}
-                pending={isPending}
-                moves={moves}
-                onResolve={(candidate) => void resolve(favorite, candidate)}
-                onRemove={() => void remove(favorite)}
-              />
-            );
-          })}
-          <AddPlaceTile near={near} disabledReason={disabledReason} onPick={addPicked} onSubmitText={addTyped} />
-        </ul>
-      </section>
-
-      <AlsoInto
-        media={media}
-        disabled={!clientId}
-        onAdd={(candidate: TypedCandidate, kind: MediaKind, query: string) =>
-          void saveMedia(addMedia(media, toMediaFavorite(candidate, kind, query)))
-        }
-        onRemove={(index) => void saveMedia(media.filter((_, i) => i !== index))}
-      />
-
-      <TasteTags tags={tags} matched={matched} updating={tagsUpdating} />
-
-      <GroundRules rules={rules} disabled={!clientId} onChange={(next) => void saveRules(next)} />
-    </section>
-  );
+  return {
+    favorites,
+    pending,
+    media,
+    rules,
+    tags,
+    tagsUpdating,
+    matched: matchedCount(favorites),
+    addPlace,
+    addTyped,
+    resolve: (favorite: FavoriteTile, candidate: FavoriteCandidate) => void resolve(favorite, candidate),
+    remove: (favorite: FavoriteTile) => void remove(favorite),
+    move: (from: number, to: number) => void move(from, to),
+    addMedia: addMediaPick,
+    removeMedia,
+    saveRules: (next: string[]) => void saveRules(next),
+  };
 }

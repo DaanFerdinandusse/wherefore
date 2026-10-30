@@ -11,10 +11,12 @@ export function toFavoriteTile(favorite: FavoriteWithPlace): FavoriteTile {
   return {
     id: favorite.id,
     query: favorite.query,
+    entityId: favorite.entityId,
     match,
     name: favorite.place?.name ?? favorite.query,
     city: favorite.place?.city ?? null,
     imageUrl: favorite.place?.imageUrl ?? null,
+    primaryType: favorite.place?.primaryType ?? null,
     candidates: favorite.candidates,
   };
 }
