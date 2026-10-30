@@ -21,7 +21,7 @@ import {
 } from "@/lib/qloo";
 import { upsertPlaces } from "@/lib/places";
 import { saveReplacement, setSlots, setTripPlaceStatus, type SlotInput } from "@/lib/trips";
-import { askFiltersOfQuery } from "@/lib/trips/map";
+import { askFiltersOfQuery, DESCRIPTION_KEYS, descriptionTexts } from "@/lib/trips/map";
 
 import { cacheWrite, guarded, type TurnRef } from "../writes";
 
@@ -29,8 +29,6 @@ import { replacementNote } from "./labels";
 import { cleanAgentNote } from "./notes";
 import {
   cardsInOrder,
-  DESCRIPTION_KEYS,
-  descriptionTexts,
   driversOf,
   resolveTripPlaceIds,
   tripPlaceRowOf,
@@ -123,17 +121,18 @@ export type SetItineraryInput = {
 
 /**
  * What a model note about a place may quote: the place's descriptions and
- * its opening hours, verbatim (notes.ts).
+ * its opening hours, verbatim (notes.ts). Never its tags: a sentence passes
+ * when it contains a fact, so a short name ("Accepts reservations") would
+ * carry any invented hours or price written around it.
  */
+export function noteFactsOf(row: Pick<typeof places.$inferSelect, "description" | "properties">): string[] {
+  return [...descriptionTexts(row), ...Object.values(hoursOf(row.properties.hours) ?? {})];
+}
+
 async function noteFacts(placeIds: string[]): Promise<Map<string, string[]>> {
   if (placeIds.length === 0) return new Map();
   const rows = await db.select().from(places).where(inArray(places.id, [...new Set(placeIds)]));
-  return new Map(
-    rows.map((row) => [
-      row.id,
-      [...descriptionTexts(row), ...Object.values(hoursOf(row.properties.hours) ?? {})],
-    ]),
-  );
+  return new Map(rows.map((row) => [row.id, noteFactsOf(row)]));
 }
 
 export async function setItineraryTool(

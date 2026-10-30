@@ -40,8 +40,11 @@ import {
   asPlaceStatus,
   asSource,
   cardPriceLevel,
+  choiceFacts,
   compareSlots,
+  DESCRIPTION_KEYS,
   placeFactsFromProperties,
+  PRACTICAL_TAGS_PATH,
   toAsk,
   toSlot,
   travelerFavorites,
@@ -81,6 +84,15 @@ const yourPlaceJoin = and(
   ),
 );
 
+/** The first text in DESCRIPTION_KEYS order, then the column. A field that is not text is no description. */
+const aboutTexts = sql.join(
+  DESCRIPTION_KEYS.map((key) => {
+    const field = sql`${places.properties} -> ${sql.raw(`'${key}'`)}`;
+    return sql`case when jsonb_typeof(${field}) = 'string' then nullif(btrim(${field} #>> '{}'), '') end`;
+  }),
+  sql`, `,
+);
+
 function cardsQuery(where: SQL | undefined) {
   return db
     .select({
@@ -98,6 +110,9 @@ function cardsQuery(where: SQL | undefined) {
       dishesRaw: sql<unknown>`${places.properties} -> 'specialty_dishes'`,
       popularityRaw: sql<unknown>`${places.properties} -> 'popularity'`,
       michelinRaw: sql<unknown>`${places.properties} -> 'external' -> 'michelin'`,
+      rating: places.rating,
+      aboutRaw: sql<unknown>`coalesce(${aboutTexts}, ${places.description})`,
+      practicalRaw: sql<unknown>`jsonb_path_query_array(${places.tags}, ${PRACTICAL_TAGS_PATH}::jsonpath)`,
       yourPlaceId: advisorPlaces.id,
       yourPlaceNote: advisorPlaces.note,
     })
@@ -142,6 +157,7 @@ function toCard(row: CardRow, askIds: string[]): TripPlaceCard {
   const priceLevel = cardPriceLevel(row.priceLevel);
   return {
     ...facts,
+    ...choiceFacts({ rating: row.rating, about: row.aboutRaw, tags: row.practicalRaw }),
     ...(priceLevel ? { priceLevel } : {}),
     tripPlaceId: tp.id,
     placeId: tp.placeId,

@@ -106,7 +106,7 @@ function realTools(turn: TurnRef) {
     }),
     recommend_place: tool({
       description:
-        "Recommend one place from a search result as the pick for the client. The chat shows it as a full place card with photos, the match and visit facts, and buttons to add it or drop it. Call once per search, right after find_places, with the best fit. Does not change the itinerary.",
+        "Recommend one place from a search result as the pick for the client. The chat shows it as a full place card with photos, the match and visit facts, and buttons to add it or drop it. Call once per search, right after find_places, with the best fit for the brief, the ground rules and the facts on each candidate. Does not change the itinerary.",
       inputSchema: z.object({
         place_id: z.string().describe("The id of a place from the search result"),
         ask_id: z.string().optional().describe("The ask_id of that search"),

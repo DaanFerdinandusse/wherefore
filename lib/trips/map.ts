@@ -4,14 +4,16 @@ import type {
   Ask,
   Category,
   ItinerarySlot,
+  PlaceFacts,
   PlaceKeyword,
+  PlacePractical,
   SlotName,
   TravelerFavorite,
   TripPlaceSource,
   TripPlaceStatus,
 } from "@/lib/contracts";
 import type { itinerarySlots, tripAsks } from "@/lib/db/schema";
-import type { FindPlacesInput } from "@/lib/qloo/contracts";
+import type { FindPlacesInput, NormalizedPlace } from "@/lib/qloo/contracts";
 import { WEEKDAY_NAMES } from "@/lib/qloo/normalize";
 
 // Pure row-to-contract mapping. The text columns hold closed sets; these
@@ -203,6 +205,111 @@ export function placeFactsFromProperties(properties: unknown): {
     ...(dishes.length > 0 ? { dishes } : {}),
     ...(popularity !== undefined ? { popularity } : {}),
     ...(cardMichelin(block.external) ? { michelin: true } : {}),
+  };
+}
+
+/** A business rating above 0 up to 5, or undefined. */
+export function cardRating(value: unknown): number | undefined {
+  return typeof value === "number" && value > 0 && value <= 5 ? value : undefined;
+}
+
+/** The provider's description fields of a place, in the order they are worth reading. */
+export const DESCRIPTION_KEYS = [
+  "short_description",
+  "description",
+  "overall_description",
+  "ambience_description",
+  "cuisine_description",
+  "unique_selling_points",
+  "neighborhood_description",
+  "physical_setting_description",
+] as const;
+
+/** Every description text of a places row, the short ones first. Verbatim, nothing added. */
+export function descriptionTexts(row: { description: string | null; properties: Record<string, unknown> }): string[] {
+  const texts = [
+    ...DESCRIPTION_KEYS.map((key) => row.properties[key]),
+    row.description,
+  ].flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []));
+  return [...new Set(texts)];
+}
+
+/** How long the card's one description may be. */
+export const CARD_ABOUT_LIMIT = 200;
+
+/**
+ * One short description, verbatim: the whole text when it fits, else its first
+ * sentences, else cut at a word and marked with an ellipsis.
+ */
+export function cardAbout(value: unknown, limit = CARD_ABOUT_LIMIT): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value.trim();
+  if (!text) return undefined;
+  if (text.length <= limit) return text;
+  const head = text.slice(0, limit);
+  const sentenceEnd = Math.max(head.lastIndexOf(". "), head.lastIndexOf("! "), head.lastIndexOf("? "));
+  if (sentenceEnd >= limit / 2) return head.slice(0, sentenceEnd + 1);
+  const room = text.slice(0, limit - 1);
+  const wordEnd = room.lastIndexOf(" ");
+  return `${room.slice(0, wordEnd > 0 ? wordEnd : room.length).replace(/[\s,;:]+$/, "")}…`;
+}
+
+/**
+ * The tag families a card reads as practical facts, the ones a ground rule
+ * hinges on most first: when a place has more than the limit, the last
+ * families go, so a dietary or access fact is never the one that is cut.
+ */
+export const PRACTICAL_FAMILIES: readonly { key: keyof PlacePractical; type: string }[] = [
+  { key: "dietary", type: "urn:tag:dietary_option:qloo" },
+  { key: "accessibility", type: "urn:tag:accessibility:place" },
+  { key: "children", type: "urn:tag:children:place" },
+  { key: "noise", type: "urn:tag:noise_level:qloo" },
+  { key: "planning", type: "urn:tag:planning:place" },
+  { key: "occasion", type: "urn:tag:event:place" },
+  { key: "visit", type: "urn:tag:visit_intent:qloo" },
+];
+/** How many practical facts a card carries at most. A busy place has about 20. */
+export const CARD_PRACTICAL_LIMIT = 24;
+/** The same families as a jsonpath over places.tags, so the card query leaves the other 100 tags in the database. */
+export const PRACTICAL_TAGS_PATH = `$[*] ? (${PRACTICAL_FAMILIES.map((f) => `@.type == "${f.type}"`).join(" || ")})`;
+
+const RawTag = z.object({ name: z.string().trim().min(1), type: z.string() });
+
+/** A place's tags as practical facts by family, verbatim. Undefined when there are none. */
+export function cardPractical(tags: unknown, limit = CARD_PRACTICAL_LIMIT): PlacePractical | undefined {
+  const parsed = parseList(tags, RawTag);
+  const out: PlacePractical = {};
+  let left = limit;
+  for (const { key, type } of PRACTICAL_FAMILIES) {
+    const names = [...new Set(parsed.filter((t) => t.type === type).map((t) => t.name))].slice(0, left);
+    if (names.length === 0) continue;
+    out[key] = names;
+    left -= names.length;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** The facts a choice rests on beyond the properties block. Empty fields are left out. */
+export function choiceFacts(input: { rating: unknown; about: unknown; tags: unknown }): Pick<PlaceFacts, "rating" | "about" | "practical"> {
+  const rating = cardRating(input.rating);
+  const about = cardAbout(input.about);
+  const practical = cardPractical(input.tags);
+  return {
+    ...(rating !== undefined ? { rating } : {}),
+    ...(about ? { about } : {}),
+    ...(practical ? { practical } : {}),
+  };
+}
+
+/** The facts of a place that may not be on the board (score_places), the same ones a card carries. */
+export function placeFactsOf(
+  place: Pick<NormalizedPlace, "properties" | "tags" | "description" | "rating" | "priceLevel">,
+): PlaceFacts {
+  const priceLevel = cardPriceLevel(place.priceLevel);
+  return {
+    ...placeFactsFromProperties(place.properties),
+    ...choiceFacts({ rating: place.rating, about: descriptionTexts(place)[0], tags: place.tags }),
+    ...(priceLevel ? { priceLevel } : {}),
   };
 }
 

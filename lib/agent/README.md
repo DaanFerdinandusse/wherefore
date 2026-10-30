@@ -120,6 +120,15 @@ The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives i
 - **Loosening is never silent.** Every filter findPlaces drops is a `loosened`
   code with copy in `LOOSENED_COPY`: the search row, the model and, for a
   replacement, the tool card or the toast say what changed and what to check.
+- **The model chooses on facts.** Top candidates score within about 0.01, so
+  `factsForModel` (`tools/model-output.ts`) gives find_places, score_places and
+  every card the provider's review keywords, dishes, price level, rating, known,
+  Michelin, one verbatim description (`about`) and `practical` tags by family,
+  with the ground rules beside the find_places candidates. An unknown fact stays
+  out, so a missing family reads as unknown, never as no. Slot notes do not count
+  these as quotable facts: `quotesFact` accepts any sentence that contains a fact,
+  so a short tag ("Accepts reservations") would admit a sentence that adds invented
+  hours around it.
 - **Reasons are templates.** The model picks favorites, shared tags and one
   description snippet by index; anything not in the input is dropped and a
   place with no valid favorite gets no reason (`explain.ts`).

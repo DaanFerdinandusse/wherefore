@@ -12,11 +12,13 @@ import insightsFixture from "@/lib/qloo/__fixtures__/insights-place.json";
 import type { FindPlacesInput, FindPlacesResult } from "@/lib/qloo/contracts";
 import { normalizePlace } from "@/lib/qloo/normalize";
 import { createTrip } from "@/lib/trips";
+import { placeFactsOf } from "@/lib/trips/map";
 
 import type { TurnRef } from "../writes";
 
 import { findPlacesTool } from "./find-places";
 import { loosenedCopy, WIDENED_IN_CATEGORY } from "./labels";
+import { DATA_OPEN, findPlacesForModel } from "./model-output";
 import { removePlaceTool } from "./place-tools";
 
 // find_places and remove_place end to end on the database, with the search and
@@ -63,7 +65,7 @@ const searchInput = (index: number) => mocks.findPlaces.mock.calls[index]![0] as
 
 describe.skipIf(!hasDatabase)("search options through the tools", () => {
   beforeAll(async () => {
-    const client = await createClient({ name: "Ana Ruiz" }, run.owner);
+    const client = await createClient({ name: "Ana Ruiz", groundRules: ["No shellfish", "Walkable evenings"] }, run.owner);
     const created = await createTrip(run.owner, {
       clientId: client.id,
       destination: LISBON,
@@ -99,6 +101,22 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
     expect(output.openDay).toBe("sunday");
     const [ask] = await db.select({ query: tripAsks.query }).from(tripAsks).where(eq(tripAsks.id, output.askId!));
     expect(ask?.query).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "sunday" });
+  });
+
+  it("reads the facts back through the card query and puts the ground rules beside them", async () => {
+    mocks.findPlaces.mockResolvedValue(found(["facts-a"]));
+    const output = await drain(findPlacesTool({ intent: "dinner" }, turn, `call-${++call}`));
+    const facts = placeFactsOf(normalizePlace(template));
+    const [card] = output.places;
+    expect(card).toMatchObject({ rating: facts.rating, about: facts.about, practical: facts.practical });
+    expect(card?.practical).toBeDefined();
+    expect(output.groundRules).toEqual(["No shellfish", "Walkable evenings"]);
+
+    const { value } = findPlacesForModel(output);
+    expect(value).toContain('"ground_rules":["No shellfish","Walkable evenings"]');
+    expect(value).toContain(`"about":${JSON.stringify(facts.about)}`);
+    expect(value).toContain('"practical":{');
+    expect(value.startsWith(DATA_OPEN)).toBe(true);
   });
 
   it("sends no open day for the stay slot, and nothing unasked", async () => {

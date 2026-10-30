@@ -20,6 +20,7 @@ import {
 } from "@/lib/qloo";
 import { addAskPlaces, listTripPlaceCards, upsertTripPlaces, type TripPlaceUpsert } from "@/lib/trips";
 import { signalSetHash } from "@/lib/trips/evidence";
+import { descriptionTexts } from "@/lib/trips/map";
 import { agentModelRef, agentProviderOptions } from "@/lib/codex/provider";
 
 import { explainPlaces, factSnippets, type ExplainInput } from "../explain";
@@ -190,27 +191,6 @@ export async function scoreAdvisorPlaces(
       },
     })),
   };
-}
-
-/** The provider's description fields of a place, in the order they are worth reading. */
-export const DESCRIPTION_KEYS = [
-  "short_description",
-  "description",
-  "overall_description",
-  "ambience_description",
-  "cuisine_description",
-  "unique_selling_points",
-  "neighborhood_description",
-  "physical_setting_description",
-] as const;
-
-/** Every description text of a places row, the short ones first. Verbatim, nothing added. */
-export function descriptionTexts(row: { description: string | null; properties: Record<string, unknown> }): string[] {
-  const texts = [
-    ...DESCRIPTION_KEYS.map((key) => row.properties[key]),
-    row.description,
-  ].flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []));
-  return [...new Set(texts)];
 }
 
 /**

@@ -10,6 +10,7 @@ import { nameMatches } from "@/lib/demo/rules";
 import { upsertPlaces } from "@/lib/places";
 import { displayScore, haversineM, MAX_DISTANCE_FACTOR, scoreEntities, searchEntities, type QlooCall } from "@/lib/qloo";
 import { listTripPlaceCards } from "@/lib/trips";
+import { placeFactsOf } from "@/lib/trips/map";
 
 import { cacheWrite, type TurnRef } from "../writes";
 
@@ -168,6 +169,7 @@ export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef, to
         category: card?.category,
         score: displayScore(s.affinity, setAffinities),
         because: driversOf(ctx, s.signalScores),
+        ...placeFactsOf(s.place),
         ...(card?.yourPlace
           ? { yourPlace: card.yourPlace }
           : saved && advisorPlaceId

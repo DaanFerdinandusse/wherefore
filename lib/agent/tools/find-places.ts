@@ -364,6 +364,7 @@ export async function* findPlacesTool(
     ...(terms.length ? { terms } : {}),
     ...(target ? { target } : {}),
     ...(openDay ? { openDay } : {}),
+    ...(ctx.rules.length ? { groundRules: ctx.rules } : {}),
     ...extra,
   });
   const failAsk = () => finishAsk(turn, ask.id, { status: "failed", elapsedMs: elapsed(), loosened: [], resultCount: 0 });

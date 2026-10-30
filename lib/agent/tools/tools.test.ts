@@ -439,16 +439,19 @@ describe("cardForModel facts", () => {
 
   it("marks a less known and a Michelin place, never with the number", () => {
     const out = cardForModel({ ...card, because: [], sharedTags: [], askIds: [], popularity: 0.02, michelin: true });
-    expect(out).toMatchObject({ less_known: true, michelin: true });
+    expect(out).toMatchObject({ known: "less known", michelin: true });
     expect(out).not.toHaveProperty("popularity");
   });
 
-  it("says nothing when the fact is unknown or the place is well known", () => {
-    for (const popularity of [undefined, 0.6, 0.97]) {
+  it("says well known from the same constant, and nothing when the fact is unknown", () => {
+    for (const popularity of [0.6, 0.97]) {
       const out = cardForModel({ ...card, because: [], sharedTags: [], askIds: [], popularity });
-      expect(out).not.toHaveProperty("less_known");
+      expect(out).toMatchObject({ known: "well known" });
       expect(out).not.toHaveProperty("michelin");
     }
+    const unknown = cardForModel({ ...card, because: [], sharedTags: [], askIds: [] });
+    expect(unknown).not.toHaveProperty("known");
+    expect(unknown).not.toHaveProperty("michelin");
   });
 });
 

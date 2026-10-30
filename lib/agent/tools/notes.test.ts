@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { askConstraints, meetsAskConstraints } from "./find-places";
 import { cleanAgentNote, makesClaim } from "./notes";
+import { noteFactsOf } from "./place-tools";
 
 describe("cleanAgentNote", () => {
   const facts = ["Known for its natural wine list", "18:30 to 23:00"];
@@ -28,6 +29,23 @@ describe("cleanAgentNote", () => {
     expect(makesClaim("Close to the river, with an open-air terrace.")).toBe(false);
     expect(makesClaim("Gluten-free options.")).toBe(false);
     expect(makesClaim("Closes at midnight.")).toBe(true);
+  });
+});
+
+describe("what a note may quote", () => {
+  const row = {
+    description: "Known for its natural wine list",
+    properties: { hours: { friday: [{ opens: "T18:30", closes: "T23:00" }] } },
+    tags: [{ tagId: "urn:tag:planning:place:accepts_reservations", name: "Accepts reservations", type: "urn:tag:planning:place" }],
+  };
+
+  it("holds the descriptions and the hours, never a tag", () => {
+    expect(noteFactsOf(row)).toEqual(["Known for its natural wine list", "18:30 to 23:00"]);
+  });
+
+  it("does not let a short practical fact carry invented claims", () => {
+    expect(cleanAgentNote("Accepts reservations, open until 2am, about 40 euros.", noteFactsOf(row))).toBe("");
+    expect(cleanAgentNote("Accepts reservations.", noteFactsOf(row))).toBe("");
   });
 });
 

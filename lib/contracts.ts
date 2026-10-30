@@ -49,6 +49,21 @@ export type Destination = {
 /** A word or dish reviews mention, with how many reviews mention it ("Tuna tostadas", 312). */
 export type PlaceKeyword = { name: string; count: number };
 
+/**
+ * What the provider's tags say about a visit, by family, names verbatim
+ * ("Vegan", "Usually a wait", "Good for kids"). A missing family means the
+ * provider says nothing about it, never that the answer is no.
+ */
+export type PlacePractical = {
+  dietary?: string[];
+  accessibility?: string[];
+  children?: string[];
+  noise?: string[];
+  planning?: string[];
+  occasion?: string[];
+  visit?: string[];
+};
+
 /** One favorite of a traveler's client profile, with the place photo when it resolved. */
 export type TravelerFavorite = { name: string; entityId?: string; imageUrl?: string };
 
@@ -89,7 +104,19 @@ export type TripPlaceCard = {
   popularity?: number;
   /** The provider links the place to Michelin. Says nothing about stars. */
   michelin?: boolean;
+  /** The provider's business rating, above 0 up to 5. */
+  rating?: number;
+  /** One short provider description, verbatim, cut to about 200 characters. */
+  about?: string;
+  /** Practical facts from the place's tags. */
+  practical?: PlacePractical;
 };
+
+/** The facts a choice between places rests on. Everything comes from the provider; an unknown fact stays out. */
+export type PlaceFacts = Pick<
+  TripPlaceCard,
+  "keywords" | "dishes" | "priceLevel" | "popularity" | "michelin" | "rating" | "about" | "practical"
+>;
 
 export type Ask = {
   id: string;
@@ -266,6 +293,8 @@ export type FindPlacesOutput = {
   terms?: string[];
   /** The weekday the search keeps to places open on, so a loosened note can name it. */
   openDay?: Weekday;
+  /** The trip's ground rules, so the model chooses with them beside the candidates. */
+  groundRules?: string[];
 };
 
 /** An itinerary slot a search or a recommendation is for. */
@@ -305,7 +334,7 @@ export type ChatOpening = {
 
 export type ScorePlacesOutput = {
   phase: ToolPhase;
-  places: (Pick<TripPlaceCard, "tripPlaceId" | "placeId" | "name" | "score" | "because" | "yourPlace"> & {
+  places: (Pick<TripPlaceCard, "tripPlaceId" | "placeId" | "name" | "score" | "because" | "yourPlace"> & PlaceFacts & {
     imageUrl?: string;
     /** The provider's id, for places scored by name that are not on the board. */
     entityId?: string;
