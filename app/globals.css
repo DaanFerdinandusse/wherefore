@@ -356,3 +356,20 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .chat-word-reveal, .chat-thinking-dot, .chat-stream-cursor { animation: none; }
 }
+
+/* Keep the status mounted just long enough to hand off to the search or reply. */
+@keyframes chat-activity-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes chat-activity-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.chat-activity-presence[data-state="active"] { animation: chat-activity-in 200ms ease-out both; }
+.chat-activity-presence[data-state="exiting"] { animation: chat-activity-out 140ms ease-out both; }
+.chat-activity-presence[data-state="exiting"] .chat-thinking-dot { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-activity-presence[data-state="active"] { animation: none; }
+  .chat-activity-presence[data-state="exiting"] { animation: none; display: none; }
+}

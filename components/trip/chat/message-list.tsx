@@ -5,7 +5,7 @@ import { isToolUIPart } from "ai";
 import type { AppUIMessage } from "@/lib/contracts";
 
 import { ToolCard } from "./tool-card";
-import { needsThinkingIndicator } from "./chat-activity";
+import { chatActivity } from "./chat-activity";
 import { StreamingText, ThinkingIndicator, ThinkingSummary } from "./streaming-parts";
 
 // The transcript: user bubbles, assistant text with a streaming cursor, and a
@@ -45,7 +45,8 @@ export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, on
           <li key={message.id} data-testid="assistant-message" data-stopped={message.metadata?.stopped ? "true" : "false"} className="flex flex-col gap-2">
             {message.parts.map((part, index) => {
               if (part.type === "reasoning") {
-                return <ThinkingSummary key={`${message.id}-${index}`} text={part.text} active={isLive && part.state === "streaming"} />;
+                if (isLive && part.state === "streaming") return null;
+                return <ThinkingSummary key={`${message.id}-${index}`} text={part.text} active={false} />;
               }
               if (part.type === "text") {
                 return (
@@ -72,7 +73,7 @@ export function MessageList({ messages, streaming, onRetryAsk, onPlacesHover, on
           </li>
         );
       })}
-      {needsThinkingIndicator(messages, streaming) ? <li><ThinkingIndicator /></li> : null}
+      <ThinkingIndicator activity={chatActivity(messages, streaming)} />
     </ol>
   );
 }

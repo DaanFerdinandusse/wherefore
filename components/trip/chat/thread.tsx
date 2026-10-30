@@ -14,7 +14,7 @@ import { toolErrorText } from "./chat-errors";
 import { readPlacesOutput, readRecommendOutput } from "./chat-places";
 import type { Recommendation } from "./chat-format";
 import { ToolCard } from "./tool-card";
-import { needsThinkingIndicator } from "./chat-activity";
+import { chatActivity } from "./chat-activity";
 import { StreamingText, ThinkingIndicator, ThinkingSummary } from "./streaming-parts";
 import type { PlaceHandlers } from "./tool-cards/parts";
 import { SearchRow } from "./tool-cards/search-row";
@@ -137,7 +137,8 @@ export function Thread({
           >
             {message.parts.map((part, index) => {
               if (part.type === "reasoning") {
-                return <ThinkingSummary key={`${message.id}-${index}`} text={part.text} active={isLive && part.state === "streaming"} />;
+                if (isLive && part.state === "streaming") return null;
+                return <ThinkingSummary key={`${message.id}-${index}`} text={part.text} active={false} />;
               }
               if (part.type === "text") {
                 if (!part.text.trim() && !(isLive && index === lastTextIndex)) return null;
@@ -208,7 +209,7 @@ export function Thread({
           </li>
         );
       })}
-      {needsThinkingIndicator(messages, streaming) ? <li><ThinkingIndicator /></li> : null}
+      <ThinkingIndicator activity={chatActivity(messages, streaming)} />
     </ol>
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import type { ChatActivity } from "./chat-activity";
 
 /** Stable word keys keep earlier text still as new words arrive. No artificial delay. */
 export function StreamingText({ text, active }: { text: string; active: boolean }) {
@@ -13,14 +15,35 @@ export function StreamingText({ text, active }: { text: string; active: boolean 
   })}{active ? <span aria-hidden data-testid="stream-cursor" className="chat-stream-cursor ml-1 inline-block h-[1em] w-0.5 translate-y-0.5 bg-amber" /> : null}</>;
 }
 
-export function ThinkingIndicator({ label = "Thinking" }: { label?: string }) {
+/** Retain the last label for the exit fade; a new phase cancels the pending removal. */
+export function ThinkingIndicator({ activity }: { activity: ChatActivity | null }) {
+  const [retained, setRetained] = useState(activity);
+  const active = activity !== null;
+  if (activity && (activity.key !== retained?.key || activity.summary !== retained.summary || activity.kind !== retained.kind)) {
+    setRetained(activity);
+  }
+  useEffect(() => {
+    if (active) return;
+    const timer = window.setTimeout(() => setRetained(null), 160);
+    return () => window.clearTimeout(timer);
+  }, [active]);
+  const shown = activity ?? retained;
+  if (!shown) return null;
   return (
-    <div role="status" data-testid="thinking" className="flex items-center gap-2.5 px-1 py-2 text-ui text-text-2">
-      <span aria-hidden className="flex gap-1 text-amber">
-        {[0, 1, 2].map((dot) => <span key={dot} className="chat-thinking-dot size-1 rounded-full bg-current" style={{ animationDelay: `${dot * 140}ms` }} />)}
-      </span>
-      {label}
-    </div>
+    <li
+      className="chat-activity-presence px-1 py-2 text-ui text-text-2"
+      data-state={active ? "active" : "exiting"}
+      data-testid="agent-activity"
+      aria-hidden={!active}
+      inert={!active}
+    >
+      <div role={active ? "status" : undefined} aria-atomic="true" data-testid={active ? shown.kind : undefined} className="flex items-start gap-2.5">
+        <span aria-hidden className="mt-2 flex shrink-0 gap-1 text-amber">
+          {[0, 1, 2].map((dot) => <span key={dot} className="chat-thinking-dot size-1 rounded-full bg-current" style={{ animationDelay: `${dot * 140}ms` }} />)}
+        </span>
+        <span className="min-w-0 leading-relaxed wrap-anywhere">{shown.label}</span>
+      </div>
+    </li>
   );
 }
 
