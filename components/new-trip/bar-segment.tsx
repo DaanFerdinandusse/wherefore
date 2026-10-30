@@ -1,97 +1,80 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
-import { Menu } from "@/components/ui/menu";
-import { Popover, type PopoverTriggerProps } from "@/components/ui/popover";
 import { cn } from "@/lib/ui/cn";
 
-// One segment of the booking-style trip bar: an uppercase label over the
-// current value (or a muted placeholder). It opens its own panel under the
-// bar. The open segment lifts onto the raised surface with an outline; the
-// hairline dividers hide next to it, as in the designs.
+// One segment of the booking-style trip bar (N1 to N4): an uppercase label
+// over the current value, or a muted placeholder. The segment only toggles;
+// the panel draws the open segment's dropdown under the sheet. The open
+// segment is a white pill with an ink outline, and the hairline dividers hide
+// next to it.
 export type SegmentKey = "who" | "where" | "when" | "travelers";
+
+export const SEGMENT_ORDER: SegmentKey[] = ["who", "where", "when", "travelers"];
 
 export function BarSegment({
   label,
   value,
   placeholder,
   open,
-  onOpenChange,
+  onToggle,
+  buttonRef,
+  controls,
   divider,
   className,
-  panelLabel,
-  kind = "dialog",
-  align = "start",
-  panelClassName,
-  children,
 }: {
   label: string;
   value: string | null;
   placeholder: string;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Show the hairline on the left (not for the first segment or next to the open one). */
-  divider: boolean;
-  /** Width share in the bar, for example "flex-[1.3_1_0px]". */
+  onToggle: () => void;
+  buttonRef?: Ref<HTMLButtonElement>;
+  /** Id of the dropdown this segment opens. */
+  controls: string;
+  /** The hairline on the left: null for the first segment, false (hidden) next to the open one. */
+  divider: boolean | null;
+  /** Width share in the bar, for example "flex-[259_1_0px]". */
   className?: string;
-  panelLabel: string;
-  kind?: "dialog" | "menu";
-  align?: "start" | "center" | "end";
-  panelClassName?: string;
-  children: ReactNode;
 }) {
-  const trigger = (props: PopoverTriggerProps) => (
-    <button
-      {...props}
-      type="button"
-      className={cn(
-        "relative flex h-[68px] w-full min-w-0 flex-col justify-center gap-[3px] rounded-pill border px-6 text-left transition-colors",
-        open
-          ? "border-nav-pill bg-surface-raised shadow-card"
-          : "border-transparent hover:bg-surface-hover",
-      )}
-    >
-      <span className="label-caps font-semibold text-ink">{label}</span>
-      <span className={cn("truncate text-body-lg leading-5", value ? "text-ink" : "text-text-2")}>
-        {value ?? placeholder}
-      </span>
-    </button>
-  );
-
-  const shared = {
-    open,
-    onOpenChange,
-    trigger,
-    label: panelLabel,
-    align,
-    className: cn("relative flex min-w-0", className),
-    panelClassName: cn("mt-6! px-3! pt-5! pb-3!", panelClassName),
-  };
-
   return (
     <>
-      <span
-        aria-hidden
-        className={cn("h-[52px] w-px shrink-0 bg-rule-strong transition-opacity", divider ? "opacity-100" : "opacity-0")}
-      />
-      {kind === "menu" ? <Menu {...shared}>{children}</Menu> : <Popover {...shared}>{children}</Popover>}
+      {divider !== null ? (
+        <span
+          aria-hidden
+          className={cn("h-9 w-px shrink-0 bg-rule transition-opacity", divider ? "opacity-100" : "opacity-0")}
+        />
+      ) : null}
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={open ? controls : undefined}
+        aria-haspopup="dialog"
+        className={cn(
+          "flex h-[68px] min-w-0 flex-col justify-center gap-1 rounded-pill px-7 text-left transition-[background-color,box-shadow] focus-visible:outline-offset-0",
+          open ? "bg-white shadow-card ring-[1.5px] ring-ink" : "hover:bg-surface",
+          className,
+        )}
+      >
+        <span className="label-caps leading-4 font-semibold tracking-[0.12em] text-text-2">{label}</span>
+        <span className={cn("truncate text-body-lg leading-[22px]", value ? "font-medium text-ink" : "text-text-muted")}>
+          {value ?? placeholder}
+        </span>
+      </button>
     </>
   );
 }
 
-/** The 44px leading circle of a menu row: an icon on an outline or ink disc. */
-export function RowIcon({ children, tone = "outline", shape = "round" }: { children: ReactNode; tone?: "outline" | "ink"; shape?: "round" | "square" }) {
+/**
+ * The quiet section label inside a dropdown ("Recent clients", "Who is
+ * traveling"). `inset` replaces the default padding.
+ */
+export function DropLabel({ children, inset = "px-4 pt-3 pb-2" }: { children: ReactNode; inset?: string }) {
   return (
-    <span
-      aria-hidden
-      className={cn(
-        "flex shrink-0 items-center justify-center",
-        shape === "round" ? "size-11 rounded-pill" : "size-12 rounded-[12px]",
-        tone === "ink" ? "bg-ink text-surface" : "border border-pill-outline text-ink",
-      )}
-    >
+    <p className={cn("label-caps leading-4 font-semibold tracking-[0.12em] text-text-2", inset)}>
       {children}
-    </span>
+    </p>
   );
 }

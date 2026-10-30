@@ -1,26 +1,25 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Plus, UserPlus, X } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
-import { Button, buttonClasses } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Stepper } from "@/components/ui/stepper";
 import { UnderlineField } from "@/components/ui/underline-field";
-import { createGuestClient, searchTripBarClients, type TripBarClient } from "@/lib/trips/actions";
+import { searchTripBarClients, type TripBarClient } from "@/lib/trips/actions";
 import { cn } from "@/lib/ui/cn";
 
-import { RowIcon } from "./bar-segment";
-import { guestsWithoutFavorites, type Draft, type DraftAction, type DraftGuest } from "./draft";
-import { clientDescription, clientTravelerNote, guestTravelerNote, missingFavoritesNote } from "./format";
+import { DropLabel } from "./bar-segment";
+import { type Draft, type DraftAction, type DraftGuest } from "./draft";
+import { clientDescription, clientTravelerNote, companionNote } from "./format";
 import { useDebouncedValue } from "./use-debounced-value";
 
-// Travelers (F4): the client, whose favorites drive the search; companions,
-// either one of the advisor's clients or a guest by name ("Add favorites"
-// turns a guest into a client row with status guest, to fill in on the client
-// screen); adults and children. Companions without favorites are flagged.
+// Travelers (N4): who is traveling. The client comes first with the Client
+// tag and whose favorites drive the search. Companions follow: one of the
+// advisor's clients (their favorites join the search) or a guest by name
+// only. Guests do not get favorites of their own. Then Adults and Children.
 export function TravelersMenu({
   draft,
   dispatch,
@@ -31,36 +30,49 @@ export function TravelersMenu({
   onChooseClient: () => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const missing = guestsWithoutFavorites(draft);
-  const note = missingFavoritesNote(
-    missing.map((g) => g.name),
-    draft.client?.name ?? null,
-  );
+  const clientName = draft.client?.name ?? null;
 
   return (
     <div className="flex flex-col gap-1">
-      <p className="label-caps px-3 pb-2 leading-[14px] text-text-2">Who is traveling</p>
+      <DropLabel>Who is traveling</DropLabel>
 
       {draft.client ? (
         <TravelerRow
-          avatar={<Avatar name={draft.client.name} size={44} />}
+          avatar={<Avatar name={draft.client.name} src={draft.client.avatarUrl ?? undefined} size={44} />}
           name={draft.client.name}
-          {...clientTravelerNote(draft.client.favoritesCount)}
+          tag="client"
+          {...clientTravelerNote(draft.client.name, draft.client.favoritesCount)}
         />
       ) : (
-        <div className="flex items-center gap-3.5 px-3 py-2.5">
-          <RowIcon>
-            <UserPlus size={16} strokeWidth={2} />
-          </RowIcon>
+        <div className="flex min-h-16 items-center gap-3 px-4">
+          <Circle>
+            <UserPlus size={18} strokeWidth={2} aria-hidden />
+          </Circle>
           <span className="flex-1 text-ui text-text-2">Choose the client first. Their favorites drive the search.</span>
-          <Button variant="outline" size="sm" onClick={onChooseClient}>
+          <Button variant="outline" size="sm" onClick={onChooseClient} className="h-9 px-3.5 text-ui">
             Choose a client
           </Button>
         </div>
       )}
 
       {draft.guests.map((guest) => (
-        <GuestRow key={guest.key} guest={guest} dispatch={dispatch} />
+        <TravelerRow
+          key={guest.key}
+          avatar={<Avatar name={guest.name} size={44} tone={guest.clientId ? "soft" : "dashed"} />}
+          name={guest.name}
+          tag={guest.clientId ? "client" : "guest"}
+          text={companionNote(guest, clientName)}
+          warning={false}
+          trailing={
+            <IconButton
+              label={`Remove ${guest.name}`}
+              variant="ghost"
+              size={32}
+              icon={<X size={14} strokeWidth={2} aria-hidden />}
+              onClick={() => dispatch({ type: "removeGuest", key: guest.key })}
+            />
+          }
+        />
       ))}
 
       {adding ? (
@@ -76,112 +88,76 @@ export function TravelersMenu({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="flex w-full items-center gap-3.5 rounded-row px-3 py-2.5 text-left transition-colors hover:bg-canvas focus-visible:bg-canvas"
+          className="flex min-h-16 w-full items-center gap-3 rounded-[16px] px-4 text-left transition-colors hover:bg-glow/25 focus-visible:bg-glow/25 focus-visible:outline-none"
         >
-          <RowIcon>
-            <Plus size={16} strokeWidth={2} />
-          </RowIcon>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-body-lg leading-5 font-semibold text-ink">Add a traveler</span>
-            <span className="text-ui-sm text-text-2">Pick one of your clients or add a guest</span>
-          </span>
+          <Circle>
+            <Plus size={18} strokeWidth={2} aria-hidden />
+          </Circle>
+          <span className="text-body-lg leading-[22px] font-semibold text-ink">Add a traveler</span>
         </button>
       )}
 
-      <div className="mt-1 flex flex-col gap-0.5 border-t border-rule-strong px-3 pt-3">
-        <Stepper label="Adults" value={draft.adults} min={1} onValueChange={(value) => dispatch({ type: "setAdults", value })} />
-        <Stepper label="Children" value={draft.children} onValueChange={(value) => dispatch({ type: "setChildren", value })} />
-        <p className={cn("pt-2 text-ui-sm", note ? "text-amber" : "text-text-2")}>
-          {note ?? "Travelers without favorites are flagged on the trip, so you know whose taste is missing."}
-        </p>
+      <div className="mt-1 flex flex-col gap-1 border-t border-rule px-4 pt-3 pb-2">
+        <Stepper
+          label="Adults"
+          value={draft.adults}
+          min={1}
+          onValueChange={(value) => dispatch({ type: "setAdults", value })}
+          className="h-[52px] py-0"
+        />
+        <Stepper
+          label="Children"
+          value={draft.children}
+          onValueChange={(value) => dispatch({ type: "setChildren", value })}
+          className="h-[52px] py-0"
+        />
       </div>
     </div>
+  );
+}
+
+function Circle({ children }: { children: ReactNode }) {
+  return (
+    <span
+      aria-hidden
+      className="flex size-11 shrink-0 items-center justify-center rounded-pill border border-ink/20 text-ink"
+    >
+      {children}
+    </span>
   );
 }
 
 function TravelerRow({
   avatar,
   name,
+  tag,
   text,
   warning,
   trailing,
 }: {
-  avatar: React.ReactNode;
+  avatar: ReactNode;
   name: string;
-  text: string;
+  tag: "client" | "guest";
+  text: string | null;
   warning: boolean;
-  trailing?: React.ReactNode;
+  trailing?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3.5 px-3 py-2.5">
+    <div className="flex min-h-16 items-center gap-3 px-4">
       {avatar}
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-body-lg leading-5 font-semibold text-ink">{name}</span>
-        <span className={cn("text-ui-sm", warning ? "text-amber" : "text-text-2")}>{text}</span>
+      <span className="w-[120px] shrink-0 truncate text-body-lg leading-[22px] font-semibold text-ink">{name}</span>
+      <span className="flex w-16 shrink-0">
+        <span
+          className={cn(
+            "inline-flex h-6 items-center rounded-pill px-2.5 text-meta font-semibold",
+            tag === "client" ? "bg-glow/25 text-amber" : "border border-ink/20 text-text-3",
+          )}
+        >
+          {tag === "client" ? "Client" : "Guest"}
+        </span>
       </span>
+      <span className={cn("min-w-0 flex-1 text-ui leading-5", warning ? "text-amber" : "text-text-3")}>{text}</span>
       {trailing}
-    </div>
-  );
-}
-
-function GuestRow({ guest, dispatch }: { guest: DraftGuest; dispatch: (action: DraftAction) => void }) {
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const note = guestTravelerNote(guest);
-
-  async function addFavorites() {
-    setCreating(true);
-    setError(null);
-    try {
-      const client = await createGuestClient(guest.name);
-      dispatch({ type: "updateGuest", key: guest.key, patch: { clientId: client.id } });
-    } catch {
-      setError("Could not save this guest. Try again.");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  const action = !guest.clientId ? (
-    <Button variant="outline" size="sm" loading={creating} onClick={addFavorites}>
-      Add favorites
-    </Button>
-  ) : guest.favoritesCount === 0 ? (
-    <Link
-      href={`/clients/${guest.clientId}`}
-      target="_blank"
-      rel="noopener"
-      className={buttonClasses({ variant: "outline", size: "sm" })}
-    >
-      Pick favorites
-    </Link>
-  ) : null;
-
-  return (
-    <div>
-      <TravelerRow
-        avatar={<Avatar name={guest.name} size={44} tone={note.warning ? "dashed" : "soft"} />}
-        name={guest.name}
-        text={note.text}
-        warning={note.warning}
-        trailing={
-          <span className="flex shrink-0 items-center gap-1">
-            {action}
-            <IconButton
-              label={`Remove ${guest.name}`}
-              variant="ghost"
-              size={32}
-              icon={<X size={14} strokeWidth={2} aria-hidden />}
-              onClick={() => dispatch({ type: "removeGuest", key: guest.key })}
-            />
-          </span>
-        }
-      />
-      {error ? (
-        <p role="alert" className="px-3 pb-2 pl-[70px] text-ui-sm text-amber">
-          {error}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -224,12 +200,12 @@ function AddTraveler({
   }
 
   return (
-    <form onSubmit={addGuest} className="flex flex-col gap-1 rounded-row bg-canvas/60 px-3 pt-1 pb-3">
+    <form onSubmit={addGuest} className="mx-1 flex flex-col gap-1 rounded-[16px] bg-surface px-3 pt-1 pb-3">
       <UnderlineField
         value={name}
         onValueChange={setName}
         label="Traveler name"
-        placeholder="Name"
+        placeholder="Name, or find one of your clients"
         icon={null}
         autoFocus
       />
@@ -240,7 +216,7 @@ function AddTraveler({
           onClick={() =>
             onAdd({ key: crypto.randomUUID(), name: client.name, clientId: client.id, favoritesCount: client.favoritesCount })
           }
-          className="flex w-full items-center gap-3 rounded-row px-2 py-2 text-left hover:bg-canvas focus-visible:bg-canvas"
+          className="flex w-full items-center gap-3 rounded-row px-2 py-2 text-left hover:bg-glow/25 focus-visible:bg-glow/25 focus-visible:outline-none"
         >
           <Avatar name={client.name} size={32} />
           <span className="flex min-w-0 flex-col">

@@ -3,6 +3,7 @@
 // Destination a trip stores.
 
 import type { Destination } from "@/lib/contracts";
+import type { PastDestination } from "@/lib/trips/contracts";
 
 /** What GET /api/localities/search returns per candidate. */
 export type LocalityCandidate = {
@@ -66,5 +67,18 @@ export function toDestination(candidate: LocalityCandidate): Destination {
     lon: candidate.lon,
     radiusM: candidate.radiusM,
     localityEntityId: candidate.entityId,
+  };
+}
+
+/** A past trip's destination as the new trip stores it, without the trip fields. */
+export function storedDestination(past: PastDestination): Destination {
+  return {
+    name: past.name,
+    disambiguation: past.disambiguation,
+    countryCode: past.countryCode,
+    lat: past.lat,
+    lon: past.lon,
+    radiusM: past.radiusM,
+    localityEntityId: past.localityEntityId,
   };
 }

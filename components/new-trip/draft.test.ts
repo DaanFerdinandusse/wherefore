@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   canCreate,
   draftReducer,
-  guestsWithoutFavorites,
   initialDraft,
   toCreateTripRequest,
   travelersSummary,
   whenSummary,
+  whereSummary,
   type Draft,
   type DraftAction,
   type DraftClient,
@@ -72,13 +72,12 @@ describe("draftReducer", () => {
     expect(whenSummary(apply(one, { type: "setDatesMode", mode: "unset" }))).toBe("Not set yet");
   });
 
-  it("flags guests without favorites", () => {
-    const draft = apply(
-      initialDraft(ana),
-      { type: "addGuest", guest: { key: "g", name: "Clara", clientId: null, favoritesCount: 0 } },
-      { type: "addGuest", guest: { key: "h", name: "Marcus Lee", clientId: "c2", favoritesCount: 5 } },
+  it("names the destination with its country", () => {
+    const one = initialDraft(ana);
+    expect(whereSummary(one)).toBeNull();
+    expect(whereSummary(apply(one, { type: "setDestination", destination: lisbon }))).toBe(
+      "Lisboa, Portugal",
     );
-    expect(guestsWithoutFavorites(draft).map((g) => g.name)).toEqual(["Clara"]);
   });
 });
 

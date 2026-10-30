@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { orderLocalityCandidates, placesInCity, toDestination } from "./localities";
+import { orderLocalityCandidates, placesInCity, storedDestination, toDestination } from "./localities";
 
 const candidate = (name: string, disambiguation: string, entityId = name) => ({
   entityId,
@@ -59,5 +59,23 @@ describe("toDestination", () => {
       radiusM: 10000,
       localityEntityId: "e1",
     });
+  });
+});
+
+describe("storedDestination", () => {
+  it("drops the past trip fields", () => {
+    const stored = storedDestination({
+      name: "Oaxaca",
+      countryCode: "MX",
+      lat: 17.06,
+      lon: -96.72,
+      radiusM: 12000,
+      lastTripId: "t1",
+      lastStartDate: "2026-03-06",
+      tripCount: 2,
+    });
+    expect(stored).toMatchObject({ name: "Oaxaca", countryCode: "MX", lat: 17.06, lon: -96.72, radiusM: 12000 });
+    expect(stored).not.toHaveProperty("lastTripId");
+    expect(stored).not.toHaveProperty("tripCount");
   });
 });
