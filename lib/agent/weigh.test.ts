@@ -67,6 +67,23 @@ describe("validateVerdicts", () => {
     expect(`${verdict?.good} ${verdict?.rest}`).toBe("Cozy Italian. Get the carbonara.");
   });
 
+  it("never leaves the pick on a bare word when its line is cut short", () => {
+    const facts = { review_keywords: ["Carbonara", "Burrata", "Patio"] };
+    const [verdict] = validateVerdicts([place("a", ["Cozy"], facts)], [answer("a", "pick", "Intimate,", "and it closes at midnight.")], []);
+    expect(`${verdict?.good} ${verdict?.rest}`).toBe("Intimate. Reviews talk about carbonara and burrata.");
+  });
+
+  it("does the same for a place promoted to pick", () => {
+    const [verdict] = validateVerdicts([place("a", ["Cozy"], { review_keywords: ["Carbonara"] })], [], []);
+    expect(verdict?.stand).toBe("pick");
+    expect(verdict?.rest).toBe("Reviews talk about carbonara.");
+  });
+
+  it("leaves a rejected place as it is", () => {
+    const [, verdict] = validateVerdicts([place("a"), place("b", ["Cozy"], { review_keywords: ["Carbonara"] })], [answer("a", "pick"), answer("b", "out", "Cozy.", "")], []);
+    expect(verdict?.rest).toBe("");
+  });
+
   it("removes dashes", () => {
     const [verdict] = validateVerdicts([place("a")], [answer("a", "pick", "Cozy \u2014 and chic.", "Good \u2013 really.")], []);
     expect(`${verdict?.good} ${verdict?.rest}`).not.toMatch(/[\u2014\u2013]/);

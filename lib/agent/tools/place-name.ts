@@ -36,3 +36,16 @@ export function findNamedPlace<T extends { name: string; removed: boolean }>(
 export function severalPlacesError(query: string, matches: readonly string[]): string {
   return `More than one place on this trip matches "${query}": ${matches.slice(0, 5).join(", ")}. Say which one.`;
 }
+
+/**
+ * The trip place an id the model garbled was meant to be. Models copy a long id
+ * nearly right and mix in a piece of another one, so one wrong character should
+ * not fail an add. The first block of an id is unique within a trip in practice;
+ * two matches stay unresolved rather than guess.
+ */
+export function repairedId(ref: string, ids: readonly string[]): string | undefined {
+  const head = ref.split("-")[0]?.toLowerCase();
+  if (!head || head.length !== 8) return undefined;
+  const matches = ids.filter((id) => id.toLowerCase().startsWith(`${head}-`));
+  return matches.length === 1 ? matches[0] : undefined;
+}

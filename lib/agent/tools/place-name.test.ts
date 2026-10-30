@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { setItineraryForModel } from "./model-output";
-import { findNamedPlace, placesNamed, severalPlacesError } from "./place-name";
+import { findNamedPlace, placesNamed, severalPlacesError, repairedId } from "./place-name";
 
 const row = (name: string) => ({ name });
 const board = [row("Cura"), row("Restaurante Cura Bar"), row("Sea Me Peixaria Moderna"), row("Máximo"), row("Aqui Há Peixe")];
@@ -74,5 +74,21 @@ describe("setItineraryForModel", () => {
     const note = "Nothing changed: the itinerary was not cleared and is exactly as it was.";
     expect(JSON.stringify(setItineraryForModel({ applied: [], rejected: [], note }))).toContain(note);
     expect(JSON.stringify(setItineraryForModel({ applied: [], rejected: [] }))).not.toContain("note");
+  });
+});
+
+describe("repairedId", () => {
+  const ids = ["2d76582b-ce38-4eea-97b2-9aa934e8891b", "66dbdf32-1111-4222-8333-444455556666"];
+
+  it("finds the place behind an id the model garbled", () => {
+    expect(repairedId("2d76582b-ce38-4eea-97e4-d5d9bbb9881b", ids)).toBe(ids[0]);
+  });
+
+  it("leaves an id that points at nothing", () => {
+    expect(repairedId("ffffffff-ce38-4eea-97e4-d5d9bbb9881b", ids)).toBeUndefined();
+  });
+
+  it("does not guess between two places", () => {
+    expect(repairedId("2d76582b-0000-4000-8000-000000000000", [...ids, "2d76582b-aaaa-4bbb-8ccc-dddddddddddd"])).toBeUndefined();
   });
 });

@@ -27,7 +27,7 @@ import { explainPlaces, factSnippets, type ExplainInput } from "../explain";
 import { likeDriver, mediaNotes, searchTags, withOverlap } from "../taste-overlap";
 import { cacheWrite, guarded, writeReasons, type TurnRef } from "../writes";
 
-import { findNamedPlace, type NamedPlace } from "./place-name";
+import { findNamedPlace, repairedId, type NamedPlace } from "./place-name";
 import { driversFor, isPlainDriver } from "./signals";
 import type { ToolTrip } from "./trip-data";
 
@@ -304,6 +304,15 @@ export async function resolveTripPlaceRefs(tripId: string, refs: string[]): Prom
   const out = new Map<string, TripPlaceMatch>();
   const byId = await resolveTripPlaceIds(tripId, refs);
   for (const [ref, row] of byId) out.set(ref, { place: row });
+  const garbled = [...new Set(refs.filter((ref) => !byId.has(ref) && isUuid(ref)))];
+  if (garbled.length > 0) {
+    const rows = await db.select().from(tripPlaces).where(eq(tripPlaces.tripId, tripId));
+    for (const ref of garbled) {
+      const id = repairedId(ref, rows.map((r) => r.id));
+      const row = rows.find((r) => r.id === id);
+      if (row) out.set(ref, { place: row });
+    }
+  }
   const names = [...new Set(refs.filter((ref) => !byId.has(ref) && !isUuid(ref)))];
   if (names.length === 0) return out;
   const rows = await db

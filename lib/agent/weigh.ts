@@ -122,10 +122,23 @@ function heldLine(raw: { good: string; rest: string }, place: WeighPlace, favori
   return { good: capitalize(opensSentence ? `${good.slice(0, -1)}.` : good), rest };
 }
 
+/**
+ * The pick and the backup are the places someone will read about, so they never
+ * end on a bare word: when their line lost its second half, reviews fill it in.
+ */
+export function withReviews(verdict: PlaceVerdict, place: Pick<WeighPlace, "facts">): PlaceVerdict {
+  if (verdict.stand === "out" || verdict.rest) return verdict;
+  const keywords = place.facts.review_keywords;
+  const words = Array.isArray(keywords) ? keywords.filter((k): k is string => typeof k === "string").slice(0, 2) : [];
+  if (words.length === 0) return verdict;
+  return { ...verdict, rest: `Reviews talk about ${words.join(" and ").toLowerCase()}.` };
+}
+
 /** One answer held to its place's facts, as it stands: the final pass settles the pick and the backup. */
 function heldVerdict(place: WeighPlace, answer: z.infer<typeof verdictSchema> | undefined, favorites: readonly string[]): PlaceVerdict {
   const line = (answer && heldLine(answer, place, favorites)) ?? plainLine(place);
-  return { tripPlaceId: place.tripPlaceId, stand: answer?.stand ?? "out", ...line, catch: Boolean(answer?.catch) && TURNS.test(line.rest) };
+  const verdict: PlaceVerdict = { tripPlaceId: place.tripPlaceId, stand: answer?.stand ?? "out", ...line, catch: Boolean(answer?.catch) && TURNS.test(line.rest) };
+  return withReviews(verdict, place);
 }
 
 /**
@@ -150,7 +163,7 @@ export function validateVerdicts(places: readonly WeighPlace[], picks: readonly 
     const promote = out.find((v) => v.stand === "backup") ?? out[0];
     promote.stand = "pick";
   }
-  return out;
+  return out.map((verdict, index) => withReviews(verdict, places[index]!));
 }
 
 /** The best-effort answer when the model gave nothing: the search's own order. */
