@@ -4,7 +4,7 @@ import type { AppUIMessage, TripPlaceCard } from "@/lib/contracts";
 
 import { toolErrorText } from "./chat-errors";
 import { placesMetaOf, toolPlaceEvents } from "./chat-places";
-import { composerPlaceholder, liveRecommendationId, mainNeighborhood, picksByAsk, placesByMatch, recommendationByPlace } from "./chat-format";
+import { composerPlaceholder, liveRecommendationId, picksByAsk, placesByMatch, recommendationByPlace } from "./chat-format";
 
 const card = (id: string, extra: Partial<TripPlaceCard> = {}): TripPlaceCard => ({
   tripPlaceId: id,
@@ -90,21 +90,9 @@ describe("tool errors in plain words", () => {
 describe("composer placeholder", () => {
   const base = { clientName: "Ana Ruiz", destination: "Lisbon" };
   it("asks for the brief in an empty chat", () => {
-    expect(composerPlaceholder({ ...base, empty: true, busy: false })).toBe("Tell me what Ana wants from Lisbon");
+    expect(composerPlaceholder({ ...base, empty: true })).toBe("Tell me what Ana wants from Lisbon");
   });
-  it("offers a change while a turn runs", () => {
-    expect(composerPlaceholder({ ...base, empty: false, busy: true })).toBe("Ask for a change while I search, or stop");
-  });
-  it("names the trip's own neighborhood", () => {
-    expect(composerPlaceholder({ ...base, empty: false, busy: false, neighborhood: "Condesa" })).toBe(
-      "Ask for a change, like “a quieter lunch” or “more coffee near Condesa”",
-    );
-  });
-
-  it("picks the neighborhood of the itinerary first", () => {
-    const places = [card("a", { neighborhood: "Chiado" }), card("b", { neighborhood: "Chiado" }), card("c", { neighborhood: "Alfama" })];
-    expect(mainNeighborhood(places, [])).toBe("Chiado");
-    expect(mainNeighborhood(places, [{ id: "s", day: 1, slot: "dinner", tripPlaceId: "c", note: "", position: 0 }])).toBe("Alfama");
-    expect(mainNeighborhood([], [])).toBeUndefined();
+  it("stays plain once the chat has started", () => {
+    expect(composerPlaceholder({ ...base, empty: false })).toBe("Ask anything ...");
   });
 });

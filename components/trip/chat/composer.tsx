@@ -6,11 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/ui/cn";
 
 // The composer docked at the bottom of the chat column (Paper G1, S1 to S5):
-// a white pill with the placeholder from trip facts and a round button that
+// a white pill with a placeholder and a round button that
 // sends (arrow) or, while a turn runs, stops it (square). Enter sends,
 // Shift+Enter is a newline. "/" outside a field focuses it, and so does the
 // workspace's focus event. While a turn runs the field stays open, so the
-// advisor can type the next change; it sends once the turn is over.
+// advisor can type the next change; it sends once the turn is over. A
+// suggestion takes the placeholder's place in an empty field: Tab, or the Tab
+// key on screen, fills it in for the advisor to edit or send.
 
 export const FOCUS_COMPOSER_EVENT = "wherefore:focus-composer";
 
@@ -18,6 +20,7 @@ type Props = {
   busy: boolean;
   stopping: boolean;
   placeholder: string;
+  suggestion?: string;
   onSend: (text: string) => void;
   onStop: () => void;
   className?: string;
@@ -28,9 +31,10 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-export function Composer({ busy, stopping, placeholder, onSend, onStop, className }: Props) {
+export function Composer({ busy, stopping, placeholder, suggestion, onSend, onStop, className }: Props) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
+  const offer = text ? undefined : suggestion;
 
   useEffect(() => {
     const focus = () => ref.current?.focus();
@@ -55,6 +59,12 @@ export function Composer({ busy, stopping, placeholder, onSend, onStop, classNam
     setText("");
   };
 
+  const takeOffer = () => {
+    if (!offer) return;
+    setText(offer);
+    ref.current?.focus();
+  };
+
   return (
     <form
       className={cn(
@@ -75,16 +85,33 @@ export function Composer({ busy, stopping, placeholder, onSend, onStop, classNam
         data-testid="composer"
         rows={1}
         value={text}
-        placeholder={placeholder}
+        placeholder={offer ?? placeholder}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             submit();
           }
+          if (event.key === "Tab" && !event.shiftKey && offer) {
+            event.preventDefault();
+            takeOffer();
+          }
         }}
         className="field-sizing-content max-h-40 min-h-11 flex-1 resize-none bg-transparent py-2.5 text-body-lg leading-5.5 text-ink outline-none placeholder:text-text-muted"
       />
+      {offer ? (
+        <button
+          type="button"
+          onClick={takeOffer}
+          aria-label="Use this suggestion"
+          aria-keyshortcuts="Tab"
+          title="Use this suggestion"
+          data-testid="suggestion-tab"
+          className="rise-in mb-2 inline-flex h-7 shrink-0 items-center rounded-row px-2 text-ui-sm font-semibold text-text-2 ring-1 ring-ink/12 transition-colors hover:bg-surface"
+        >
+          Tab
+        </button>
+      ) : null}
       {busy ? (
         <button
           type="button"

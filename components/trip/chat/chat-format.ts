@@ -1,11 +1,11 @@
 import { getToolName, isToolUIPart } from "ai";
 
-import type { AppUIMessage, ItinerarySlot, RecommendPlaceOutput, TripPlaceCard } from "@/lib/contracts";
+import type { AppUIMessage, RecommendPlaceOutput, TripPlaceCard } from "@/lib/contracts";
 
 import { readRecommendOutput } from "./chat-places";
 
-// Pure decisions of the chat column: the composer's placeholder from trip
-// facts, which recommendation shows as the full card (the latest; earlier
+// Pure decisions of the chat column: the composer's placeholder, which
+// recommendation shows as the full card (the latest; earlier
 // picks collapse to one line), and every recommendation by place, so a card
 // opened from the itinerary keeps the slot it was recommended for. Tested in
 // chat-format.test.ts.
@@ -47,35 +47,17 @@ export function picksByAsk(messages: readonly AppUIMessage[]): Map<string, strin
   return picks;
 }
 
-/** The neighborhood most places of the trip are in: itinerary places first, then the rest. */
-export function mainNeighborhood(places: readonly TripPlaceCard[], slots: readonly ItinerarySlot[]): string | undefined {
-  const planned = new Set(slots.map((s) => s.tripPlaceId).filter(Boolean));
-  const pick = (list: readonly TripPlaceCard[]) => {
-    const counts = new Map<string, number>();
-    for (const p of list) if (p.neighborhood && p.status !== "removed") counts.set(p.neighborhood, (counts.get(p.neighborhood) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
-  };
-  return pick(places.filter((p) => planned.has(p.tripPlaceId))) ?? pick(places);
-}
-
 /**
- * The composer's placeholder: the brief while the chat is empty, a nudge to
- * change course while a turn runs, otherwise a change in the trip's own
- * words ("more coffee near Condesa").
+ * The composer's placeholder: the brief while the chat is empty, otherwise a
+ * plain line until a suggestion is ready to take its place.
  */
 export function composerPlaceholder(input: {
   empty: boolean;
-  busy: boolean;
   clientName: string;
   destination: string;
-  neighborhood?: string;
   openingPlaceholder?: string;
 }): string {
-  if (input.busy) return "Ask for a change while I search, or stop";
-  if (input.empty) {
-    const client = input.clientName.trim().split(/\s+/)[0] || input.clientName;
-    return input.openingPlaceholder ?? `Tell me what ${client} wants from ${input.destination}`;
-  }
-  const near = input.neighborhood ? `more coffee near ${input.neighborhood}` : "more coffee nearby";
-  return `Ask for a change, like “a quieter lunch” or “${near}”`;
+  if (!input.empty) return "Ask anything ...";
+  const client = input.clientName.trim().split(/\s+/)[0] || input.clientName;
+  return input.openingPlaceholder ?? `Tell me what ${client} wants from ${input.destination}`;
 }

@@ -14,4 +14,6 @@ The activity row fades in over 200ms and out over 140ms, retaining its last labe
 
 Search chips switch the card inline within their own search. Browsing does not change the recommended pick or itinerary. Place selection from the itinerary or map opens a native modal, keeping the transcript and composer mounted underneath. Escape, the close action, and the backdrop dismiss the modal.
 
+As soon as a reply's stream ends `useNextPrompt` posts the last exchange to `/api/chats/[chatId]/next-prompt` for one follow-up message, outside the turn's workflow (`lib/agent/next-prompt-data.ts`). Until it arrives the placeholder is "Ask anything ...". It replaces the placeholder in an empty composer; Tab or the Tab key on screen fills it in, and the advisor edits or sends it. Shift+Tab, and Tab with text in the field, move focus as usual. Sending, a stopped reply or a failed reply offers nothing.
+
 The map's Search this region reaches the chat through the store (`askChat`). `ChatColumn` sends it like a typed message as soon as no reply is running, and says so in a toast when it has to wait. The marker line with the coordinates stays in the stored text, so a retry keeps it, and the bubble leaves it out (`withoutRegionMarker`).

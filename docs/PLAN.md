@@ -18,7 +18,7 @@ Decisions already made with Daan (2026-10-21):
 - Search: Postgres `pg_trgm` on Neon, not Elasticsearch.
 - Teams: single user now; every row carries `owner_id` and a nullable `org_id` so a team list can be added later. The Mine/Team toggle ships but Team is only shown when an org exists.
 - Maps and photos: Google Maps JavaScript API for the dynamic map, Google Places (New) for photos and details in the place profile. Card images come from the recommendation API's own `images[]` first (no quota, no caching restriction), Google photos as fallback and for the profile gallery.
-- Not in scope: attachments, budget tracking, model selection, a question/ask-user tool, prompt suggestions, booking, routing, payments.
+- Not in scope: attachments, budget tracking, model selection, a question/ask-user tool, booking, routing, payments.
 - UI never names the data provider. Copy says "recommended", "match", "taste match". No em dashes anywhere in copy or code comments. Do not copy code from the earlier travel advisor project (`aivisor`); the agent-core and itinerary-canvas repos are references for API shape and the Codex auth protocol only.
 
 ## 1. Stack
