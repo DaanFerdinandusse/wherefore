@@ -9,7 +9,8 @@ import { cn } from "@/lib/ui/cn";
 // dialogs (`center`). Built on the native <dialog> like the lightbox in
 // itinerary-canvas, so Escape, the focus trap, focus return and the top layer
 // come from the platform. A click on the scrim closes it; the page behind
-// does not scroll while it is open. The panel rises in.
+// does not scroll while it is open. The panel rises in. `left` is the nav
+// drawer: 360px, 12px from the viewport edge.
 export function Sheet({
   open,
   onClose,
@@ -22,7 +23,7 @@ export function Sheet({
   onClose: () => void;
   /** Accessible name ("Contramar"). */
   label: string;
-  side?: "right" | "center";
+  side?: "right" | "left" | "center";
   /** Panel classes: width, height, padding. */
   className?: string;
   children: ReactNode;
@@ -62,14 +63,22 @@ export function Sheet({
       className={cn(
         "m-0 max-h-none max-w-none bg-transparent p-0 backdrop:bg-scrim-soft backdrop:backdrop-blur-[6px] open:flex",
         "fixed inset-0 h-dvh w-screen",
-        side === "right" ? "items-stretch justify-end p-4" : "items-center justify-center p-6",
+        side === "right"
+          ? "items-stretch justify-end p-4"
+          : side === "left"
+            ? "items-stretch justify-start p-3"
+            : "items-center justify-center p-6",
       )}
     >
       {open ? (
         <div
           className={cn(
             "rise-in relative overflow-auto rounded-panel bg-surface shadow-panel",
-            side === "right" ? "h-full w-[min(1224px,calc(100vw-32px))]" : "max-h-full w-[min(560px,100%)] p-8",
+            side === "right"
+              ? "h-full w-[min(1224px,calc(100vw-32px))]"
+              : side === "left"
+                ? "h-full w-[min(360px,calc(100vw-24px))]"
+                : "max-h-full w-[min(560px,100%)] p-8",
             className,
           )}
         >

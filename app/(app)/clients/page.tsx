@@ -14,10 +14,8 @@ export default function ClientsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   return (
-    <main className="flex flex-1 flex-col">
-      <Suspense fallback={<ClientsListSkeleton />}>
-        <ClientsScreen searchParams={searchParams} />
-      </Suspense>
-    </main>
+    <Suspense fallback={<ClientsListSkeleton />}>
+      <ClientsScreen searchParams={searchParams} />
+    </Suspense>
   );
 }

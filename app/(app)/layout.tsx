@@ -1,34 +1,29 @@
 import { Suspense } from "react";
 
 import { NewTripLauncher } from "@/components/new-trip/new-trip-launcher";
-import { AppBarContainer } from "@/components/shell/app-bar-container";
+import { NavDrawer } from "@/components/shell/nav-drawer";
+import { ShellUser } from "@/components/shell/shell-store";
 import { getOptionalUser } from "@/lib/auth/server";
 
-// Every signed-in page: the app bar above the page on the canvas. The user is
-// read at request time, so the bar streams in behind a Suspense boundary. The
-// fallback is a bar-sized placeholder without client hooks (usePathname in a
-// fallback would block prerendering under Cache Components), so nothing
-// shifts and the build stays static where it can.
-async function SignedInAppBar() {
+// Every signed-in page sits on the canvas and draws its own frame (AppPage
+// for the sections, the trip workspace for a trip). The layout adds what is
+// shared: the nav drawer, the New trip panel, and the advisor's name for the
+// avatar, read at request time behind Suspense so the rest stays static.
+async function SignedInUser() {
   const user = await getOptionalUser();
-  return <AppBarContainer userName={user?.name ?? ""} />;
-}
-
-function AppBarPlaceholder() {
-  return (
-    <div aria-hidden className="flex h-[76px] shrink-0 items-center px-7">
-      <span className="font-display text-wordmark text-ink">Tastebrief</span>
-    </div>
-  );
+  return <ShellUser name={user?.name ?? ""} />;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">
-      <Suspense fallback={<AppBarPlaceholder />}>
-        <SignedInAppBar />
+      <Suspense fallback={null}>
+        <SignedInUser />
       </Suspense>
       {children}
+      <Suspense fallback={null}>
+        <NavDrawer />
+      </Suspense>
       <Suspense fallback={null}>
         <NewTripLauncher />
       </Suspense>

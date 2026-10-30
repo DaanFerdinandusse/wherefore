@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
+import { AppPage } from "@/components/shell/app-page";
 import { PageHeader } from "@/components/shell/page-header";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -58,8 +59,14 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
   const hidden = filtered.length - visible.length;
 
   const [tripCards, tripCounts] = await Promise.all([
-    listClientTripCards(visible.flatMap((client) => (client.nextTrip ? [client.nextTrip.id] : [])), user),
-    countClientTrips(visible.map((client) => client.id), user),
+    listClientTripCards(
+      visible.flatMap((client) => (client.nextTrip ? [client.nextTrip.id] : [])),
+      user,
+    ),
+    countClientTrips(
+      visible.map((client) => client.id),
+      user,
+    ),
   ]);
   const cardById = new Map(tripCards.map((card) => [card.id, card]));
 
@@ -70,7 +77,7 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
       : `${plural(clients.length, "client")}. Their favorite places are saved, so every new trip starts from what they love.`;
 
   return (
-    <div className="flex flex-col pb-10">
+    <AppPage section="clients" detail={plural(clients.length, "client")}>
       <PageHeader
         title="Clients"
         subtitle={subtitle}
@@ -89,11 +96,15 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
       />
 
       {visible.length === 0 ? (
-        <div className="px-7 pt-2">
+        <div className="pt-2">
           {q || show !== "all" ? (
             <EmptyState
               title="No clients match"
-              body={q ? `Nobody matches “${q}”. Check the spelling or clear the search.` : "No client is in this group right now."}
+              body={
+                q
+                  ? `Nobody matches “${q}”. Check the spelling or clear the search.`
+                  : "No client is in this group right now."
+              }
               action={
                 <Link href="/clients" className={buttonClasses({ variant: "outline" })}>
                   Show all clients
@@ -114,7 +125,7 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
           )}
         </div>
       ) : (
-        <section aria-label="Clients" className="flex flex-col gap-2 px-7">
+        <section aria-label="Clients" className="flex flex-col gap-2">
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-4">
             {visible.map((client) => (
               <ClientCard
@@ -122,7 +133,10 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
                 client={client}
                 nextTrip={client.nextTrip ? (cardById.get(client.nextTrip.id) ?? null) : null}
                 tripCount={tripCounts[client.id] ?? 0}
-                startTripHref={hrefWith(params, { new: "1", client: client.id })}
+                startTripHref={hrefWith(params, {
+                  new: "1",
+                  client: client.id,
+                })}
                 today={today}
                 now={now}
               />
@@ -134,7 +148,11 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
               <Link
                 href={hrefWith(params, { all: "1" })}
                 scroll={false}
-                className={buttonClasses({ variant: "outline", size: "sm", className: "h-[38px]! px-5! font-medium!" })}
+                className={buttonClasses({
+                  variant: "outline",
+                  size: "sm",
+                  className: "h-[38px]! px-5! font-medium!",
+                })}
               >
                 Show {plural(hidden, "more client")}
               </Link>
@@ -148,6 +166,6 @@ export async function ClientsScreen({ searchParams }: { searchParams: Promise<Se
           </footer>
         </section>
       )}
-    </div>
+    </AppPage>
   );
 }

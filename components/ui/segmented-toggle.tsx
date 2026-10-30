@@ -7,14 +7,16 @@ import { cn } from "@/lib/ui/cn";
 // Pick one of a few views. `glass` is the Board / Map toggle that floats over
 // the board above the dock; `outline` is Mine / Team and Exact dates /
 // Not set yet; `quiet` is Board / Calendar / List on the trips page, where
-// only the active option wears an outline. A radio group: arrow keys move
-// and select.
+// only the active option wears an outline; `panel` is the v3 view switch in
+// a panel header (Board / List, Itinerary / Map): a canvas track with the
+// active option as an ink pill. A radio group: arrow keys move and select.
 export type SegmentOption<V extends string> = { value: V; label: string; icon?: ReactNode };
 
 const containerClasses = {
   glass: "glass-control gap-1 rounded-pill border border-ink/18 p-1",
   outline: "gap-1 rounded-pill border border-pill-outline p-1",
   quiet: "gap-2",
+  panel: "gap-0.5 rounded-pill bg-canvas p-1",
 } as const;
 
 export function SegmentedToggle<V extends string>({
@@ -72,7 +74,12 @@ export function SegmentedToggle<V extends string>({
             className={cn(
               "inline-flex items-center gap-2 whitespace-nowrap rounded-pill text-ui transition-colors",
               size === "sm" ? "px-[18px] py-[7px]" : variant === "glass" ? "px-3.5 py-2" : "px-4 py-2",
-              variant === "quiet"
+              variant === "panel" && "gap-[7px]",
+              variant === "panel"
+                ? selected
+                  ? "bg-ink font-semibold text-surface"
+                  : "font-medium text-text-3 hover:bg-ink/5 hover:text-ink"
+                : variant === "quiet"
                 ? selected
                   ? "border border-nav-pill font-semibold text-ink"
                   : "border border-transparent font-medium text-text-muted hover:text-ink"
