@@ -64,10 +64,19 @@ function SeeAllButton({ count, onClick }: { count: number; onClick: () => void }
   );
 }
 
-function SmallPhoto({ photo, className, children }: { photo: ProfilePhoto; className?: string; children?: React.ReactNode }) {
+function OpenPhoto({ photo, sizes, priority, onOpen }: { photo: ProfilePhoto; sizes: string; priority?: boolean; onOpen: (src: string) => void }) {
+  return (
+    <button type="button" aria-label={`View ${photo.alt}`} aria-haspopup="dialog" onClick={() => onOpen(photo.src)}
+      className="absolute inset-0 size-full cursor-zoom-in focus-visible:outline-offset-[-4px]">
+      <FilmImage src={photo.src} alt={photo.alt} sizes={sizes} priority={priority} {...IMAGE_PROPS} />
+    </button>
+  );
+}
+
+function SmallPhoto({ photo, className, children, onOpen }: { photo: ProfilePhoto; className?: string; children?: React.ReactNode; onOpen: (src: string) => void }) {
   return (
     <div className={cn("relative overflow-hidden rounded-photo bg-avatar", className)}>
-      <FilmImage src={photo.src} alt={photo.alt} sizes="284px" {...IMAGE_PROPS} />
+      <OpenPhoto photo={photo} sizes="284px" onOpen={onOpen} />
       <Attribution photo={photo} className="top-3 bottom-auto" />
       {children}
     </div>
@@ -79,11 +88,13 @@ export function ProfilePhotos({
   name,
   scrolled,
   onSeeAll,
+  onOpenPhoto,
 }: {
   photos: ProfilePhoto[];
   name: string;
   scrolled: boolean;
   onSeeAll: () => void;
+  onOpenPhoto: (src: string) => void;
 }) {
   const [first, second, third] = photos;
   const count = photos.length;
@@ -100,11 +111,11 @@ export function ProfilePhotos({
     return (
       <div className="flex h-full flex-col gap-3">
         <div className="flex h-[296px] shrink-0 gap-3">
-          <SmallPhoto photo={second} className="flex-1" />
-          {third ? <SmallPhoto photo={third} className="flex-1" /> : null}
+          <SmallPhoto onOpen={onOpenPhoto} photo={second} className="flex-1" />
+          {third ? <SmallPhoto onOpen={onOpenPhoto} photo={third} className="flex-1" /> : null}
         </div>
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-photo bg-avatar">
-          <FilmImage src={first.src} alt={first.alt} sizes="580px" {...IMAGE_PROPS} />
+          <OpenPhoto photo={first} sizes="580px" onOpen={onOpenPhoto} />
           <Attribution photo={first} />
           <SeeAllButton count={count} onClick={onSeeAll} />
         </div>
@@ -118,9 +129,9 @@ export function ProfilePhotos({
         {/* ArchPhoto's shape and caption, with the image loaded unoptimized (see IMAGE_PROPS). */}
         <div className="@container relative size-full">
           <div className="arch-top-fluid relative size-full overflow-hidden bg-avatar">
-            <FilmImage src={first.src} alt={first.alt} priority sizes="580px" {...IMAGE_PROPS} />
+            <OpenPhoto photo={first} sizes="580px" priority onOpen={onOpenPhoto} />
           </div>
-          <span className="absolute bottom-4 left-4 inline-flex items-center gap-1.5 rounded-pill border border-white/30 bg-ink/35 px-3 py-[7px] text-ui-sm font-semibold text-white backdrop-blur-[14px]">
+          <span className="pointer-events-none absolute bottom-4 left-4 inline-flex items-center gap-1.5 rounded-pill border border-white/30 bg-ink/35 px-3 py-[7px] text-ui-sm font-semibold text-white backdrop-blur-[14px]">
             <Images size={14} strokeWidth={2} aria-hidden />
             {count === 1 ? "1 photo" : `1 of ${count} photos`}
           </span>
@@ -129,11 +140,11 @@ export function ProfilePhotos({
       </div>
       {second ? (
         <div className="flex min-h-0 flex-1 gap-3">
-          <SmallPhoto photo={second} className="flex-1">
+          <SmallPhoto onOpen={onOpenPhoto} photo={second} className="flex-1">
             {!third && count > 1 ? <SeeAllButton count={count} onClick={onSeeAll} /> : null}
           </SmallPhoto>
           {third ? (
-            <SmallPhoto photo={third} className="flex-1">
+            <SmallPhoto onOpen={onOpenPhoto} photo={third} className="flex-1">
               <SeeAllButton count={count} onClick={onSeeAll} />
             </SmallPhoto>
           ) : null}
@@ -145,7 +156,7 @@ export function ProfilePhotos({
 }
 
 /** "See all N photos": a horizontal strip over the sheet. Esc closes the strip, not the sheet. */
-export function PhotoStrip({ photos, name, onClose }: { photos: ProfilePhoto[]; name: string; onClose: () => void }) {
+export function PhotoStrip({ photos, name, onClose, onOpenPhoto }: { photos: ProfilePhoto[]; name: string; onClose: () => void; onOpenPhoto: (src: string) => void }) {
   const regionRef = useRef<HTMLDivElement>(null);
   useEffect(() => regionRef.current?.querySelector("button")?.focus(), []);
 
@@ -178,7 +189,7 @@ export function PhotoStrip({ photos, name, onClose }: { photos: ProfilePhoto[]; 
       <ul className="flex min-h-0 flex-1 snap-x gap-3 overflow-x-auto pb-2">
         {photos.map((photo, i) => (
           <li key={`${photo.src}-${i}`} className="relative aspect-[4/5] h-full shrink-0 snap-start overflow-hidden rounded-photo bg-avatar">
-            <FilmImage src={photo.src} alt={photo.alt} sizes="600px" loading="lazy" {...IMAGE_PROPS} />
+            <OpenPhoto photo={photo} sizes="600px" onOpen={onOpenPhoto} />
             <Attribution photo={photo} />
           </li>
         ))}

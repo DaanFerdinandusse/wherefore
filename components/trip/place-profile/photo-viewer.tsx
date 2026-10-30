@@ -51,6 +51,7 @@ export function PhotoViewer({ photos, name, initialSrc, onClose }: {
       ref={dialogRef}
       aria-label={`Photos of ${name}`}
       className="fixed inset-0 m-auto h-[90dvh] max-h-none w-[min(1200px,calc(100vw-32px))] max-w-none overflow-hidden rounded-panel bg-surface p-0 text-ink shadow-panel backdrop:bg-scrim-soft backdrop:backdrop-blur-[6px]"
+      onClose={(event) => event.stopPropagation()}
       onCancel={(event) => { event.preventDefault(); event.stopPropagation(); onClose(); }}
       onKeyDown={(event) => {
         event.stopPropagation();

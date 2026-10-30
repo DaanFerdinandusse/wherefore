@@ -30,6 +30,7 @@ import {
   tripDays,
   type SlotChoice,
 } from "./profile-format";
+import { PhotoViewer } from "./photo-viewer";
 import { PhotoStrip, ProfilePhotos, type ProfilePhoto } from "./profile-photos";
 import { WhyBlock } from "./profile-why";
 import { YourPick } from "./profile-your-pick";
@@ -121,6 +122,7 @@ function PlaceProfileBody({
     return [...provider, ...google];
   }, [place, card.imageUrl, card.name, details]);
   const [stripOpen, setStripOpen] = useState(false);
+  const [viewerSrc, setViewerSrc] = useState<string | null>(null);
 
   // "In my places" and "Your pick".
   const [savedOverride, setSavedOverride] = useState<boolean | null>(null);
@@ -196,7 +198,7 @@ function PlaceProfileBody({
   return (
     <div className="relative flex h-full gap-10 py-5 pr-9 pl-5">
       <div className="h-full w-[min(580px,50%)] shrink-0">
-        <ProfilePhotos photos={photos} name={card.name} scrolled={compact} onSeeAll={() => setStripOpen(true)} />
+        <ProfilePhotos onOpenPhoto={setViewerSrc} photos={photos} name={card.name} scrolled={compact} onSeeAll={() => setStripOpen(true)} />
       </div>
 
       <div className="relative flex min-w-0 grow flex-col">
@@ -367,7 +369,8 @@ function PlaceProfileBody({
         </div>
       </div>
 
-      {stripOpen ? <PhotoStrip photos={photos} name={card.name} onClose={() => setStripOpen(false)} /> : null}
+      {viewerSrc && open ? <PhotoViewer photos={photos} name={card.name} initialSrc={viewerSrc} onClose={() => setViewerSrc(null)} /> : null}
+      {stripOpen ? <PhotoStrip onOpenPhoto={setViewerSrc} photos={photos} name={card.name} onClose={() => setStripOpen(false)} /> : null}
     </div>
   );
 }
