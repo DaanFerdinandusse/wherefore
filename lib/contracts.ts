@@ -347,6 +347,8 @@ export type TripContextOutput = {
     name: string;
     role: string;
     favorites: string[];
+    /** Artists and films that drive the search: "Khruangbin (artist)". */
+    media?: string[];
     tasteTags: string[];
     rules: string[];
     drivesSearch?: boolean;

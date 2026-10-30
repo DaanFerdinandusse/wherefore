@@ -96,6 +96,18 @@ The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives i
   result set is authoritative (`addAskPlaces(..., { replace: true })`), call
   logs are upserted on (tool call, step, index), and a replacement is saved
   with its link on the removed place (`replaced_by`, `replacement_key`).
+- **Every search runs on one signal set.** `lib/trips/trip-signals.ts` reads it
+  for find_places, score_places, remove_place and the UI's replace: favorites
+  of every profiled traveler (places, then artists and films), blended advisor
+  places, then the itinerary's places (at most 8, favorites keep `MAX_SIGNALS`).
+  Advisor places and itinerary places are plain drivers ("Your places", "This
+  trip's picks"): they keep their share of the match and never read as
+  something the client loves. An itinerary change moves the signal hash, so
+  newer evidence wins on the next search (`lib/trips/evidence.ts`).
+- **Searches do not repeat.** find_places excludes the itinerary and the removed
+  places (capped at `MAX_EXCLUDED`), upstream and again in code. A place that was
+  only shown stays available for another slot, which also lets a retried
+  search find its own results.
 - **Reasons are templates.** The model picks favorites, shared tags and one
   description snippet by index; anything not in the input is dropped and a
   place with no valid favorite gets no reason (`explain.ts`).

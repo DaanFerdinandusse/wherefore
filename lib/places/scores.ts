@@ -8,7 +8,8 @@ import type { ScorePlacesForClient } from "./contracts";
 
 // My places scored for one client, outside any trip: the same signals the
 // agent builds for a trip with this client alone (their resolved favorites,
-// never the advisor's own places) and the same scoring call score_places
+// artists and films included, never the advisor's own places) and the same
+// scoring call score_places
 // makes. Without a trip there is no board, so the display scale is the set
 // itself. The upstream answer is cached in api_cache for a day (lib/qloo), so
 // switching back to a client or a city re-reads the cache instead of calling.
@@ -22,6 +23,7 @@ export const scorePlacesForClient: ScorePlacesForClient = async (clientId, entit
   const signals = buildSignals({
     travelers: [{ name: client.name, clientId, role: "client" }],
     favorites: favorites.map((f) => ({ clientId: f.clientId, entityId: f.entityId, name: f.place?.name ?? f.query, match: f.match })),
+    media: client.mediaFavorites.map((m) => ({ ...m, clientId })),
   });
   if (signals.signals.length === 0) return { status: "no-favorites" };
 

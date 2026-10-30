@@ -13,8 +13,10 @@ export type OpeningFacts = {
   destination: string;
   startDate?: string;
   endDate?: string;
-  /** The client's matched favorites. */
+  /** The favorites that drive the searches: resolved places, artists and films. */
   favoritesCount: number;
+  /** Whose favorites those are, the client first; the client when missing. */
+  favoriteOwners?: string[];
   /** The advisor's own saved places in the destination. */
   advisorPlacesInCity: number;
   /** Itinerary slots that hold a place. */
@@ -112,11 +114,12 @@ export function composeOpening(facts: OpeningFacts): ChatOpening {
   const lead = days ? `${capitalize(numberWord(days))} ${days === 1 ? "day" : "days"} in ${facts.destination} for ${who}.` : `A trip to ${facts.destination} for ${who}.`;
   let match: string;
   if (facts.favoritesCount > 0) {
+    const owners = list((facts.favoriteOwners?.length ? facts.favoriteOwners : [facts.clientName]).map((name) => `${firstName(name)}'s`));
     const favorites = `${numberWord(facts.favoritesCount)} ${facts.favoritesCount === 1 ? "favorite" : "favorites"}`;
     match =
       facts.advisorPlacesInCity > 0
-        ? ` I will match every pick to ${client}'s ${favorites} and check your ${numberWord(facts.advisorPlacesInCity)} saved ${facts.destination} ${facts.advisorPlacesInCity === 1 ? "place" : "places"} along the way.`
-        : ` I will match every pick to ${client}'s ${favorites}.`;
+        ? ` I will match every pick to ${owners} ${favorites} and check your ${numberWord(facts.advisorPlacesInCity)} saved ${facts.destination} ${facts.advisorPlacesInCity === 1 ? "place" : "places"} along the way.`
+        : ` I will match every pick to ${owners} ${favorites}.`;
   } else {
     match = ` ${client} has no favorites saved yet, so the matches stay broad until you add some to ${client}'s profile.`;
     if (facts.advisorPlacesInCity > 0) {

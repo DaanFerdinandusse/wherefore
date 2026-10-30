@@ -13,8 +13,9 @@ import { composeOpening, daysBetween } from "./opening";
 import { loadToolTrip } from "./tools/trip-data";
 
 // The facts behind an empty chat's opening (lib/agent/opening.ts): the trip,
-// its travelers and itinerary, the client's matched favorites and the
-// advisor's saved places in the destination. Read for the chat's owner only.
+// its travelers and itinerary, the favorites that drive its searches (places,
+// artists and films of every profiled traveler) and the advisor's saved places
+// in the destination. Read for the chat's owner only.
 
 const DEFAULT_DAYS = 3;
 
@@ -37,7 +38,6 @@ export async function loadChatOpening(chatId: string, user: AuthUser): Promise<C
   const ctx = await loadToolTrip(chat.tripId);
 
   const { trip, travelers, slots } = snapshot;
-  const client = travelers.find((t) => t.role === "client");
   const filled = slots.filter((s) => s.tripPlaceId).map((s) => ({ day: s.day, slot: s.slot }));
   const dayCount =
     daysBetween(trip.startDate, trip.endDate) ?? Math.max(DEFAULT_DAYS, ...slots.map((s) => s.day));
@@ -48,7 +48,8 @@ export async function loadChatOpening(chatId: string, user: AuthUser): Promise<C
     destination: trip.destination.name,
     startDate: trip.datesMode === "exact" ? trip.startDate : undefined,
     endDate: trip.datesMode === "exact" ? trip.endDate : undefined,
-    favoritesCount: client?.favoritesCount ?? 0,
+    favoritesCount: ctx.signals.favorites.length,
+    favoriteOwners: ctx.signals.favoritesUsed.map((f) => f.clientName),
     advisorPlacesInCity: ctx.advisorPlaces.length,
     filled,
     dayCount,

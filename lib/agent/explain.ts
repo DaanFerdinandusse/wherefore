@@ -23,7 +23,7 @@ export type ExplainInput = {
   name: string;
   category: string;
   neighborhood?: string;
-  /** The drivers of this match, biggest share first. Plain entries ("Other favorites", "Your places") are never picked. */
+  /** The drivers of this match, biggest share first. Plain entries ("Other favorites", "Your places", "This trip's picks") are never picked. */
   because: { name: string; share: number; entityId?: string }[];
   /** The client's taste tags this place shares. */
   sharedTags: string[];
@@ -52,8 +52,8 @@ export const MAX_TAGS = 3;
 export const MAX_FACTS = 4;
 export const MAX_FACT_CHARS = 90;
 
-const PLAIN_DRIVERS = new Set(["other", "advisor"]);
-const PLAIN_NAMES = new Set(["other favorites", "your places"]);
+const PLAIN_DRIVERS = new Set(["other", "advisor", "trip-picks"]);
+const PLAIN_NAMES = new Set(["other favorites", "your places", "this trip's picks"]);
 
 const normalize = (text: string) =>
   text

@@ -6,7 +6,7 @@ import type {
   SharedTripView,
   SlotName,
 } from "@/lib/contracts";
-import { ADVISOR_DRIVER_NAME, OTHER_FAVORITES_NAME } from "@/lib/qloo/normalize";
+import { ADVISOR_DRIVER_NAME, OTHER_FAVORITES_NAME, TRIP_PICKS_DRIVER_NAME } from "@/lib/qloo/normalize";
 
 // Pure helpers for the traveler view. Every sentence the page says about a
 // place is a template over the shared view's facts (favorite names and
@@ -40,13 +40,13 @@ function parseDay(iso: string | undefined): Date | null {
 
 /**
  * A favorite the traveler can be told about: a real name. The shared view
- * carries no entity ids, and the server already drops the "Your places" and
- * "Other favorites" entries; their names are filtered too for views written
- * before that.
+ * carries no entity ids, and the server already drops the "Your places",
+ * "This trip's picks" and "Other favorites" entries; their names are filtered
+ * too for views written before that.
  */
 function isNamedFavorite(item: { name: string }): boolean {
   const name = item.name.trim();
-  return name !== "" && name !== OTHER_FAVORITES_NAME && name !== ADVISOR_DRIVER_NAME;
+  return name !== "" && name !== OTHER_FAVORITES_NAME && name !== ADVISOR_DRIVER_NAME && name !== TRIP_PICKS_DRIVER_NAME;
 }
 
 /** The place's named favorites, biggest share first. */

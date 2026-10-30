@@ -9,6 +9,8 @@ import type {
   TripPlaceCard,
 } from "@/lib/contracts";
 
+import { favoriteDrivers } from "@/lib/qloo/normalize";
+
 import { CATEGORY_NAME, loosenedCopy } from "./labels";
 
 // The `content` the model reads next to the `details` the UI reads (the
@@ -45,7 +47,7 @@ export function cardForModel(card: TripPlaceCard) {
     category: card.category,
     ...(card.neighborhood ? { neighborhood: card.neighborhood } : {}),
     ...(card.score !== undefined ? { score: card.score } : {}),
-    because: card.because.map((b) => `${b.name} ${b.share}%`),
+    because: favoriteDrivers(card.because).map((b) => `${b.name} ${b.share}%`),
     shared_tags: card.sharedTags.map((t) => t.name),
     ...(card.yourPlace ? { your_place: true, advisor_note: card.yourPlace.note } : {}),
     ...(card.reason ? { reason: card.reason } : {}),
@@ -106,7 +108,7 @@ export function scorePlacesForModel(output: ScorePlacesOutput): ModelText {
       ...(p.tripPlaceId ? { id: p.tripPlaceId } : {}),
       name: p.name,
       ...(p.score !== undefined ? { score: p.score } : {}),
-      because: p.because.map((b) => `${b.name} ${b.share}%`),
+      because: favoriteDrivers(p.because).map((b) => `${b.name} ${b.share}%`),
       ...(p.yourPlace ? { your_place: true, advisor_note: p.yourPlace.note } : {}),
       on_board: Boolean(p.tripPlaceId),
     })),

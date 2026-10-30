@@ -86,6 +86,7 @@ describe("reasonLine", () => {
     expect(reasonLine(place({ because: [] }))).toBeNull();
     expect(reasonLine(place({ because: [{ name: "Other favorites", share: 100 }] }))).toBeNull();
     expect(reasonLine(place({ because: [{ name: "Your places", share: 100 }] }))).toBeNull();
+    expect(reasonLine(place({ because: [{ name: "This trip's picks", share: 100 }] }))).toBeNull();
   });
 });
 

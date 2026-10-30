@@ -33,6 +33,23 @@ describe("composeOpening", () => {
     expect(opening.paragraphs[0]).toBe("A trip to Lisbon for Ana. I will match every pick to Ana's five favorites.");
   });
 
+  it("counts what drives the search, whoever named it", () => {
+    const opening = composeOpening({
+      ...lisbon,
+      favoritesCount: 2,
+      favoriteOwners: ["Ana Ruiz"],
+      advisorPlacesInCity: 0,
+    });
+    expect(opening.paragraphs[0]).toContain("I will match every pick to Ana's two favorites.");
+
+    const both = composeOpening({ ...lisbon, favoritesCount: 6, favoriteOwners: ["Ana Ruiz", "Marcus Lee"], advisorPlacesInCity: 0 });
+    expect(both.paragraphs[0]).toContain("I will match every pick to Ana's and Marcus's six favorites.");
+
+    const companionOnly = composeOpening({ ...lisbon, favoritesCount: 3, favoriteOwners: ["Marcus Lee"], advisorPlacesInCity: 0 });
+    expect(companionOnly.paragraphs[0]).toContain("Marcus's three favorites");
+    expect(companionOnly.paragraphs[0]).not.toContain("no favorites saved");
+  });
+
   it("says plainly when the client has no favorites", () => {
     const opening = composeOpening({ ...lisbon, favoritesCount: 0, advisorPlacesInCity: 1 });
     expect(opening.paragraphs[0]).toContain("Ana has no favorites saved yet");

@@ -303,16 +303,19 @@ export const OTHER_FAVORITES_NAME = "Other favorites";
 /** The one driver entry that holds every blended advisor place: a plain bar, never a favorite. */
 export const ADVISOR_DRIVER_ID = "advisor";
 export const ADVISOR_DRIVER_NAME = "Your places";
+/** The one driver entry that holds every place already in the itinerary: a plain bar, never a favorite. */
+export const TRIP_PICKS_DRIVER_ID = "trip-picks";
+export const TRIP_PICKS_DRIVER_NAME = "This trip's picks";
 
-/** True for a driver entry that is not one of the client's favorites ("Your places", "Other favorites"). */
+/** True for a driver entry that is not one of the client's favorites ("Your places", "This trip's picks", "Other favorites"). */
 export function isPlainDriver(entityId: string): boolean {
-  return entityId === ADVISOR_DRIVER_ID || entityId === OTHER_FAVORITES_ID;
+  return entityId === ADVISOR_DRIVER_ID || entityId === TRIP_PICKS_DRIVER_ID || entityId === OTHER_FAVORITES_ID;
 }
 
 /**
  * The favorites a place is credited to by name, for every "Because Ana
- * loves ..." sentence: never "Your places" or "Other favorites", never a
- * driver without a name.
+ * loves ..." sentence: never "Your places", "This trip's picks" or "Other
+ * favorites", never a driver without a name.
  */
 export function favoriteDrivers<T extends { entityId: string; name: string }>(because: readonly T[]): T[] {
   return because.filter((d) => !isPlainDriver(d.entityId) && d.name.trim().length > 0);

@@ -1,21 +1,20 @@
 import "server-only";
 
-import { asc, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import { getAdvisor } from "@/lib/auth/advisor";
 import type { ScopeInput } from "@/lib/auth/scope";
-import { listFavorites, type Client } from "@/lib/clients";
+import type { Client } from "@/lib/clients";
 import type { Destination, TasteTag } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { clients, trips, tripTravelers } from "@/lib/db/schema";
-import { listAdvisorPlaces, type AdvisorPlaceRow } from "@/lib/places";
-import { haversineM, MAX_DISTANCE_FACTOR } from "@/lib/qloo/normalize";
+import { trips } from "@/lib/db/schema";
+import type { AdvisorPlaceRow } from "@/lib/places";
 import { logTripCall, type Trip } from "@/lib/trips";
+import { loadTripSignals, tripScope } from "@/lib/trips/trip-signals";
 import type { QlooCall } from "@/lib/qloo";
 
 import { guarded, type TurnRef } from "../writes";
 
-import { buildSignals, type TripSignals } from "./signals";
+import type { TripSignals } from "./signals";
 
 // What a tool step needs to know about its trip, read once per step: the
 // trip row and its scope, the travelers' signals, the client's taste tags
@@ -37,6 +36,8 @@ export type ToolTrip = {
   /** The advisor's saved places in the destination (by city name or distance). */
   advisorPlaces: AdvisorPlaceRow[];
   blendMyTaste: boolean;
+  /** Entity ids a search leaves out: the itinerary and the removed places. */
+  excludeIds: string[];
 };
 
 export class TripGoneError extends Error {
@@ -46,50 +47,11 @@ export class TripGoneError extends Error {
   }
 }
 
-function inDestination(place: AdvisorPlaceRow, destination: Destination): boolean {
-  if (place.city.trim().toLowerCase() === destination.name.trim().toLowerCase()) return true;
-  if (place.lat === null || place.lon === null) return false;
-  const distance = haversineM(place.lat, place.lon, destination.lat, destination.lon);
-  return distance <= destination.radiusM * MAX_DISTANCE_FACTOR;
-}
-
 export async function loadToolTrip(tripId: string): Promise<ToolTrip> {
   const [trip] = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
   if (!trip) throw new TripGoneError();
-  const scope: ScopeInput = { ownerId: trip.ownerId, orgIds: trip.orgId ? [trip.orgId] : [], orgId: trip.orgId };
-
-  const travelerRows = await db
-    .select()
-    .from(tripTravelers)
-    .where(eq(tripTravelers.tripId, tripId))
-    .orderBy(asc(tripTravelers.position));
-  const travelers =
-    travelerRows.length > 0
-      ? travelerRows.map((t) => ({ name: t.name, clientId: t.clientId, role: t.role }))
-      : [{ name: trip.clientName, clientId: trip.clientId, role: "client" }];
-  const clientIds = [...new Set([trip.clientId, ...travelers.map((t) => t.clientId).filter((id): id is string => !!id)])];
-
-  const [clientRows, advisor, saved] = await Promise.all([
-    db.select().from(clients).where(inArray(clients.id, clientIds)),
-    getAdvisor(trip.ownerId),
-    listAdvisorPlaces(scope, { limit: 500 }),
-  ]);
-  const favoriteLists = await Promise.all(clientIds.map((id) => listFavorites(id, scope)));
-  const favorites = favoriteLists.flat().map((f) => ({
-    clientId: f.clientId,
-    entityId: f.entityId,
-    name: f.place?.name ?? f.query,
-    match: f.match,
-  }));
-
-  const advisorPlaces = saved.filter((p) => inDestination(p, trip.destination));
-  const blendMyTaste = advisor?.blendMyTaste ?? false;
-  const signals = buildSignals({
-    travelers,
-    favorites,
-    advisorPlaceEntityIds: advisorPlaces.map((p) => p.entityId),
-    blendMyTaste,
-  });
+  const scope = tripScope(trip);
+  const { travelers, clientIds, clients: clientRows, signals, advisorPlaces, blendMyTaste, excludeIds } = await loadTripSignals(trip);
 
   const byId = new Map(clientRows.map((c) => [c.id, c]));
   const ordered = clientIds.map((id) => byId.get(id)).filter((c): c is Client => !!c);
@@ -117,6 +79,7 @@ export async function loadToolTrip(tripId: string): Promise<ToolTrip> {
     signals,
     advisorPlaces,
     blendMyTaste,
+    excludeIds,
   };
 }
 

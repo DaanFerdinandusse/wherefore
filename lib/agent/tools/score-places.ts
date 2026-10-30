@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { FatalError } from "workflow";
 
 import type { ScorePlacesOutput } from "@/lib/contracts";
@@ -14,6 +14,7 @@ import { listTripPlaceCards } from "@/lib/trips";
 import { cacheWrite, type TurnRef } from "../writes";
 
 import { advisorPlaceIdOf, driversOf, resolveTripPlaceIds, signalHashOf } from "./search-core";
+import { signalsForScoring } from "./signals";
 import { loadToolTrip, logCalls } from "./trip-data";
 
 // score_places (PLAN 7): how well a shortlist fits the client. The shortlist
@@ -29,6 +30,8 @@ export type ScorePlacesInput = {
 };
 
 const MAX_NAMES = 10;
+/** Board places scored along for the scale when none was scored on this signal set yet. */
+const MAX_SCALE_PLACES = 12;
 
 export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef, toolCallId: string): Promise<ScorePlacesOutput> {
   const key = { toolCallId, step: "score" };
@@ -89,30 +92,55 @@ export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef, to
     };
   }
 
+  const signals = signalsForScoring(ctx.signals, entityIds);
+  if (signals.length === 0) {
+    await logCalls(turn, ctx, calls, "manual", key);
+    return { phase: "done", places: [], unresolved, error: `${ctx.clientName} has no resolved favorites to score against yet.` };
+  }
+
+  // The board's scale: this trip's current best affinities, scored against
+  // the same signals as these (lib/trips/evidence.ts); others do not compare.
+  // Every itinerary change moves the signal set, so the board can hold none:
+  // then its best places are scored in the same call, for the scale only,
+  // instead of ranking a lone place against itself.
+  const hash = signalHashOf(ctx);
+  const boardRows = await db
+    .select({
+      entityId: places.entityId,
+      status: tripPlaces.status,
+      affinity: tripPlaces.bestAffinity,
+      signalHash: tripPlaces.signalHash,
+    })
+    .from(tripPlaces)
+    .innerJoin(places, eq(places.id, tripPlaces.placeId))
+    .where(and(eq(tripPlaces.tripId, turn.tripId), isNotNull(tripPlaces.bestAffinity)))
+    .orderBy(desc(tripPlaces.bestAffinity));
+  const sameSet = boardRows.filter((r) => !hash || !r.signalHash || r.signalHash === hash);
+  const picks = new Set(ctx.signals.tripPickSignals);
+  const scaleIds =
+    sameSet.length > 0
+      ? []
+      : boardRows
+          .filter((r) => r.status !== "removed" && !entityIds.has(r.entityId) && !picks.has(r.entityId))
+          .slice(0, MAX_SCALE_PLACES)
+          .map((r) => r.entityId);
+
   let scored;
+  let setAffinities: number[];
   try {
     const result = await scoreEntities(
-      { signals: ctx.signals.signals, entityIds: [...entityIds], destination: ctx.destination, favorites: ctx.signals.favorites },
+      { signals, entityIds: [...entityIds, ...scaleIds], destination: ctx.destination, favorites: ctx.signals.favorites },
       { tripId: ctx.trip.id },
     );
     calls.push(...result.calls);
-    scored = result.scores;
+    scored = result.scores.filter((s) => entityIds.has(s.entityId));
+    const scale = sameSet.map((r) => r.affinity).filter((a): a is number => a !== null);
+    setAffinities = scale.length > 0 ? scale : result.scores.map((s) => s.affinity);
   } catch {
     await logCalls(turn, ctx, calls, "manual", key);
     throw new FatalError("Scoring did not answer. Try again in a moment.");
   }
   await logCalls(turn, ctx, calls, "manual", key);
-
-  // The board's scale: this trip's current best affinities, scored against
-  // the same signals as these (lib/trips/evidence.ts); others do not compare.
-  const hash = signalHashOf(ctx);
-  const boardRows = await db
-    .select({ affinity: tripPlaces.bestAffinity, signalHash: tripPlaces.signalHash })
-    .from(tripPlaces)
-    .where(and(eq(tripPlaces.tripId, turn.tripId), isNotNull(tripPlaces.bestAffinity)));
-  const sameSet = boardRows.filter((r) => !hash || !r.signalHash || r.signalHash === hash);
-  const scale = sameSet.map((r) => r.affinity).filter((a): a is number => a !== null);
-  const setAffinities = scale.length > 0 ? scale : scored.map((s) => s.affinity);
 
   // Which of these are on the board already (cards carry ids and your place).
   const cache = await db

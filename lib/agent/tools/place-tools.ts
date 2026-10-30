@@ -33,6 +33,7 @@ import {
   tripPlaceRowOf,
   type BoardItem,
 } from "./search-core";
+import { searchExclusions } from "./signals";
 import { loadToolTrip, logCalls } from "./trip-data";
 
 // lookup_place, set_itinerary and remove_place: the small tools.
@@ -190,7 +191,7 @@ export async function removePlaceTool(
   turn: TurnRef,
   toolCallId: string,
 ): Promise<RemovePlaceOutput> {
-  const ctx = await loadToolTrip(turn.tripId);
+  const before = await loadToolTrip(turn.tripId);
   const found = (await resolveTripPlaceIds(turn.tripId, [input.place_id])).get(input.place_id);
   if (!found) return { error: "That place is not on this trip." };
   const [placeRow] = await db.select().from(places).where(eq(places.id, found.placeId)).limit(1);
@@ -203,7 +204,7 @@ export async function removePlaceTool(
 
   // Already replaced: by this call (a retry) or an earlier one.
   if (found.status === "removed" && found.replacedBy) {
-    const [replacement] = await cardsInOrder(ctx, [found.replacedBy]);
+    const [replacement] = await cardsInOrder(before, [found.replacedBy]);
     return {
       removed,
       ...(replacement ? { replacement } : {}),
@@ -211,9 +212,12 @@ export async function removePlaceTool(
     };
   }
   if (found.status !== "removed") {
-    await guarded(turn, (guard) => setTripPlaceStatus(found.id, "removed", ctx.scope, { turn: guard }));
+    await guarded(turn, (guard) => setTripPlaceStatus(found.id, "removed", before.scope, { turn: guard }));
   }
   if (!input.replace) return { removed };
+  // Read again after the removal: a place the advisor just dropped from the
+  // itinerary is no longer a pick, so the replacement is not searched for on it.
+  const ctx = await loadToolTrip(turn.tripId);
 
   // Where the place came from: its best ranked ask, else its category.
   const [origin] = await db
@@ -237,7 +241,7 @@ export async function removePlaceTool(
     .from(places)
     .innerJoin(tripPlaces, eq(tripPlaces.placeId, places.id))
     .where(eq(tripPlaces.tripId, turn.tripId));
-  const excludeIds = onTrip.map((r) => r.entityId).slice(0, 200);
+  const excludeIds = searchExclusions(onTrip.map((r) => r.entityId));
 
   let results: PlaceResult[];
   try {

@@ -1,32 +1,35 @@
 import "server-only";
 
-import { and, asc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 
+import { driversFor } from "@/lib/agent/tools/signals";
 import { NotFoundError } from "@/lib/auth/errors";
 import type { ScopeInput } from "@/lib/auth/scope";
-import type { Category, TasteTag, TripPlaceCard } from "@/lib/contracts";
+import type { Category, TripPlaceCard } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { askPlaces, clientFavorites, clients, places, tripAsks, tripPlaces, tripTravelers } from "@/lib/db/schema";
+import { askPlaces, places, tripAsks, tripPlaces } from "@/lib/db/schema";
 import { upsertPlaces } from "@/lib/places";
 import { findPlaces as defaultFindPlaces, type QlooClient } from "@/lib/qloo";
 import type { FindPlaces, PlaceResult } from "@/lib/qloo/contracts";
-import { CATEGORY_FILTER_TAGS, categoryOf, displayScore, explainabilityFor, sharedTagsFor } from "@/lib/qloo/normalize";
+import { CATEGORY_FILTER_TAGS, categoryOf, displayScore, sharedTagsFor } from "@/lib/qloo/normalize";
 
 import { signalSetHash } from "./evidence";
 import { asCategory } from "./map";
 import { logTripCall, saveReplacement, setTripPlaceStatus } from "./mutations";
 import { getTrip, listTripPlaceCards } from "./queries";
+import { loadTripSignals } from "./trip-signals";
 import type { TurnGuard } from "./turn-guard";
 
 // "Not for Ana": the removed place makes room for the next best one. The ask
 // (or board category) that brought the removed place is asked again with the
-// same signals (the client favorites) and every entity already on the trip
-// excluded, so a removed place never comes back and nothing doubles. The best
-// new place is written as a manual trip place with its score and
-// explainability, joins the ask tab the removed place was in, and the calls
-// land in the trip's call log for "How we got this". The replacement and its
-// link on the removed place are one write (saveReplacement): a repeat with
-// the same key returns the same replacement instead of adding another.
+// same signals as every other search (trip-signals.ts) and every entity
+// already on the trip excluded, so a removed place never comes back and
+// nothing doubles. The best new place is written as a manual trip place with
+// its score and explainability, joins the ask tab the removed place was in,
+// and the calls land in the trip's call log for "How we got this". The
+// replacement and its link on the removed place are one write
+// (saveReplacement): a repeat with the same key returns the same replacement
+// instead of adding another.
 
 const TAKE = 10;
 
@@ -112,7 +115,7 @@ export async function replaceTripPlace(
   const trip = await getTrip(tripId, scope);
   if (!trip) throw new NotFoundError("trip");
 
-  const [removedRows, tripRows, askRows, travelerRows] = await db.batch([
+  const [removedRows, tripRows, askRows] = await db.batch([
     db
       .select({
         category: tripPlaces.category,
@@ -136,10 +139,6 @@ export async function replaceTripPlace(
       .innerJoin(tripAsks, eq(tripAsks.id, askPlaces.askId))
       .where(and(eq(askPlaces.tripPlaceId, tripPlaceId), ne(tripAsks.status, "archived")))
       .orderBy(asc(tripAsks.createdAt)),
-    db
-      .select({ clientId: tripTravelers.clientId })
-      .from(tripTravelers)
-      .where(and(eq(tripTravelers.tripId, tripId), eq(tripTravelers.drivesSearch, true), isNotNull(tripTravelers.clientId))),
   ]);
   const removed = removedRows[0];
   if (!removed) throw new NotFoundError("trip place");
@@ -152,19 +151,10 @@ export async function replaceTripPlace(
 
   if (removed.status !== "removed") await setTripPlaceStatus(tripPlaceId, "removed", scope, { turn: deps.turn });
 
-  // Same signals as the board: the favorites of the travelers who drive the search.
-  const clientIds = [...new Set([trip.clientId, ...travelerRows.flatMap((t) => (t.clientId ? [t.clientId] : []))])];
-  const [favoriteRows, clientRows] = await db.batch([
-    db
-      .select({ entityId: clientFavorites.entityId, query: clientFavorites.query, placeName: places.name })
-      .from(clientFavorites)
-      .leftJoin(places, eq(places.id, clientFavorites.placeId))
-      .where(and(inArray(clientFavorites.clientId, clientIds), isNotNull(clientFavorites.entityId)))
-      .orderBy(asc(clientFavorites.position)),
-    db.select({ id: clients.id, tasteTags: clients.tasteTags }).from(clients).where(eq(clients.id, trip.clientId)),
-  ]);
-  const favorites = uniqueFavorites(favoriteRows);
-  const tasteTags: TasteTag[] = clientRows[0]?.tasteTags ?? [];
+  // Same signals as the board, read after the removal: a place just dropped
+  // from the itinerary is no longer a pick.
+  const { signals, clients } = await loadTripSignals(trip);
+  const tasteTags = clients.find((c) => c.id === trip.clientId)?.tasteTags ?? [];
 
   const category = asCategory(removed.category);
   const query = replacementQuery({
@@ -178,7 +168,7 @@ export async function replaceTripPlace(
   const found = await find(
     {
       destination: trip.destination,
-      signals: favorites.map((f) => f.entityId),
+      signals: signals.signals,
       tags: query.tags,
       tagsOperator: query.tags.length > 1 ? "union" : undefined,
       excludeIds,
@@ -217,7 +207,7 @@ export async function replaceTripPlace(
   // the cards around it rather than as the top of a one-off query.
   const tripAffinities = tripRows.flatMap((row) => (typeof row.affinity === "number" ? [row.affinity] : []));
   const score = tripAffinities.length > 0 ? displayScore(best.affinity, [...tripAffinities, best.affinity]) : best.score;
-  const explainability = explainabilityFor(best, favorites);
+  const explainability = driversFor(best.signalScores, signals);
 
   const newTripPlaceId = await saveReplacement(
     tripId,
@@ -230,7 +220,7 @@ export async function replaceTripPlace(
         category: categoryOf(best.place) === "other" ? category : categoryOf(best.place),
         bestAffinity: best.affinity,
         bestScore: score,
-        signalHash: signalSetHash(favorites.map((f) => f.entityId)) ?? null,
+        signalHash: signalSetHash(signals.signals) ?? null,
         explainability,
         sharedTags: sharedTagsFor(best.place, tasteTags),
       },
@@ -245,15 +235,4 @@ export async function replaceTripPlace(
 
   const [card] = await listTripPlaceCards(tripId, scope, { tripPlaceIds: [newTripPlaceId] });
   return card ?? null;
-}
-
-function uniqueFavorites(rows: { entityId: string | null; query: string; placeName: string | null }[]) {
-  const seen = new Set<string>();
-  const out: { entityId: string; name: string }[] = [];
-  for (const row of rows) {
-    if (!row.entityId || seen.has(row.entityId)) continue;
-    seen.add(row.entityId);
-    out.push({ entityId: row.entityId, name: row.placeName ?? row.query });
-  }
-  return out;
 }

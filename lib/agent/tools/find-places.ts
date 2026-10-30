@@ -46,12 +46,14 @@ import {
   type BoardItem,
   type RankedPlace,
 } from "./search-core";
+import { searchExclusions } from "./signals";
 import { firstName, loadToolTrip, logCalls, type ToolTrip } from "./trip-data";
 
 // find_places (PLAN 7): one ask from the advisor becomes one board and map
 // tab. Three phases, each yielded as a preliminary output the card renders:
-//   searching  tags for free text, the search with the trip's signals, the
-//              ask and its places written (keyed by toolCallId);
+//   searching  tags for free text, the search with the trip's signals (the
+//              itinerary and the removed places left out), the ask and its
+//              places written (keyed by toolCallId);
 //   scoring    the advisor's places in the city scored, the ones that fit
 //              the ask (category, tags, price cap, area) kept and marked
 //              "Your place";
@@ -328,6 +330,9 @@ export async function* findPlacesTool(
     ...extra,
   });
   const failAsk = () => finishAsk(turn, ask.id, { status: "failed", elapsedMs: elapsed(), loosened: [], resultCount: 0 });
+  // The upstream exclusion is trusted but checked, and it never covers the advisor's places.
+  const excluded = new Set(ctx.excludeIds);
+  const notExcluded = (r: PlaceResult) => !excluded.has(r.place.entityId);
 
   yield output("searching");
 
@@ -385,13 +390,14 @@ export async function* findPlacesTool(
             signals: ctx.signals.signals,
             ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
             ...(input.price_max ? { priceMax: input.price_max } : {}),
+            ...(ctx.excludeIds.length ? { excludeIds: ctx.excludeIds } : {}),
             take,
           },
           { tripId: ctx.trip.id },
         );
         calls.push(...found.calls);
         loosened = found.loosened;
-        results = found.results;
+        results = found.results.filter(notExcluded);
       } catch (error) {
         await logCalls(turn, ctx, calls, source, key("search"));
         if (error instanceof QlooLocalityMismatchError) {
@@ -413,6 +419,7 @@ export async function* findPlacesTool(
         const exact = results.filter((r) => r.place.tags.some((t) => resolved.ids.includes(t.tagId)));
         const room = take - exact.length;
         if (room > 0) {
+          const fillExcludeIds = searchExclusions(exact.map((r) => r.place.entityId), ctx.excludeIds);
           try {
             const fill = await findPlaces(
               {
@@ -421,13 +428,13 @@ export async function* findPlacesTool(
                 tags: CATEGORY_FILTER_TAGS[askCategory],
                 tagsOperator: "union",
                 ...(input.price_max ? { priceMax: input.price_max } : {}),
-                ...(exact.length ? { excludeIds: exact.map((r) => r.place.entityId) } : {}),
+                ...(fillExcludeIds.length ? { excludeIds: fillExcludeIds } : {}),
                 take: Math.min(50, room + 4),
               },
               { tripId: ctx.trip.id },
             );
             calls.push(...fill.calls);
-            const fillers = fill.results.filter((r) => r.category === askCategory).slice(0, room);
+            const fillers = fill.results.filter(notExcluded).filter((r) => r.category === askCategory).slice(0, room);
             if (fillers.length > 0) {
               const merged = [...exact, ...fillers];
               const affinities = merged.map((r) => r.affinity);
@@ -511,8 +518,9 @@ export async function* findPlacesTool(
         // filters (category, tags, price cap, area); in-result ones already do.
         const kept = scores.filter(
           (s) =>
-            inResults.has(s.item.place.entityId) ||
-            (s.item.category === fitCategory && meetsAskConstraints(s.item.place, constraints)),
+            !excluded.has(s.item.place.entityId) &&
+            (inResults.has(s.item.place.entityId) ||
+              (s.item.category === fitCategory && meetsAskConstraints(s.item.place, constraints))),
         );
         // In-result advisor places already carry the link (persistBoardItems);
         // the others join the board and the ask, ranked by affinity.

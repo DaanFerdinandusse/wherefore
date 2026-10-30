@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { addFavorite, createClient } from "@/lib/clients";
+import { addFavorite, createClient, setMediaFavorites } from "@/lib/clients";
 import { db } from "@/lib/db";
 import { cleanup, hasDatabase, LISBON, testRun } from "@/lib/db/__tests__/fixtures";
 import { askPlaces, tripCalls, tripPlaces } from "@/lib/db/schema";
@@ -10,7 +10,8 @@ import insightsFixture from "@/lib/qloo/__fixtures__/insights-place.json";
 import { memoryCacheStore } from "@/lib/qloo/cache";
 import { createQlooClient } from "@/lib/qloo/client";
 import type { PlaceResult } from "@/lib/qloo/contracts";
-import { addAskPlaces, createAsk, createTrip, listTripPlaceCards, upsertTripPlaces } from "@/lib/trips";
+import { addAskPlaces, createAsk, createTrip, listTripPlaceCards, setSlots, upsertTripPlaces } from "@/lib/trips";
+import { signalSetHash } from "@/lib/trips/evidence";
 import { pickReplacement, replaceTripPlace, replacementQuery } from "@/lib/trips/replace";
 
 const template = insightsFixture.results.entities[0]!;
@@ -106,12 +107,14 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
   let removedId = "";
   let keptEntity = "";
   let askId = "";
+  let clientId = "";
   const FAV_A = entity("fav-a");
   const FAV_B = entity("fav-b");
   const favs: [string, string] = [FAV_A, FAV_B];
 
   beforeAll(async () => {
     const client = await createClient({ name: "Ana Ruiz", homeCity: "New York" }, run.owner);
+    clientId = client.id;
     const favorites = await upsertPlaces([
       { entityId: FAV_A, name: "Via Carota" },
       { entityId: FAV_B, name: "Lilia" },
@@ -230,5 +233,57 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
     expect(removed).toMatchObject({ status: "removed", replacedBy: card?.tripPlaceId, replacementKey: "call-again" });
     const names = (await listTripPlaceCards(tripId, run.owner)).map((c) => c.name);
     expect(names).not.toContain("Second pick");
+  });
+
+  it("searches on the same signals as the board: artists and films, and itinerary picks as a plain driver", async () => {
+    const ARTIST = entity("artist");
+    await setMediaFavorites(clientId, [{ query: "khruangbin", kind: "artist", entityId: ARTIST, name: "Khruangbin" }], run.owner);
+    const placeIds = await upsertPlaces([
+      { entityId: entity("pick"), name: "Picked place", primaryType: "urn:tag:genre:place:restaurant" },
+      { entityId: entity("dropped"), name: "Dropped place", primaryType: "urn:tag:genre:place:restaurant" },
+    ]);
+    const written = await upsertTripPlaces(
+      tripId,
+      [
+        { placeId: placeIds[entity("pick")]!, source: "ask", category: "eat", bestAffinity: 0.75, bestScore: 70 },
+        { placeId: placeIds[entity("dropped")]!, source: "ask", category: "eat", bestAffinity: 0.74, bestScore: 65 },
+      ],
+      run.owner,
+    );
+    const droppedId = written[placeIds[entity("dropped")]!]!;
+    await setSlots(
+      tripId,
+      [
+        { day: 1, slot: "lunch", tripPlaceId: written[placeIds[entity("pick")]!]! },
+        { day: 1, slot: "dinner", tripPlaceId: droppedId },
+      ],
+      "merge",
+      run.owner,
+    );
+
+    const raw = rawPlace(entity("after-pick"), "After the pick", 0.8, favs);
+    raw.query = {
+      ...raw.query,
+      explainability: {
+        "signal.interests.entities": [
+          { entity_id: FAV_A, score: 0.5 },
+          { entity_id: ARTIST, score: 0.2 },
+          { entity_id: entity("pick"), score: 0.3 },
+        ],
+      },
+    };
+    const { client, urls } = fakeClient([raw]);
+    const card = await replaceTripPlace(tripId, droppedId, run.owner, { client });
+
+    const signals = [FAV_A, FAV_B, ARTIST, entity("pick")];
+    // The dropped place left the itinerary with the removal: it is no pick any more.
+    expect(urls[0]!.searchParams.get("signal.interests.entities")).toBe(signals.join(","));
+    expect(card?.because).toEqual([
+      { entityId: FAV_A, name: "Via Carota", share: 50 },
+      { entityId: ARTIST, name: "Khruangbin", share: 20 },
+      { entityId: "trip-picks", name: "This trip's picks", share: 30 },
+    ]);
+    const [row] = await db.select().from(tripPlaces).where(eq(tripPlaces.id, card!.tripPlaceId));
+    expect(row?.signalHash).toBe(signalSetHash(signals));
   });
 });

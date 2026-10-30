@@ -2,7 +2,7 @@ import { FilmImage } from "@/components/ui/film-image";
 import { Pill } from "@/components/ui/pill";
 import type { Explainability, TasteTag } from "@/lib/contracts";
 import type { TripPlaceProfileDriver } from "@/lib/trips/profile-types";
-import { ADVISOR_DRIVER_ID, ADVISOR_DRIVER_NAME, isPlainDriver, OTHER_FAVORITES_NAME } from "@/lib/qloo/normalize";
+import { ADVISOR_DRIVER_ID, ADVISOR_DRIVER_NAME, isPlainDriver, OTHER_FAVORITES_NAME, TRIP_PICKS_DRIVER_ID, TRIP_PICKS_DRIVER_NAME } from "@/lib/qloo/normalize";
 import { cn } from "@/lib/ui/cn";
 
 import { whySentence } from "./profile-format";
@@ -50,7 +50,7 @@ export function WhyBlock({
           {because.map((driver) => {
             const other = isPlainDriver(driver.entityId);
             const photo = other ? null : byEntity.get(driver.entityId)?.imageUrl;
-            const plainName = driver.entityId === ADVISOR_DRIVER_ID ? ADVISOR_DRIVER_NAME : OTHER_FAVORITES_NAME;
+            const plainName = driver.entityId === ADVISOR_DRIVER_ID ? ADVISOR_DRIVER_NAME : driver.entityId === TRIP_PICKS_DRIVER_ID ? TRIP_PICKS_DRIVER_NAME : OTHER_FAVORITES_NAME;
             return (
               <li key={driver.entityId} className="flex items-center gap-3">
                 <span className={cn("relative size-[34px] shrink-0 overflow-hidden rounded-pill", other ? "border border-dashed border-pill-outline" : "bg-surface")}>

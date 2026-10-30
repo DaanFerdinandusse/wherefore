@@ -24,6 +24,7 @@ const place: ExplainInput = {
     { name: "Via Carota", share: 52, entityId: "e-via" },
     { name: "Lilia", share: 30, entityId: "e-lilia" },
     { name: "Your places", share: 10, entityId: "advisor" },
+    { name: "This trip's picks", share: 10, entityId: "trip-picks" },
     { name: "Other favorites", share: 8, entityId: "other" },
   ],
   sharedTags: ["Cozy", "Italian", "Natural Wine"],
@@ -55,7 +56,7 @@ describe("structured reasons", () => {
 
   it("gives no reason when no picked favorite is in the input", () => {
     expect(validatePick(place, { drivers: ["Lobster Shack"], tags: ["Cozy"] })).toBeNull();
-    const result = reasonsFromPicks([place], [{ place_id: "tp-1", drivers: ["Other favorites", "Your places"] }], context);
+    const result = reasonsFromPicks([place], [{ place_id: "tp-1", drivers: ["Other favorites", "Your places", "This trip's picks"] }], context);
     expect(result.reasons.size).toBe(0);
     expect(result.rejected).toHaveLength(1);
   });

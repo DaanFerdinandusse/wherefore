@@ -17,9 +17,21 @@ import {
   slotPhrase,
   slotTarget,
 } from "./labels";
-import { asTripData, DATA_CLOSE } from "./model-output";
+import { asTripData, cardForModel, DATA_CLOSE } from "./model-output";
 import { matchClientNote, mentions, targetOfQuery } from "./recommend-format";
-import { ADVISOR_DRIVER_ID, buildSignals, driversFor, MAX_SIGNALS } from "./signals";
+import { signalSetHash } from "@/lib/trips/evidence";
+import { favoriteDrivers } from "@/lib/qloo/normalize";
+import {
+  ADVISOR_DRIVER_ID,
+  buildSignals,
+  driversFor,
+  MAX_EXCLUDED,
+  MAX_SIGNALS,
+  MAX_TRIP_PICK_SIGNALS,
+  searchExclusions,
+  signalsForScoring,
+  TRIP_PICKS_DRIVER_ID,
+} from "./signals";
 
 describe("ask labels", () => {
   it("builds the tab label from the intent and the day", () => {
@@ -128,6 +140,200 @@ describe("buildSignals", () => {
       match: "resolved",
     }));
     expect(buildSignals({ travelers, favorites: many }).signals).toHaveLength(MAX_SIGNALS);
+  });
+
+  describe("artists and films", () => {
+    const media = [
+      { clientId: "c-ana", entityId: "e-khruangbin", name: "Khruangbin", query: "khruangbin" },
+      { clientId: "c-ana", entityId: "e-mood", query: "in the mood for love" },
+      { clientId: "c-ana", query: "no entity, not a signal" },
+    ];
+
+    it("comes after that traveler's places, named and owned", () => {
+      const signals = buildSignals({
+        travelers,
+        favorites,
+        media: [...media, { clientId: "c-marcus", entityId: "e-jazz", name: "Alice Coltrane", query: "alice" }],
+      });
+      expect(signals.signals).toEqual(["e-via", "e-lilia", "e-khruangbin", "e-mood", "e-jazz"]);
+      expect(signals.favorites).toContainEqual({ entityId: "e-khruangbin", name: "Khruangbin" });
+      expect(signals.favorites).toContainEqual({ entityId: "e-mood", name: "in the mood for love" });
+      expect(signals.favoritesUsed).toEqual([
+        { clientName: "Ana Ruiz", names: ["Via Carota", "Lilia", "Khruangbin", "in the mood for love"] },
+        { clientName: "Marcus", names: ["Alice Coltrane"] },
+      ]);
+    });
+
+    it("counts a traveler with only artists and films as having favorites", () => {
+      const signals = buildSignals({
+        travelers,
+        favorites: [],
+        media: [{ clientId: "c-marcus", entityId: "e-jazz", name: "Alice Coltrane", query: "alice" }],
+      });
+      expect(signals.favoritesUsed).toEqual([{ clientName: "Marcus", names: ["Alice Coltrane"] }]);
+      expect(signals.companionsWithoutFavorites).toEqual(["Ana Ruiz", "Clara"]);
+    });
+
+    it("names them in the drivers", () => {
+      const signals = buildSignals({ travelers, favorites, media });
+      expect(
+        driversFor(
+          [
+            { entityId: "e-via", score: 0.82 },
+            { entityId: "e-khruangbin", score: 0.18 },
+          ],
+          signals,
+        ),
+      ).toEqual([
+        { entityId: "e-via", name: "Via Carota", share: 82 },
+        { entityId: "e-khruangbin", name: "Khruangbin", share: 18 },
+      ]);
+    });
+
+    it("respects the signal cap, places first", () => {
+      const many = Array.from({ length: MAX_SIGNALS - 1 }, (_, i) => ({
+        clientId: "c-ana",
+        entityId: `e-${i}`,
+        name: `Place ${i}`,
+        match: "resolved",
+      }));
+      const signals = buildSignals({ travelers, favorites: many, media });
+      expect(signals.signals).toHaveLength(MAX_SIGNALS);
+      expect(signals.signals.at(-1)).toBe("e-khruangbin");
+      expect(signals.signals).not.toContain("e-mood");
+    });
+  });
+
+  describe("trip picks", () => {
+    const picks = ["e-tasca", "e-uva"];
+
+    it("adds itinerary places after the favorites and the advisor's places, never as favorites", () => {
+      const signals = buildSignals({
+        travelers,
+        favorites,
+        advisorPlaceEntityIds: ["e-uva"],
+        blendMyTaste: true,
+        tripPickEntityIds: [...picks, "e-via"],
+      });
+      expect(signals.signals).toEqual(["e-via", "e-lilia", "e-uva", "e-tasca"]);
+      // A favorite stays a favorite, a blended place stays the advisor's.
+      expect(signals.tripPickSignals).toEqual(["e-tasca"]);
+      expect(signals.favorites.map((f) => f.entityId)).toEqual(["e-via", "e-lilia"]);
+      expect(signals.companionsWithoutFavorites).toEqual(["Clara", "Marcus"]);
+    });
+
+    it("caps the picks, and favorites always keep their room", () => {
+      const lots = Array.from({ length: 20 }, (_, i) => `e-pick-${i}`);
+      expect(buildSignals({ travelers, favorites, tripPickEntityIds: lots }).tripPickSignals).toHaveLength(MAX_TRIP_PICK_SIGNALS);
+
+      const full = Array.from({ length: MAX_SIGNALS - 3 }, (_, i) => ({
+        clientId: "c-ana",
+        entityId: `e-${i}`,
+        name: `Place ${i}`,
+        match: "resolved",
+      }));
+      const signals = buildSignals({ travelers, favorites: full, tripPickEntityIds: lots });
+      expect(signals.signals).toHaveLength(MAX_SIGNALS);
+      expect(signals.favorites).toHaveLength(MAX_SIGNALS - 3);
+      expect(signals.tripPickSignals).toHaveLength(3);
+    });
+
+    it("collapses their share into one plain entry and keeps the client's share true", () => {
+      const signals = buildSignals({ travelers, favorites, tripPickEntityIds: picks });
+      const drivers = driversFor(
+        [
+          { entityId: "e-tasca", score: 0.2 },
+          { entityId: "e-via", score: 0.5 },
+          { entityId: "e-uva", score: 0.1 },
+          { entityId: "e-unknown", score: 0.2 },
+        ],
+        signals,
+      );
+      expect(drivers).toEqual([
+        { entityId: "e-via", name: "Via Carota", share: 50 },
+        { entityId: TRIP_PICKS_DRIVER_ID, name: "This trip's picks", share: 30 },
+        { entityId: "other", name: "Other favorites", share: 20 },
+      ]);
+      expect(favoriteDrivers(drivers).map((d) => d.name)).toEqual(["Via Carota"]);
+    });
+
+    it("lists Your places before This trip's picks", () => {
+      const signals = buildSignals({
+        travelers,
+        favorites,
+        advisorPlaceEntityIds: ["e-uva"],
+        blendMyTaste: true,
+        tripPickEntityIds: ["e-tasca"],
+      });
+      const drivers = driversFor(
+        [
+          { entityId: "e-tasca", score: 0.4 },
+          { entityId: "e-uva", score: 0.1 },
+          { entityId: "e-via", score: 0.5 },
+        ],
+        signals,
+      );
+      expect(drivers.map((d) => d.entityId)).toEqual(["e-via", ADVISOR_DRIVER_ID, TRIP_PICKS_DRIVER_ID]);
+    });
+
+    it("is no driver list on its own", () => {
+      const signals = buildSignals({ travelers, favorites, tripPickEntityIds: picks });
+      expect(driversFor([{ entityId: "e-tasca", score: 1 }], signals)).toEqual([]);
+    });
+
+    it("changes nothing with an empty itinerary", () => {
+      const before = buildSignals({ travelers, favorites });
+      const empty = buildSignals({ travelers, favorites, tripPickEntityIds: [] });
+      expect(empty).toEqual(before);
+      expect(empty.tripPickSignals).toEqual([]);
+      expect(signalSetHash(empty.signals)).toBe(signalSetHash(["e-via", "e-lilia"]));
+    });
+
+    it("moves the signal hash once the itinerary holds a place", () => {
+      const empty = buildSignals({ travelers, favorites });
+      const picked = buildSignals({ travelers, favorites, tripPickEntityIds: ["e-tasca"] });
+      expect(signalSetHash(picked.signals)).not.toBe(signalSetHash(empty.signals));
+    });
+
+    it("never scores a pick against itself", () => {
+      const signals = buildSignals({ travelers, favorites, tripPickEntityIds: picks });
+      expect(signalsForScoring(signals, ["e-tasca", "e-new"])).toEqual(["e-via", "e-lilia", "e-uva"]);
+      // A favorite stays a signal, as it always did.
+      expect(signalsForScoring(signals, ["e-via"])).toEqual(signals.signals);
+    });
+  });
+});
+
+describe("searchExclusions", () => {
+  it("lists the itinerary and the removed places, each once", () => {
+    expect(searchExclusions(["e-a", "e-b"], ["e-c", "e-a"])).toEqual(["e-a", "e-b", "e-c"]);
+    expect(searchExclusions([], [])).toEqual([]);
+  });
+
+  it("caps the list, the first list first", () => {
+    const itinerary = Array.from({ length: 5 }, (_, i) => `e-slot-${i}`);
+    const removed = Array.from({ length: MAX_EXCLUDED * 2 }, (_, i) => `e-gone-${i}`);
+    const list = searchExclusions(itinerary, removed);
+    expect(list).toHaveLength(MAX_EXCLUDED);
+    expect(list.slice(0, 5)).toEqual(itinerary);
+  });
+});
+
+describe("cardForModel", () => {
+  it("only hands the model the favorites it may credit", () => {
+    const card = {
+      tripPlaceId: "tp-1",
+      name: "Snob Bar",
+      category: "drink",
+      because: [
+        { entityId: "e-khruangbin", name: "Khruangbin", share: 18 },
+        { entityId: TRIP_PICKS_DRIVER_ID, name: "This trip's picks", share: 30 },
+        { entityId: ADVISOR_DRIVER_ID, name: "Your places", share: 12 },
+        { entityId: "other", name: "Other favorites", share: 40 },
+      ],
+      sharedTags: [],
+    } as unknown as Parameters<typeof cardForModel>[0];
+    expect(cardForModel(card).because).toEqual(["Khruangbin 18%"]);
   });
 });
 
