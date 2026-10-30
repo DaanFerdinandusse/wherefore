@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 import { FilmImage } from "@/components/ui/film-image";
 import type { AppUIMessage, ChatOpening, FindPlacesOutput, ItinerarySlot } from "@/lib/contracts";
+import { withoutRegionMarker } from "@/lib/map/region-prompt";
 import { cn } from "@/lib/ui/cn";
 
 import { isInSlot, pickLine } from "../place-profile/card-format";
@@ -120,7 +121,7 @@ export function Thread({
       {visible.length === 0 && opening ? <OpeningMessage opening={opening} /> : null}
       {visible.map((message) => {
         if (message.role === "user") {
-          const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+          const text = withoutRegionMarker(message.parts.map((p) => (p.type === "text" ? p.text : "")).join(""));
           return (
             <li key={message.id} className="flex justify-end">
               <p

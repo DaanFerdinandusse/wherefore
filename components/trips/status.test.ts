@@ -9,10 +9,10 @@ const shared = (overrides: Parameters<typeof tripCard>[0] = {}) =>
   tripCard({ stage: "shared", shareToken: "tok", sharedAt: new Date("2026-11-06T09:00:00Z"), ...overrides });
 
 describe("planning", () => {
-  it("counts filled slots against every slot of every day", () => {
+  it("counts filled slots against the meals of every day", () => {
     const card = tripCard({ counts: { filledSlots: 3, days: 5 } });
-    expect(totalSlots(card)).toBe(30);
-    expect(cardStatus(card, today, now)).toMatchObject({ icon: "slots", text: "3 of 30 slots filled" });
+    expect(totalSlots(card)).toBe(15);
+    expect(cardStatus(card, today, now)).toMatchObject({ icon: "slots", text: "3 of 15 slots filled" });
   });
 
   it("says places are ready when there are places and no slot is filled", () => {

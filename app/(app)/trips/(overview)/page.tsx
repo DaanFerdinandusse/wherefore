@@ -19,7 +19,7 @@ import { listTrips, todayIso } from "@/lib/trips";
 import { showDevTrips } from "@/lib/trips/dev";
 import { shareUrl } from "@/lib/trips/share-actions";
 
-export const metadata: Metadata = { title: "Trips · Tastebrief" };
+export const metadata: Metadata = { title: "Trips · Wherefore" };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 

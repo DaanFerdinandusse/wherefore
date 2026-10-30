@@ -15,6 +15,7 @@ import {
   getSharedTripView,
   getTrip,
   getTripSnapshot,
+  getTripTravelerView,
   listTripPlaceCards,
   listTrips,
   setShareToken,
@@ -92,6 +93,32 @@ describe.skipIf(!hasDatabase)("trips", () => {
     await expect(createTrip(run.otherOwner, { ...baseInput(), clientId: f.clientId })).rejects.toThrow(
       "No client with that id.",
     );
+  });
+
+  it("carries the trip's cover to the snapshot, the board and the traveler view", async () => {
+    const owner = `${run.owner}-cover`;
+    const client = await createClient({ name: "Cover Client" }, owner);
+    const cover = {
+      url: "https://images.unsplash.com/photo-1",
+      alt: "Lisbon at dusk",
+      creditName: "Ana Ruiz",
+      creditUrl: "https://unsplash.com/@ana?utm_source=wherefore&utm_medium=referral",
+    };
+    try {
+      const { trip } = await createTrip(owner, { ...baseInput(), clientId: client.id, cover });
+      const { trip: without } = await createTrip(owner, { ...baseInput(), clientId: client.id });
+      expect(without.cover).toBeNull();
+
+      expect((await getTripSnapshot(trip.id, owner))?.trip.cover).toEqual(cover);
+      expect((await getTripTravelerView(trip.id, owner))?.cover).toEqual(cover);
+      const board = (await listTrips(owner)).planning.trips;
+      expect(board.find((card) => card.id === trip.id)?.imageUrl).toBe(cover.url);
+      expect(board.find((card) => card.id === without.id)?.imageUrl).toBeNull();
+    } finally {
+      await db.delete(chats).where(eq(chats.ownerId, owner));
+      await db.delete(trips).where(eq(trips.ownerId, owner));
+      await db.delete(clients).where(eq(clients.ownerId, owner));
+    }
   });
 
   it("upsertTripPlaces keeps one row per place, the strongest source and the best score", async () => {
@@ -347,8 +374,12 @@ describe.skipIf(!hasDatabase)("trips", () => {
     await setTripPlaceStatus(ids[ramiro]!, "removed", run.owner);
 
     expect(await getSharedTripView("not-a-real-token-at-all")).toBeNull();
+    const preview = await getTripTravelerView(trip.id, run.owner);
     const { shareToken } = await setShareToken(trip.id, run.owner);
     const view = await getSharedTripView(shareToken!);
+    // The advisor's preview, read before any link existed, is the page the link shows.
+    expect(preview).toEqual(view);
+    expect(await getTripTravelerView(trip.id, run.otherOwner)).toBeNull();
     expect(view).toMatchObject({ title: "Lisbon for Ana", destinationName: "Lisbon", preparedFor: "Ana" });
     expect(view!.days.map((d) => [d.day, d.date, d.slots.map((s) => [s.slot, s.place?.name, s.advisorNote])])).toEqual([
       [

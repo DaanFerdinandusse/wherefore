@@ -9,7 +9,7 @@ import "server-only";
 import { PLACES_API_BASE, googleServerKey } from "./config";
 import type { DetailsTier, GoogleAttribution, GooglePlaceDetails, PlaceDetails } from "./contracts";
 import { GoogleApiError, GoogleInputError, GoogleSchemaError } from "./errors";
-import { photoProxyUrl } from "./photos";
+import { fullPhotoWidth, photoProxyUrl, tilePhotoWidth } from "./photos";
 import { type RawPlaceDetails, placeDetailsSchema } from "./types";
 
 export const BASIC_FIELDS = [
@@ -17,6 +17,7 @@ export const BASIC_FIELDS = [
   "displayName",
   "formattedAddress",
   "googleMapsUri",
+  "googleMapsLinks",
   "primaryType",
   "primaryTypeDisplayName",
   "businessStatus",
@@ -163,6 +164,7 @@ export function normalizeDetails(raw: RawPlaceDetails, tier: DetailsTier): Googl
     name: raw.displayName?.text,
     address: raw.formattedAddress,
     mapsUrl: raw.googleMapsUri,
+    photosUrl: raw.googleMapsLinks?.photosUri,
     primaryType: raw.primaryType,
     primaryTypeLabel: raw.primaryTypeDisplayName?.text,
     businessStatus: raw.businessStatus,
@@ -170,7 +172,8 @@ export function normalizeDetails(raw: RawPlaceDetails, tier: DetailsTier): Googl
     utcOffsetMinutes: raw.utcOffsetMinutes,
     photos: (raw.photos ?? []).map((photo) => ({
       name: photo.name,
-      url: photoProxyUrl(photo.name),
+      url: photoProxyUrl(photo.name, tilePhotoWidth(photo)),
+      fullUrl: photoProxyUrl(photo.name, fullPhotoWidth(photo)),
       widthPx: photo.widthPx,
       heightPx: photo.heightPx,
       attributions: (photo.authorAttributions ?? []).map(attribution),

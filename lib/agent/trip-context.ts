@@ -121,6 +121,18 @@ export async function loadTripContext(tripId: string): Promise<TripContextOutput
           );
   const scoreOf = new Map(scoreRows.map((r) => [r.advisorPlaceId, r.score]));
 
+  // Which place each filled slot holds, so the agent knows where the days are.
+  const slotPlaceIds = [...new Set(slotRows.flatMap((s) => (s.tripPlaceId ? [s.tripPlaceId] : [])))];
+  const slotPlaces =
+    slotPlaceIds.length === 0
+      ? []
+      : await db
+          .select({ id: tripPlaces.id, name: places.name, neighborhood: places.neighborhood })
+          .from(tripPlaces)
+          .innerJoin(places, eq(places.id, tripPlaces.placeId))
+          .where(inArray(tripPlaces.id, slotPlaceIds));
+  const slotPlaceOf = new Map(slotPlaces.map((p) => [p.id, p]));
+
   const clientById = new Map(clientRows.map((c) => [c.id, c]));
   const travelerList =
     travelerRows.length > 0
@@ -175,7 +187,13 @@ export async function loadTripContext(tripId: string): Promise<TripContextOutput
     },
     itinerary: slotRows.map((s) => {
       const slot = toSlot(s);
-      return { ...slot, note: clip(slot.note) };
+      const place = s.tripPlaceId ? slotPlaceOf.get(s.tripPlaceId) : undefined;
+      return {
+        ...slot,
+        note: clip(slot.note),
+        ...(place ? { placeName: clip(place.name, 60) } : {}),
+        ...(place?.neighborhood ? { neighborhood: clip(place.neighborhood, 40) } : {}),
+      };
     }),
   };
   return fitContext(context);

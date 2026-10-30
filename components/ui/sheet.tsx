@@ -10,7 +10,8 @@ import { cn } from "@/lib/ui/cn";
 // itinerary-canvas, so Escape, the focus trap, focus return and the top layer
 // come from the platform. A click on the scrim closes it; the page behind
 // does not scroll while it is open. The panel rises in. `left` is the nav
-// drawer: 360px, 12px from the viewport edge.
+// drawer: 360px, 12px from the viewport edge. `full` covers the whole window
+// and scrolls on its own (the traveler view).
 export function Sheet({
   open,
   onClose,
@@ -23,7 +24,7 @@ export function Sheet({
   onClose: () => void;
   /** Accessible name ("Contramar"). */
   label: string;
-  side?: "right" | "left" | "center";
+  side?: "right" | "left" | "center" | "full";
   /** Panel classes: width, height, padding. */
   className?: string;
   children: ReactNode;
@@ -67,18 +68,23 @@ export function Sheet({
           ? "items-stretch justify-end p-4"
           : side === "left"
             ? "items-stretch justify-start p-3"
-            : "items-center justify-center p-6",
+            : side === "full"
+              ? "items-stretch justify-stretch"
+              : "items-center justify-center p-6",
       )}
     >
       {open ? (
         <div
           className={cn(
-            "rise-in relative overflow-auto rounded-panel bg-surface shadow-panel",
+            "rise-in relative overflow-auto bg-surface",
+            side !== "full" && "rounded-panel shadow-panel",
             side === "right"
               ? "h-full w-[min(1224px,calc(100vw-32px))]"
               : side === "left"
                 ? "h-full w-[min(360px,calc(100vw-24px))]"
-                : "max-h-full w-[min(560px,100%)] p-8",
+                : side === "full"
+                  ? "h-full w-full"
+                  : "max-h-full w-[min(560px,100%)] p-8",
             className,
           )}
         >

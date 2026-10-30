@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ClientsList } from "@/components/clients/list/clients-list";
 import { NewClientSheet } from "@/components/clients/new/new-client-sheet";
 
-export const metadata: Metadata = { title: "New client · Tastebrief" };
+export const metadata: Metadata = { title: "New client · Wherefore" };
 
 // C1 from a deep link (or the New trip panel's "New client"): the Clients
 // list with the New client sheet over it. Closing goes to the list, or back

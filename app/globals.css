@@ -101,6 +101,9 @@
   --text-meta--line-height: 16px;
   --text-micro: 12px;
   --text-micro--line-height: 16px;
+  /* Long place names in map pills. */
+  --text-map-name: 11px;
+  --text-map-name--line-height: 14px;
   --text-action: 15px;
   --text-action--line-height: 20px;
   --text-empty: 30px;
@@ -299,6 +302,63 @@ textarea {
   animation: rise-in 320ms var(--ease-out-expo) both;
 }
 
+/* A place landing in the itinerary from the map: the ring goes out from the
+   pin, the day badge pops on, the check draws itself in the bar. */
+@keyframes pin-landed {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@keyframes badge-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes check-draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@utility pin-landed {
+  animation: pin-landed 700ms var(--ease-out-expo) both;
+}
+
+@utility badge-pop {
+  animation: badge-pop 420ms var(--ease-out-expo) both;
+}
+
+/* On an icon: the check's stroke is shorter than this dash. */
+@utility check-draw {
+  & path {
+    stroke-dasharray: 24;
+    animation: check-draw 420ms var(--ease-out-expo) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-landed,
+  .badge-pop,
+  .check-draw path {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rise-in {
     animation: none;
@@ -332,6 +392,22 @@ textarea {
 /* A loading tile in the chat: the warm diagonal sheen of the designs. */
 @utility skeleton-sheen {
   background-image: linear-gradient(110deg, var(--color-skeleton) 0%, var(--color-skeleton-light) 45%, var(--color-skeleton) 90%);
+}
+
+/* A loading line of text: the same warm sheen, sweeping across while it waits. */
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+@utility skeleton-shimmer {
+  background-image: linear-gradient(110deg, var(--color-skeleton) 30%, var(--color-skeleton-light) 50%, var(--color-skeleton) 70%);
+  background-size: 250% 100%;
+  animation: skeleton-shimmer 1.6s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 @utility arch-top-fluid {
@@ -374,43 +450,36 @@ textarea {
   .chat-activity-presence[data-state="exiting"] { animation: none; display: none; }
 }
 
+/* Closing uses a softer curve than opening: at the expo ease the height would
+   be gone before the fade could be seen. */
 .place-photos-reveal {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: grid-template-rows 340ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .place-photos-reveal[data-expanded="true"] {
   grid-template-rows: 1fr;
-  transition-duration: 400ms;
+  transition: grid-template-rows 440ms var(--ease-out-expo);
 }
 
 .place-photos-clip {
   min-height: 0;
   overflow: hidden;
+  opacity: 0;
+  transition: opacity 240ms ease-out;
 }
 
-.place-photos-scroll {
-  /* Two additional rows beneath the original photo strip. */
-  --photo-row: clamp(100px, 22cqw, 180px);
-  max-height: calc(var(--photo-row) * 2 + 6px);
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-text-2) var(--color-track);
-  border-radius: var(--radius-lg);
-}
-
-.place-photos-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: var(--photo-row);
-  gap: 6px;
+.place-photos-reveal[data-expanded="true"] > .place-photos-clip {
+  opacity: 1;
+  transition: opacity 380ms ease-out 40ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .place-photos-reveal,
-  .place-photos-reveal[data-expanded="true"] {
+  .place-photos-reveal[data-expanded="true"],
+  .place-photos-clip,
+  .place-photos-reveal[data-expanded="true"] > .place-photos-clip {
     transition: none;
   }
 }

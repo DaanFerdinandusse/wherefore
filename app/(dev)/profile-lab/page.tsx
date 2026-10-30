@@ -19,7 +19,7 @@ import { fixtureCases } from "./fixtures";
 // here, so the demo data stays as it is.
 
 export const metadata: Metadata = {
-  title: "Profile lab · Tastebrief",
+  title: "Profile lab · Wherefore",
   robots: { index: false, follow: false },
 };
 

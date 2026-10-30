@@ -1,4 +1,4 @@
-# Tastebrief: working agreements
+# Wherefore: working agreements
 
 Read `docs/PLAN.md` first. It is the full build plan: data model, agent runtime, screens, behaviors, build order. `PRODUCT.md` is the product truth. `QLOO_API_FINDINGS.md` is what the recommendation API actually returns. The designs are in Paper (file "qloo", page "v2 Itinerary builder"); the Paper MCP tools can screenshot any artboard by name.
 

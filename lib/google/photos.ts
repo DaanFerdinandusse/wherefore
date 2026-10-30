@@ -10,10 +10,15 @@ import { GoogleApiError, GoogleInputError, GooglePhotoTooLargeError } from "./er
 
 export const PHOTO_PROXY_PATH = "/api/places/photo";
 export const DEFAULT_PHOTO_WIDTH = 800;
-/** Widest photo the proxy asks for: enough for a full-width profile header. */
-export const MAX_PHOTO_WIDTH = 1600;
+/** Widest photo the proxy asks for: fills the viewer on a 2x screen and stays
+ *  well under MAX_PHOTO_BYTES, which Google's 4800 px originals can pass. */
+export const MAX_PHOTO_WIDTH = 2400;
 /** Largest upstream body the proxy passes on. */
 export const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+/** Short side of a tile photo: covers the profile's 580 x 520 arch on a 2x screen. */
+export const TILE_SHORT_SIDE_PX = 1000;
+/** Long side of a photo in the viewer. */
+export const FULL_LONG_SIDE_PX = 2400;
 
 // places/{placeId}/photos/{photoReference}: ids are URL-safe base64-ish.
 const PHOTO_NAME_RE = /^places\/[A-Za-z0-9_-]{10,}\/photos\/[A-Za-z0-9_-]{10,}$/;
@@ -22,9 +27,29 @@ export function isPhotoName(name: string): boolean {
   return PHOTO_NAME_RE.test(name);
 }
 
+/** The Google place a photo belongs to, from its name. */
+export function photoPlaceId(name: string): string | null {
+  return isPhotoName(name) ? (name.split("/")[1] ?? null) : null;
+}
+
 export function clampPhotoWidth(width: number | undefined): number {
   if (width === undefined || !Number.isFinite(width)) return DEFAULT_PHOTO_WIDTH;
   return Math.min(MAX_PHOTO_WIDTH, Math.max(1, Math.round(width)));
+}
+
+type PhotoSize = { widthPx?: number; heightPx?: number };
+
+/** Width that gives a tile photo its short side. Sized by width alone, a
+ *  landscape photo comes back too low and is stretched to fill a tall frame. */
+export function tilePhotoWidth({ widthPx, heightPx }: PhotoSize): number {
+  if (!widthPx || !heightPx) return DEFAULT_PHOTO_WIDTH;
+  return clampPhotoWidth(Math.min(widthPx, TILE_SHORT_SIDE_PX * Math.max(1, widthPx / heightPx)));
+}
+
+/** Width that gives a viewer photo its long side, never above the original. */
+export function fullPhotoWidth({ widthPx, heightPx }: PhotoSize): number {
+  if (!widthPx || !heightPx) return MAX_PHOTO_WIDTH;
+  return clampPhotoWidth(Math.min(widthPx, FULL_LONG_SIDE_PX * Math.min(1, widthPx / heightPx)));
 }
 
 /** Same-origin URL for a Google photo at a width, for an <img src>. */

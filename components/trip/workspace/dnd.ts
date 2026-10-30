@@ -4,14 +4,25 @@
 
 import type { DragEvent } from "react";
 
-import type { SlotName } from "@/lib/contracts";
+import type { Category, SlotName } from "@/lib/contracts";
+import { asCategory } from "@/lib/trips/map";
 
-export const TRIP_PLACE_TYPE = "application/x-tastebrief-trip-place";
-export const SLOT_TYPE = "application/x-tastebrief-slot";
+export const TRIP_PLACE_TYPE = "application/x-wherefore-trip-place";
+export const SLOT_TYPE = "application/x-wherefore-slot";
+// A drag's data can only be read on drop. Its types can be read while it
+// hovers, so the category travels in a type: a target refuses before the drop.
+const CATEGORY_TYPE = "application/x-wherefore-category-";
 
-export function startPlaceDrag(event: DragEvent, tripPlaceId: string) {
+export function startPlaceDrag(event: DragEvent, tripPlaceId: string, category: Category) {
   event.dataTransfer.setData(TRIP_PLACE_TYPE, tripPlaceId);
+  event.dataTransfer.setData(`${CATEGORY_TYPE}${category}`, category);
   event.dataTransfer.effectAllowed = "copyMove";
+}
+
+/** The kind of place being dragged, readable while it hovers. */
+export function draggedCategory(event: DragEvent): Category | null {
+  const type = event.dataTransfer.types.find((t) => t.startsWith(CATEGORY_TYPE));
+  return type ? asCategory(type.slice(CATEGORY_TYPE.length)) : null;
 }
 
 export type DraggedSlot = { day: number; slot: SlotName; position: number };

@@ -4,11 +4,12 @@
 // path merges by tripPlaceId and every transition is idempotent under replay.
 
 import type { Ask, Category, ItinerarySlot, SlotName, TripPlaceCard, TripPlaceStatus, TripSnapshot } from "@/lib/contracts";
+import { addPosition, nextPosition, overflowSlot, PREFERRED_SLOTS, SLOT_ORDER, slotHolds, slotRule } from "@/lib/trips/day-parts";
 import { DEFAULT_UNSET_DAYS, daysBetween } from "@/lib/trips/stage";
 
 import type { BoardTab, MapCamera, PlacesMeta, TripView, TripWorkspaceState } from "../contracts";
 
-export const SLOT_ORDER: readonly SlotName[] = ["morning", "lunch", "afternoon", "dinner", "night", "stay"];
+export { SLOT_ORDER };
 export const BOARD_CATEGORIES = ["eat", "drink", "coffee", "see", "stay"] as const;
 export type BoardCategory = (typeof BOARD_CATEGORIES)[number];
 
@@ -79,6 +80,9 @@ export type WorkspaceEvent =
   | { type: "trip"; patch: Partial<TripSnapshot["trip"]> }
   | { type: "addDay" };
 
+/** What the trip panel opens on when nothing asks for another view. */
+export const DEFAULT_VIEW: TripView = "map";
+
 export function initialState(
   snapshot: TripSnapshot,
   client: Partial<Pick<WorkspaceState, "view" | "activeTab" | "selectedPlaceId" | "camera">> = {},
@@ -89,7 +93,7 @@ export function initialState(
     places: {},
     asks: {},
     slots: [],
-    view: client.view === "board" || !client.view ? "itinerary" : client.view,
+    view: client.view === "board" ? "itinerary" : (client.view ?? DEFAULT_VIEW),
     activeTab: client.activeTab ?? "all",
     highlightedPlaceId: null,
     selectedPlaceId: client.selectedPlaceId ?? null,
@@ -407,21 +411,12 @@ export function slotAt(
   return slots.find((s) => s.day === day && s.slot === slot && s.position === position);
 }
 
-const isFree = (slots: ItinerarySlot[], day: number, slot: SlotName) => !slotAt(slots, day, slot)?.tripPlaceId;
-
-// Which slots a place of each category goes to first, in order.
-const PREFERRED: Record<Category, SlotName[]> = {
-  eat: ["lunch", "dinner"],
-  drink: ["night", "afternoon"],
-  coffee: ["morning", "afternoon"],
-  see: ["morning", "afternoon"],
-  stay: ["stay"],
-  other: ["morning", "afternoon", "lunch", "dinner", "night"],
-};
+const isEmpty = (slots: ItinerarySlot[], day: number, slot: SlotName) =>
+  !slots.some((s) => s.day === day && s.slot === slot && s.tripPlaceId);
 
 /** The slot categories fill first, for "Add" on an empty slot ("lunch" opens Eat). */
 export function categoryForSlot(slot: SlotName): BoardCategory {
-  if (slot === "lunch" || slot === "dinner") return "eat";
+  if (slot === "breakfast" || slot === "lunch" || slot === "dinner") return "eat";
   if (slot === "night") return "drink";
   if (slot === "stay") return "stay";
   if (slot === "morning") return "coffee";
@@ -429,19 +424,27 @@ export function categoryForSlot(slot: SlotName): BoardCategory {
 }
 
 /**
- * The next free slot for a place: the earliest day with a free slot that suits
- * its category. Null when every suitable slot is taken (the UI opens a picker).
+ * The next free slot for a place: the earliest day with an empty slot that
+ * suits its category, so places spread over the days; then any other empty
+ * slot that may hold it (a restaurant's breakfast). Once those are full, the
+ * first day's open slot that suits it takes one more. Null when no open slot
+ * may hold it, a restaurant or a hotel (the UI opens a picker).
  */
 export function nextFreeSlot(
   state: Pick<WorkspaceState, "trip" | "slots" | "requestedDays">,
   category: Category,
-): { day: number; slot: SlotName } | null {
+): { day: number; slot: SlotName; position: number } | null {
   const days = dayCount(state);
-  const preferred = PREFERRED[category];
-  for (let day = 1; day <= days; day++) {
-    for (const slot of preferred) if (isFree(state.slots, day, slot)) return { day, slot };
+  const holding = SLOT_ORDER.filter((slot) => slotHolds(slot, category));
+  for (const candidates of [PREFERRED_SLOTS[category], holding]) {
+    for (let day = 1; day <= days; day++) {
+      for (const slot of candidates) {
+        if (isEmpty(state.slots, day, slot)) return { day, slot, position: addPosition(state.slots, { day, slot }) };
+      }
+    }
   }
-  return null;
+  const open = overflowSlot(category);
+  return open ? { day: 1, slot: open, position: nextPosition(state.slots, 1, open) } : null;
 }
 
 export function filledSlotCount(slots: ItinerarySlot[]): number {
@@ -487,6 +490,22 @@ export function swapWrites(slots: ItinerarySlot[], from: SlotRef, to: SlotRef): 
         }
       : { ...a, tripPlaceId: null },
   ];
+}
+
+/**
+ * Why a move can not happen, or null. A move onto a filled slot sends the
+ * place there back to the slot it came from, so that place has to fit too.
+ */
+export function moveRefusal(state: Pick<WorkspaceState, "slots" | "places">, from: SlotRef, to: SlotRef): string | null {
+  const categoryAt = (ref: SlotRef) => {
+    const id = slotAt(state.slots, ref.day, ref.slot, ref.position ?? 0)?.tripPlaceId;
+    return id ? state.places[id]?.category : undefined;
+  };
+  const moved = categoryAt(from);
+  if (moved && !slotHolds(to.slot, moved)) return slotRule(moved);
+  const displaced = categoryAt(to);
+  if (displaced && !slotHolds(from.slot, displaced)) return slotRule(displaced);
+  return null;
 }
 
 /** A slot row's content, as the server's replace writes it. */

@@ -28,7 +28,7 @@ A row is in scope when `owner_id = <user id>` or `org_id` is one of the user's o
 - Ids from URLs are checked with `isUuid` first, so a malformed id is a 404, not a 500.
 - Hand-written correlated subqueries use `inScopeAs(alias, scope)`. A child id is not a scope: the client summaries filter their `trips t` subqueries by scope too, because a client id alone also matches trips another advisor wrote for it.
 - A trip place's "Your place" link (`advisor_place_id`) is checked twice: `upsertTripPlaces` stores it only when the saved place is in the caller's scope and saves the same place, and the card query joins it only for the trip's own owner (or org) and the same place.
-- `places` is shared and unowned. The public traveler view (`getSharedTripView`) is keyed by the share token alone, so it never reuses the advisor snapshot: it selects only traveler-facing columns and returns a `SharedTripView` (no ids, scores, asks, removed places or advisor place notes; a slot note only when `note_for_traveler` is set).
+- `places` is shared and unowned. The public traveler view (`getSharedTripView`) is keyed by the share token alone, so it never reuses the advisor snapshot: it selects only traveler-facing columns and returns a `SharedTripView` (no ids, scores, asks, removed places or advisor place notes; a slot note only when `note_for_traveler` is set). `getTripTravelerView` reads the same view by trip id and scope for the advisor's preview. Both read Google's photos live (`lib/trips/traveler-photos.ts`) and never store them; a shared trip loads them from `/api/share/<token>/photo`, which serves only places on that trip's itinerary (`isSharedGooglePlace`).
 
 Route handlers map the typed errors with `errorResponse()` from `lib/auth/errors.ts`: 401, 404, 400, 503.
 

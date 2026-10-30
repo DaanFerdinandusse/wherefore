@@ -108,7 +108,7 @@ function DrawerBody({ onClose, pathname }: { onClose: () => void; pathname: stri
     <>
       <div className="flex items-center justify-between pl-2">
         <Link href="/trips" className="font-display text-wordmark leading-8 tracking-[-0.03em] text-ink">
-          Tastebrief
+          Wherefore
         </Link>
         <button
           type="button"

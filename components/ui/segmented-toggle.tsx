@@ -8,7 +8,7 @@ import { cn } from "@/lib/ui/cn";
 // the board above the dock; `outline` is Mine / Team and Exact dates /
 // Not set yet; `quiet` is Board / Calendar / List on the trips page, where
 // only the active option wears an outline; `panel` is the v3 view switch in
-// a panel header (Board / List, Itinerary / Map): a canvas track with the
+// a panel header (Board / List, Map / Itinerary): a canvas track with the
 // active option as an ink pill. A radio group: arrow keys move and select.
 export type SegmentOption<V extends string> = { value: V; label: string; icon?: ReactNode };
 

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trust Moments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..600;1,6..96,400..600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #e8e3d9; --surface: #f1ede6; --raised: #fbf9f5; --avatar: #ddd6ca;
+    --ink: #1c1a17; --text-2: #5e5850; --text-3: #4a453e;
+    --rule: rgb(28 26 23 / 0.12); --amber: #8a5a1e; --amber-deep: #6b4615; --dot: #c98a2e;
+    --glow: #e2a85a; --why: #f5e6cc; --track: rgb(28 26 23 / 0.06);
+    --display: "Bodoni Moda", Georgia, serif; --sans: "Hanken Grotesk", system-ui, sans-serif;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--canvas); color: var(--ink); font: 15px/1.45 var(--sans); padding: 40px 24px 80px; }
+  .board { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
+  header h1 { font: 400 56px/1.02 var(--display); letter-spacing: -0.025em; }
+  header p { margin-top: 10px; font-size: 18px; color: var(--text-3); max-width: 640px; }
+
+  .moment { display: flex; flex-direction: column; gap: 18px; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber); }
+  .moment h2 { font: 400 34px/1.1 var(--display); letter-spacing: -0.015em; margin-top: 6px; }
+  .moment .sub { color: var(--text-2); margin-top: 4px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+  .pair.wide { grid-template-columns: minmax(260px, 1fr) minmax(320px, 2.2fr); }
+  .tag { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); margin-bottom: 8px; }
+  .today { opacity: 0.72; }
+  .frame { background: var(--surface); border-radius: 20px; padding: 18px; }
+
+  .bubble { background: var(--surface); border-radius: 16px; padding: 14px 16px; }
+  .known { background: var(--raised); border-radius: 20px; padding: 24px; box-shadow: 0 1px 3px rgb(22 19 15 / 0.06); display: flex; flex-direction: column; gap: 16px; }
+  .known .line { font: 400 30px/1.18 var(--display); letter-spacing: -0.01em; }
+  .known .line em { font-style: italic; }
+  .known .ask { color: var(--text-3); }
+
+  .toggle { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--track); align-self: flex-start; }
+  .toggle button { border: 0; background: none; font: 600 15px/20px var(--sans); color: var(--text-3); padding: 9px 18px; border-radius: 999px; cursor: pointer; transition: background .2s, color .2s; }
+  .toggle button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .list-head b { font-weight: 600; color: var(--amber-deep); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .tile { display: flex; flex-direction: column; gap: 7px; transition: opacity .35s var(--ease), transform .45s var(--ease); }
+  .tile.swap { opacity: 0; transform: translateY(8px); }
+  .photo { position: relative; aspect-ratio: 4 / 3; border-radius: 14px; overflow: hidden; background: var(--avatar); }
+  .photo img { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter .5s var(--ease); }
+  .tile strong { font-size: 14px; font-weight: 600; line-height: 18px; }
+  .tile span.kind { font-size: 13px; color: var(--text-2); line-height: 17px; }
+
+  .looked { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  .looked i { width: 18px; height: 18px; border-radius: 50%; background: var(--ink); color: #fff; display: inline-flex; align-items: center; justify-content: center; font: 700 11px var(--sans); }
+  .picks { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 760px) { .picks { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .pick { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .pick .photo { aspect-ratio: 1 / 1; border-radius: 12px; }
+  .pick strong { font-size: 13px; font-weight: 600; line-height: 16px; }
+  .pick small { font-size: 12.5px; line-height: 16px; color: var(--text-2); opacity: 0; transition: opacity .4s var(--ease); }
+  .pick.out .photo img { filter: grayscale(1) opacity(0.5); }
+  .pick.out small { opacity: 1; }
+  .pick.out strong { color: var(--text-2); }
+  .pick.mine .photo { outline: 2.5px solid var(--dot); outline-offset: 2px; box-shadow: 0 0 22px 2px rgb(233 176 96 / 0.6); transition: box-shadow .5s; }
+  .pick.mine small { opacity: 1; color: var(--amber); font-weight: 600; }
+
+  .note { background: var(--raised); border-radius: 24px; padding: 14px; display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; box-shadow: 0 1px 3px rgb(22 19 15 / 0.06), 0 12px 32px rgb(22 19 15 / 0.05); transition: opacity .6s var(--ease), transform .7s var(--ease); }
+  .note.wait { opacity: 0; transform: translateY(14px); }
+  @media (max-width: 680px) { .note { grid-template-columns: 1fr; } }
+  .note .words { padding: 16px 10px 10px 16px; display: flex; flex-direction: column; gap: 14px; }
+  .note .slot { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber); }
+  .note h3 { font: 400 64px/1 var(--display); letter-spacing: -0.025em; }
+  .note p.say { font: italic 400 27px/1.2 var(--display); }
+  .note .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
+  .btn { height: 40px; padding: 0 16px; border-radius: 999px; font: 600 14px/40px var(--sans); border: 1px solid transparent; }
+  .btn.dark { background: var(--ink); color: #fff; }
+  .btn.line { border-color: rgb(28 26 23 / 0.5); font-weight: 500; line-height: 38px; }
+  .note .hero { position: relative; border-radius: 16px; overflow: hidden; min-height: 280px; background: var(--avatar); }
+  .note .hero > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .like { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; font-weight: 600; }
+  .like img { border-radius: 50%; object-fit: cover; flex: none; }
+  .note .hero .like { position: absolute; left: 12px; bottom: 12px; background: rgb(15 12 9 / 0.72); color: #fff; font-size: 13px; padding: 5px 12px 5px 5px; }
+  .note .hero .like img { width: 26px; height: 26px; }
+
+  .replay { align-self: flex-start; border: 0; background: var(--track); border-radius: 999px; font: 600 13px/17px var(--sans); padding: 7px 14px; cursor: pointer; color: var(--text-3); }
+
+  .day { background: var(--raised); border-radius: 18px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 76px 72px minmax(0, 1fr); gap: 12px; align-items: center; padding: 9px 14px; }
+  .row + .row { border-top: 1px solid var(--rule); }
+  .row .when { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2); }
+  .row .thumb { height: 56px; border-radius: 10px; overflow: hidden; background: var(--avatar); }
+  .row .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .row b { display: block; font-weight: 600; line-height: 20px; }
+  .row .type { font-size: 13px; line-height: 17px; color: var(--text-3); }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .badge { background: var(--why); color: var(--amber-deep); font-size: 12px; line-height: 22px; font-weight: 500; padding: 0 8px; border-radius: 999px; }
+  .badge.fav { display: inline-flex; align-items: center; gap: 4px; background: var(--dot); color: #fff; font-weight: 600; padding-left: 3px; }
+  .badge.fav img { width: 17px; height: 17px; border-radius: 50%; object-fit: cover; }
+  .badge.tip { background: none; border: 1px solid rgb(28 26 23 / 0.2); color: var(--text-3); line-height: 20px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="board">
+  <header>
+    <h1>A friend who knows Ana</h1>
+    <p>Four moments, in demo order. Real Lisbon results and real photos. The wording is a mock, built from those facts.</p>
+  </header>
+
+  <section class="moment">
+    <div>
+      <p class="eyebrow">1 · First screen</p>
+      <h2>It already knows Ana</h2>
+      <p class="sub">Before anyone types, it talks about the person, not the system.</p>
+    </div>
+    <div class="pair wide">
+      <div class="today">
+        <p class="tag">Today</p>
+        <div class="bubble">Five days in Lisboa for Ana and Clara. I will match every pick to Ana's four favorites and check your 11 saved Lisboa places along the way.</div>
+      </div>
+      <div>
+        <p class="tag">New</p>
+        <div class="known">
+          <p class="line">Ana goes for cozy, intimate, a little moody. <em>Italian for dinner, a speakeasy after.</em></p>
+          <p class="ask">Five days in Lisboa. Where do we start?</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="moment">
+    <div>
+      <p class="eyebrow">2 · One click</p>
+      <h2>Not the list everyone gets</h2>
+      <p class="sub">The same city, the same category. Flip it. On the real screen, this switches the map pins too.</p>
+    </div>
+    <div class="frame" style="display:flex;flex-direction:column;gap:16px">
+      <div class="list-head">
+        <div class="toggle" role="group" aria-label="Whose Lisboa">
+          <button type="button" data-list="all" aria-pressed="false">Everyone's Lisboa</button>
+          <button type="button" data-list="ana" aria-pressed="true">Ana's Lisboa</button>
+        </div>
+        <p><b>1 of the top 20 is the same</b></p>
+      </div>
+      <div class="tiles" id="tiles"></div>
+    </div>
+  </section>
+
+  <section class="moment">
+    <div>
+      <p class="eyebrow">3 · The money shot</p>
+      <h2>It makes the call, and shows who lost</h2>
+      <p class="sub">Options drop out with a reason, one stays, and it talks like a friend: the place, what to order, the catch.</p>
+    </div>
+    <div class="today">
+      <p class="tag">Today</p>
+      <div class="bubble">Forte is recommended for Sunday breakfast, a taste match for Sofia's love of Ten Belles and her stylish, cozy preferences.</div>
+    </div>
+    <p class="tag" style="margin-bottom:-8px">New</p>
+    <div class="looked"><i>✓</i> Looked at 6 restaurants for Friday dinner</div>
+    <div class="picks" id="picks"></div>
+    <article class="note" id="note">
+      <div class="words">
+        <p class="slot">Friday dinner · My pick</p>
+        <h3>Da Noi.</h3>
+        <p class="say">Get the cacio e pepe. It's loud, but so is Lilia.</p>
+        <div class="actions"><span class="btn dark">Add to Friday dinner</span><span class="btn line">Not for Ana</span></div>
+      </div>
+      <div class="hero">
+        <img src="https://images.qloo.com/i/77F491C5-CC44-46D7-AFAC-291A761F051A-4zW7HK-420x-outside.jpg" alt="">
+        <span class="like"><img src="https://images.qloo.com/i/55E6BA87-F930-4AF0-AD01-D2A3AF0CF782-420x-auto.jpg" alt="">Like Lilia</span>
+      </div>
+    </article>
+    <button class="replay" id="replay" type="button">Replay</button>
+  </section>
+
+  <section class="moment">
+    <div>
+      <p class="eyebrow">4 · The itinerary</p>
+      <h2>Every row sounds like a recommendation</h2>
+      <p class="sub">Same row, same badges. "Stylish" could be any client. "Like Lilia" can only be Ana.</p>
+    </div>
+    <div class="pair">
+      <div class="today">
+        <p class="tag">Today</p>
+        <div class="day">
+          <div class="row"><span class="when">Breakfast</span><span class="thumb"><img src="https://images.qloo.com/i/4E79E101-AF3D-4E90-AAC3-BB395FCD9D5D-0CpNeE-420x-outside.jpg" alt=""></span><div><b>The Folks Chiado</b><span class="type">Coffee · Chiado · €€</span><div class="badges"><span class="badge">Stylish</span><span class="badge">Cozy</span><span class="badge">Hip</span></div></div></div>
+          <div class="row"><span class="when">Dinner</span><span class="thumb"><img src="https://images.qloo.com/i/77F491C5-CC44-46D7-AFAC-291A761F051A-4zW7HK-420x-outside.jpg" alt=""></span><div><b>Da Noi</b><span class="type">Restaurant · Santos-o-Velho · €€</span><div class="badges"><span class="badge">Stylish</span><span class="badge">Romantic</span><span class="badge">Cozy</span></div></div></div>
+          <div class="row"><span class="when">Night</span><span class="thumb"><img src="https://images.qloo.com/i/22235B6D-2F04-4886-921A-5C767771CB6D-420x-auto.jpg" alt=""></span><div><b>Red Frog</b><span class="type">Bar · €€€</span><div class="badges"><span class="badge">Stylish</span><span class="badge">Intimate</span><span class="badge">Romantic</span></div></div></div>
+        </div>
+      </div>
+      <div>
+        <p class="tag">New</p>
+        <div class="day">
+          <div class="row"><span class="when">Breakfast</span><span class="thumb"><img src="https://images.qloo.com/i/4E79E101-AF3D-4E90-AAC3-BB395FCD9D5D-0CpNeE-420x-outside.jpg" alt=""></span><div><b>The Folks Chiado</b><span class="type">Coffee · Chiado · €€</span><div class="badges"><span class="badge fav"><img src="https://images.qloo.com/i/AF59EF83-C53B-45AB-A980-D5EEECB3A8F0-420x-auto.jpg" alt="">Like Devoción</span><span class="badge tip">Get the syrniki</span></div></div></div>
+          <div class="row"><span class="when">Dinner</span><span class="thumb"><img src="https://images.qloo.com/i/77F491C5-CC44-46D7-AFAC-291A761F051A-4zW7HK-420x-outside.jpg" alt=""></span><div><b>Da Noi</b><span class="type">Restaurant · Santos-o-Velho · €€</span><div class="badges"><span class="badge fav"><img src="https://images.qloo.com/i/55E6BA87-F930-4AF0-AD01-D2A3AF0CF782-420x-auto.jpg" alt="">Like Lilia</span><span class="badge tip">Get the cacio e pepe</span></div></div></div>
+          <div class="row"><span class="when">Night</span><span class="thumb"><img src="https://images.qloo.com/i/22235B6D-2F04-4886-921A-5C767771CB6D-420x-auto.jpg" alt=""></span><div><b>Red Frog</b><span class="type">Bar · €€€</span><div class="badges"><span class="badge fav"><img src="https://images.qloo.com/i/A9711D3C-43BD-4199-9C52-A89883F17DCD-420x-auto.jpg" alt="">Like Attaboy</span><span class="badge tip">Find the secret entrance</span></div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const lists = {
+    all: [
+      ["Time Out Market", "Food court", "96296410-62EB-408E-96C6-FD60AAAF9216-2b0WSH"],
+      ["Alegro Alfragide", "Shopping mall", "EAFABA65-503F-46E7-9A75-875D6515C3D6-0OvsBD"],
+      ["SUD Lisboa Terrazza", "Restaurant", "217477CC-45CC-4332-A0FC-AEAB22990ED4-4uiFGu"],
+      ["Village Underground", "Cultural center", "C6C2AEC9-8C10-4D83-A26B-266D9027F607-0hLuus"],
+      ["D'Bacalhau", "Restaurant", "6613BF54-046F-4505-B5F1-C70E5E5D6A8D-2hyFLA"],
+      ["Nicolau Lisboa", "Cafe", "D26D55AC-81B9-4B2E-A605-851BA0C1C0F9-1upllm"],
+    ],
+    ana: [
+      ["Da Noi", "Restaurant", "77F491C5-CC44-46D7-AFAC-291A761F051A-4zW7HK"],
+      ["A Taberna Do Mar", "Restaurant", "BF147A08-CE1E-4CB3-B659-8CA621A17410-0f9sv1"],
+      ["Tapisco", "Tapas", "4A73E875-40EE-44B4-A6AC-0754DDDB47D4-3UEZvg"],
+      ["The Folks Chiado", "Coffee shop", "4E79E101-AF3D-4E90-AAC3-BB395FCD9D5D-0CpNeE"],
+      ["Ceia", "Restaurant", "1E7A343E-1D71-429B-A334-14D07AA67077-45Glzx"],
+      ["Mezze", "Middle Eastern", "7262F08A-A8AF-4018-B930-909680EF5BEC-1Cz7Ru"],
+    ],
+  };
+  const image = (id) => `https://images.qloo.com/i/${id}-420x-outside.jpg`;
+  const tiles = document.getElementById("tiles");
+  const buttons = [...document.querySelectorAll(".toggle button")];
+
+  function fill(name) {
+    tiles.innerHTML = lists[name]
+      .map(([title, kind, id]) => `<div class="tile"><div class="photo"><img src="${image(id)}" alt=""></div><strong>${title}</strong><span class="kind">${kind}</span></div>`)
+      .join("");
+  }
+  function show(name) {
+    buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.list === name)));
+    [...tiles.children].forEach((t, i) => setTimeout(() => t.classList.add("swap"), i * 35));
+    setTimeout(() => {
+      fill(name);
+      [...tiles.children].forEach((t, i) => {
+        t.classList.add("swap");
+        setTimeout(() => t.classList.remove("swap"), 40 + i * 45);
+      });
+    }, 300);
+  }
+  buttons.forEach((b) => b.addEventListener("click", () => show(b.dataset.list)));
+  fill("ana");
+
+  const candidates = [
+    ["Quintal das Docas", "More sushi and steak", "7830F8E0-90AF-4EAB-A273-4EAA4B44071C-2LWdSZ"],
+    ["Tapisco", "Highest price here", "4A73E875-40EE-44B4-A6AC-0754DDDB47D4-3UEZvg"],
+    ["The Folks Chiado", "A brunch place", "4E79E101-AF3D-4E90-AAC3-BB395FCD9D5D-0CpNeE"],
+    ["Da Noi", "My pick", "77F491C5-CC44-46D7-AFAC-291A761F051A-4zW7HK"],
+    ["A Taberna Do Mar", "Tasting menu, cash only", "BF147A08-CE1E-4CB3-B659-8CA621A17410-0f9sv1"],
+    ["Mezze", "Syrian, communal", "7262F08A-A8AF-4018-B930-909680EF5BEC-1Cz7Ru"],
+  ];
+  const picks = document.getElementById("picks");
+  const note = document.getElementById("note");
+  picks.innerHTML = candidates
+    .map(([title, why, id]) => `<div class="pick"><div class="photo"><img src="${image(id)}" alt=""></div><strong>${title}</strong><small>${why}</small></div>`)
+    .join("");
+
+  let timers = [];
+  function eliminate() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    const items = [...picks.children];
+    items.forEach((p) => p.classList.remove("out", "mine"));
+    note.classList.add("wait");
+    const losers = [2, 5, 1, 4, 0];
+    losers.forEach((index, step) => timers.push(setTimeout(() => items[index].classList.add("out"), 500 + step * 450)));
+    timers.push(setTimeout(() => items[3].classList.add("mine"), 500 + losers.length * 450));
+    timers.push(setTimeout(() => note.classList.remove("wait"), 900 + losers.length * 450));
+  }
+  document.getElementById("replay").addEventListener("click", eliminate);
+  const seen = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) { eliminate(); seen.disconnect(); }
+  }, { threshold: 0.4 });
+  seen.observe(picks);
+</script>
+</body>
+</html>

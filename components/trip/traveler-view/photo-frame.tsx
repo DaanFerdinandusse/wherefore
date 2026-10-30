@@ -5,6 +5,9 @@ import { type CSSProperties, useState } from "react";
 import { FilmImage } from "@/components/ui/film-image";
 import { cn } from "@/lib/ui/cn";
 
+import type { PhotoCreditFacts } from "./format";
+import { PhotoCredit } from "./photo-credit";
+
 /**
  * A rounded photo frame with a fixed aspect ratio (the ratio and flex grow
  * come in as CSS variables). A photo that fails to load takes its frame with
@@ -18,6 +21,7 @@ export function PhotoFrame({
   style,
   sizes,
   priority,
+  credit,
 }: {
   src: string;
   alt: string;
@@ -25,12 +29,14 @@ export function PhotoFrame({
   style?: CSSProperties;
   sizes: string;
   priority?: boolean;
+  credit?: PhotoCreditFacts;
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   if (failedSrc === src) return null;
   return (
     <div style={style} className={cn("relative overflow-hidden rounded-card bg-avatar", className)}>
       <FilmImage src={src} alt={alt} sizes={sizes} priority={priority} onError={() => setFailedSrc(src)} />
+      {credit ? <PhotoCredit credit={credit} /> : null}
     </div>
   );
 }

@@ -123,7 +123,7 @@ export function distanceM(a: LatLon, b: LatLon): number {
 }
 
 /**
- * The search radius for "Search this area": the circle that fits inside the
+ * The search radius for "Search this region": the circle that fits inside the
  * viewport (half the shorter side), so results land on screen. Rounded to
  * 50 m and kept between 200 m and 50 km.
  */
@@ -133,6 +133,22 @@ export function radiusFromViewport(bounds: Bounds): number {
   const halfWidth = distanceM(center, { lat: center.lat, lon: bounds.east });
   const radius = Math.round(Math.min(halfHeight, halfWidth) / 50) * 50;
   return Math.min(50_000, Math.max(200, radius));
+}
+
+/** A pan this big, as a share of the viewport's shorter side, shows another region. */
+const FAR_PAN_SHARE = 0.4;
+/** A zoom this big does too: just under one level, so one click of the zoom buttons counts. */
+const FAR_ZOOM_LEVELS = 0.9;
+
+/**
+ * Does the view show a different region than `from`? A big zoom or a big pan,
+ * measured on screen at the current zoom. Coming back counts as not moved.
+ */
+export function movedFar(from: Camera, to: Camera, size: ViewportSize): boolean {
+  if (Math.abs(to.zoom - from.zoom) >= FAR_ZOOM_LEVELS) return true;
+  const p = toScreen(to, size, from);
+  const shift = Math.hypot(p.x - size.width / 2, p.y - size.height / 2);
+  return shift >= Math.min(size.width, size.height) * FAR_PAN_SHARE;
 }
 
 export type Compass = "north" | "north-east" | "east" | "south-east" | "south" | "south-west" | "west" | "north-west";

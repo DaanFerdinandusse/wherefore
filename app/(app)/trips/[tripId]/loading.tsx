@@ -25,14 +25,7 @@ export default function TripLoading() {
           <span className="h-[42px] w-[200px] rounded-pill bg-canvas" />
           <span className="size-[34px] rounded-pill bg-avatar" />
         </div>
-        <div className="flex flex-col gap-[22px] px-6 pt-5">
-          <span className="h-[150px] rounded-card bg-avatar/70" />
-          <span className="h-8 w-72 max-w-full rounded-row bg-avatar/70" />
-          <div className="grid grid-cols-2 gap-3">
-            <span className="h-[176px] rounded-[16px] bg-avatar/60" />
-            <span className="h-[176px] rounded-[16px] bg-avatar/60" />
-          </div>
-        </div>
+        <div className="min-h-0 flex-1 bg-avatar/40" />
       </section>
     </div>
   );

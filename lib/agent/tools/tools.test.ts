@@ -189,7 +189,7 @@ describe("slots and search rows", () => {
 
   it("labels a slot from the trip dates, the day number without them, and the stay by city", () => {
     expect(slotTarget({ day: 1, slot: "dinner" }, trip)).toEqual({ day: 1, slot: "dinner", label: "Fri dinner", date: "2027-05-14" });
-    expect(slotTarget({ day: 2, slot: "night" }, trip).label).toBe("Sat late");
+    expect(slotTarget({ day: 2, slot: "night" }, trip).label).toBe("Sat night");
     expect(slotTarget({ day: 2, slot: "lunch" }, {}).label).toBe("Day 2 lunch");
     expect(slotTarget({ day: 1, slot: "stay" }, trip).label).toBe("Lisbon stay");
     expect(dateOfDay("2027-05-14", 5)).toBe("2027-05-18");

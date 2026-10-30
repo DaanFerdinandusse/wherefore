@@ -12,6 +12,7 @@ import {
   dayTitle,
   dishList,
   favoritesBehind,
+  framePhoto,
   heroImage,
   heroIntro,
   joinNames,
@@ -202,14 +203,51 @@ describe("layouts", () => {
 });
 
 describe("hero", () => {
+  it("opens with the trip's cover when there is one", () => {
+    const cover = { url: "https://images.unsplash.com/photo-1", alt: "Lisbon", creditName: "Ana", creditUrl: "https://unsplash.com/@ana" };
+    expect(heroImage(view({ cover }))).toEqual({ src: cover.url, alt: "Lisbon", photo: { src: cover.url }, cover });
+  });
+
   it("takes the first place with a spare photo, else the last photo", () => {
     const v = view();
-    expect(heroImage(v)).toEqual({ src: "https://images.qloo.com/i/contramar.jpg", alt: "Lardo" });
+    expect(heroImage(v)).toMatchObject({ src: "https://images.qloo.com/i/contramar.jpg", alt: "Lardo" });
     v.days[0]!.slots[1] = slot({ place: place({ name: "Rosetta", images: ["r1", "r2"] }) });
-    expect(heroImage(v)).toEqual({ src: "r1", alt: "Rosetta" });
+    expect(heroImage(v)).toMatchObject({ src: "r1", alt: "Rosetta" });
     expect(heroImage({ days: [] })).toBeNull();
     expect(withoutHero(["r1", "r2"], "r1")).toEqual(["r2"]);
     expect(withoutHero(["r1"], "r1")).toEqual(["r1"]);
+  });
+
+  it("keeps a Google hero's url for matching and loads its larger copy with the credit", () => {
+    const v = view();
+    v.days[0]!.slots[1] = slot({
+      place: place({
+        name: "La Valise",
+        images: ["/tile-1", "/tile-2"],
+        googlePhotos: { "/tile-1": { fullSrc: "/full-1", author: "A Visitor" }, "/tile-2": { fullSrc: "/full-2" } },
+      }),
+    });
+    expect(heroImage(v)).toEqual({
+      src: "/tile-1",
+      alt: "La Valise",
+      photo: { src: "/full-1", credit: { author: "A Visitor" } },
+    });
+  });
+});
+
+describe("framePhoto", () => {
+  const url = "https://images.qloo.com/i/A-420x-outside.jpg";
+
+  it("asks the provider for the frame's size, with no credit", () => {
+    expect(framePhoto({}, url, false)).toEqual({ src: "https://images.qloo.com/i/A-1600x-outside.jpg" });
+    expect(framePhoto({}, url, true)).toEqual({ src: "https://images.qloo.com/i/A-2400x-outside.jpg" });
+  });
+
+  it("uses a Google photo's tile or larger copy, always with its credit", () => {
+    const place = { googlePhotos: { "/tile": { fullSrc: "/full", author: "A", authorUri: "https://a.test" } } };
+    const credit = { author: "A", authorUri: "https://a.test" };
+    expect(framePhoto(place, "/tile", false)).toEqual({ src: "/tile", credit });
+    expect(framePhoto(place, "/tile", true)).toEqual({ src: "/full", credit });
   });
 
   it("writes the intro from counts and the favorites behind the picks", () => {

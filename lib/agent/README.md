@@ -35,11 +35,11 @@ the Workflow run, its stream and a conditional UPDATE.
 | --- | --- | --- |
 | `seed_trip` | `{}`, forced on step 0 of the seed turn only | `FindPlacesOutput` with `kind: "seed"`, `steps`, `summary: SeedSummary` |
 | `get_trip_context` | `{}` | `TripContextOutput` |
-| `find_places` | `{ intent, category?, tags?, price_max?, area?, day_hint?, take? }` | `FindPlacesOutput` (phases searching, scoring, explaining, done) |
+| `find_places` | `{ intent, category?, tags?, price_max?, area?, near?, around_place_id?, around_day?, radius_m?, day_hint?, take? }` | `FindPlacesOutput` (phases searching, scoring, explaining, done). `near` is the exact circle from the map's Search this region (`lib/map/region-prompt.ts`); it wins over `area` and may lie outside the destination. Everything else searches a circle from `tools/search-area.ts`: a named spot, that day's places, the hotel, the middle of the itinerary, or the city center, widening only when too few places match. The agent chooses the anchor, the code does the geometry |
 | `score_places` | `{ place_ids?, names?, scope?: "advisor_places" }` | `ScorePlacesOutput` |
 | `lookup_place` | `{ place_id }` | `LookupPlaceOutput` |
 | `set_itinerary` | `{ days: [{ day, slots: [{ slot, place_id, note? }] }], mode }` | `SetItineraryOutput` (notes stored as agent notes) |
-| `remove_place` | `{ place_id, replace }` | `RemovePlaceOutput` |
+| `remove_place` | `{ place_id, replace }` | `RemovePlaceOutput`. Like `lookup_place`, `set_itinerary` and `around_place_id`, it takes a name as well as an id (`tools/place-name.ts`), because old tool results are trimmed from the model's history. A name that fits several trip places changes nothing and lists them; `set_itinerary` in replace mode then keeps the whole itinerary |
 
 The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives it a compact copy wrapped in `<trip_data>`, because client names, ground rules and advisor notes are typed by people. Ids the model passes back (`place_id`) are trip place ids; place ids are accepted too. Provider calls are logged with `logTripCall` (source `seed`, `ask:<id>`, or `manual` for score_places and a replacement outside an ask). The spike tools (`echo_places`, `slow_count`) exist only with `AGENT_DEV_TOOLS=1` outside production (playwright.config.ts sets it); their places never reach the board (`extractChatPlaces` reads only find_places, seed_trip and remove_place).
 

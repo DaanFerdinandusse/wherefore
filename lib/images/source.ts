@@ -3,19 +3,22 @@
 //
 // - provider: recommendation images (any host under qloo.com). The origin is
 //   slow and sometimes fails outright, and the dev image optimizer gives up
-//   after 7 s with a 504, which left cards as empty frames. They are already
+//   after 7 s with a 504, which left cards as empty frames. They are stored
 //   small (420 px wide), so the browser loads them directly: unoptimized, with
 //   an explicit size, lazy and async, over a warm placeholder background.
-// - proxy: our Google photo proxy (/api/places/photo). It requires the
+// - proxy: our Google photo routes (/api/places/photo, and
+//   /api/share/<token>/photo for shared trips). The first requires the
 //   viewer's session and the optimizer fetches local URLs without cookies, so
-//   it cannot go through the optimizer either; it sizes the photo itself (?w=)
-//   and sends Cache-Control. Loaded directly, lazy and async.
+//   it cannot go through the optimizer either; they size the photo themselves
+//   (?w=) and send Cache-Control. Loaded directly, lazy and async.
+// - unsplash: trip covers. Unsplash requires hotlinking and its CDN resizes on
+//   request, so unsplashLoader asks it for each width instead of the optimizer.
 // - other: static imports, files in /public and public remote hosts
 //   (Google avatars). These stay on the optimizer.
 
-import type { ImageProps } from "next/image";
+import type { ImageLoaderProps, ImageProps } from "next/image";
 
-export type ImageSource = "provider" | "proxy" | "other";
+export type ImageSource = "provider" | "proxy" | "unsplash" | "other";
 
 export type ImagePolicy = {
   source: ImageSource;
@@ -31,6 +34,7 @@ export type ImagePolicy = {
 
 /** Mirrors PHOTO_PROXY_PATH in lib/google/photos.ts (server only). */
 export const PHOTO_PROXY_PATH = "/api/places/photo";
+const SHARE_PHOTO_RE = /^\/api\/share\/[^/?]+\/photo(\?|$)/;
 
 // Provider images come as 420 px wide portraits ("...-420x-outside.jpg").
 const PROVIDER_WIDTH = 420;
@@ -56,12 +60,44 @@ function providerWidth(pathname: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
+/**
+ * A provider image at another width: its server resizes from the name. It
+ * also enlarges past the original, so a wider file is sharper only when the
+ * original had the pixels. Any other url comes back as it is.
+ */
+export function providerImageAt(url: string, width: number): string {
+  try {
+    if (!isProviderHost(new URL(url).hostname)) return url;
+  } catch {
+    return url;
+  }
+  return url.replace(/-\d{2,4}x-(?=[a-z]+\.[a-z]+$)/i, `-${width}x-`);
+}
+
+const UNSPLASH_HOST = "images.unsplash.com";
+
+/** The photo at the width the page asks for. `fm` would override `auto=format`. */
+export function unsplashLoader({ src, width, quality }: ImageLoaderProps): string {
+  const url = new URL(src);
+  url.searchParams.delete("fm");
+  url.searchParams.set("auto", "format");
+  url.searchParams.set("fit", "max");
+  url.searchParams.set("w", String(width));
+  url.searchParams.set("q", String(quality ?? 75));
+  return url.toString();
+}
+
 export function imagePolicy(src: Src): ImagePolicy {
   const url = srcString(src);
   if (!url) return OPTIMIZED;
 
   if (url.startsWith("/")) {
-    if (url === PHOTO_PROXY_PATH || url.startsWith(`${PHOTO_PROXY_PATH}?`) || url.startsWith(`${PHOTO_PROXY_PATH}/`)) {
+    if (
+      url === PHOTO_PROXY_PATH ||
+      url.startsWith(`${PHOTO_PROXY_PATH}?`) ||
+      url.startsWith(`${PHOTO_PROXY_PATH}/`) ||
+      SHARE_PHOTO_RE.test(url)
+    ) {
       return { source: "proxy", unoptimized: true, loading: "lazy", decoding: "async", placeholder: true };
     }
     return OPTIMIZED;
@@ -75,6 +111,9 @@ export function imagePolicy(src: Src): ImagePolicy {
   }
   if (parsed.protocol === "data:" || parsed.protocol === "blob:") {
     return { source: "other", unoptimized: true, decoding: "async", placeholder: false };
+  }
+  if (parsed.hostname === UNSPLASH_HOST) {
+    return { source: "unsplash", unoptimized: false, placeholder: false };
   }
   if (isProviderHost(parsed.hostname)) {
     const width = providerWidth(parsed.pathname) ?? PROVIDER_WIDTH;

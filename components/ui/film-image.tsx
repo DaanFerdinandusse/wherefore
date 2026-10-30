@@ -3,7 +3,7 @@
 import Image, { type ImageProps } from "next/image";
 import { useState } from "react";
 
-import { imagePolicy } from "@/lib/images/source";
+import { imagePolicy, unsplashLoader } from "@/lib/images/source";
 import { cn } from "@/lib/ui/cn";
 
 // next/image with the warm film grade of the designs (the `film` utility).
@@ -12,7 +12,8 @@ import { cn } from "@/lib/ui/cn";
 //
 // How the bytes load comes from imagePolicy (lib/images/source.ts): provider
 // images and our photo proxy load directly (unoptimized, explicit size, lazy,
-// async, warm placeholder background); everything else uses the optimizer.
+// async, warm placeholder background); Unsplash covers ask its CDN for each
+// width; everything else uses the optimizer.
 // A photo that fails to load is removed, so the frame's warm background shows
 // instead of a broken image. Explicit `unoptimized`, `loading` or `decoding`
 // props win over the policy.
@@ -51,6 +52,7 @@ export function FilmImage({
       height={sized ? policy.height : useFill ? undefined : height}
       sizes={direct ? sizes : (sizes ?? (useFill ? "(min-width: 1024px) 50vw, 100vw" : undefined))}
       unoptimized={direct || undefined}
+      loader={policy.source === "unsplash" ? unsplashLoader : undefined}
       priority={priority}
       preload={preload}
       loading={loading ?? (priority || preload ? undefined : direct ? policy.loading : undefined)}

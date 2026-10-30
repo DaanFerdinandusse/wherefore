@@ -12,13 +12,15 @@ import type {
 } from "@/lib/contracts";
 import type { itinerarySlots, tripAsks } from "@/lib/db/schema";
 
+import { SLOT_ORDER } from "./day-parts";
+
 // Pure row-to-contract mapping. The text columns hold closed sets; these
 // narrow them once so the UI never sees a value outside the union.
 
 const CATEGORIES: readonly Category[] = ["eat", "drink", "coffee", "see", "stay", "other"];
 const SOURCES: readonly TripPlaceSource[] = ["seed", "ask", "advisor", "manual"];
 const STATUSES: readonly TripPlaceStatus[] = ["suggested", "added", "removed"];
-export const SLOT_ORDER: readonly SlotName[] = ["morning", "lunch", "afternoon", "dinner", "night", "stay"];
+export { SLOT_ORDER };
 const ASK_STATUSES: readonly Ask["status"][] = ["running", "done", "failed", "archived"];
 
 function narrow<T extends string>(allowed: readonly T[], value: string, fallback: T): T {

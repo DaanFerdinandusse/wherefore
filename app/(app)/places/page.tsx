@@ -38,7 +38,7 @@ import { todayIso } from "@/lib/trips/stage";
 // save flow are the client islands. Scoring for the picked client starts
 // here and streams into the cards without holding the page.
 
-export const metadata: Metadata = { title: "My places · Tastebrief" };
+export const metadata: Metadata = { title: "My places · Wherefore" };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

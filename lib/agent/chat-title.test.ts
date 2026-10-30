@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { mapRegionPrompt } from "@/lib/map/region-prompt";
+
 import { CHAT_TITLE_MAX, chatTitleFrom, shortLine } from "./chat-title";
 
 describe("shortLine", () => {
@@ -26,6 +28,11 @@ describe("shortLine", () => {
 });
 
 describe("chatTitleFrom", () => {
+  it("leaves the coordinates of a map region search out of the title", () => {
+    const text = mapRegionPrompt({ lat: 38.7, lon: -9.1, radiusM: 1200 }, "dinner options");
+    expect(chatTitleFrom({ role: "user", parts: [{ type: "text", text }] })).toBe("Search this region of the map for dinner options.");
+  });
+
   it("names the chat from the advisor's text", () => {
     expect(
       chatTitleFrom({ role: "user", parts: [{ type: "text", text: "Day 2 lunch" }, { type: "text", text: "somewhere lively" }] }),

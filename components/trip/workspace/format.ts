@@ -2,17 +2,10 @@
 // "Because Ana loves ..." line and the board subtitle from built_from. Pure,
 // and only ever built from data we have (no invented facts).
 
-import type { BuiltFrom, Category, Explainability, SlotName, TripSnapshot } from "@/lib/contracts";
+import type { BuiltFrom, Category, Explainability, TripSnapshot } from "@/lib/contracts";
 import { favoriteDrivers } from "@/lib/qloo/normalize";
 
-export const SLOT_LABELS: Record<SlotName, string> = {
-  morning: "Morning",
-  lunch: "Lunch",
-  afternoon: "Afternoon",
-  dinner: "Dinner",
-  night: "Night",
-  stay: "Stay",
-};
+export { SLOT_LABELS } from "@/lib/trips/day-parts";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

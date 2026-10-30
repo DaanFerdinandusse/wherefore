@@ -7,7 +7,7 @@
 import type { Ask, ChatSnapshot, ItinerarySlot, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
 
 /**
- * The right-hand panel: "itinerary" (the default), "map", or "traveler" (the
+ * The right-hand panel: "map" (the default), "itinerary", or "traveler" (the
  * traveler preview). "board" is the retired Discover board; it reads as
  * "itinerary" so old links still open.
  */
@@ -35,7 +35,7 @@ export type TripMapProps = {
   onSelect: (tripPlaceId: string | null) => void;
   onOpenProfile: (tripPlaceId: string) => void;
   onCameraChange?: (camera: MapCamera) => void;
-  /** Shown after the user pans; reruns the active ask around the new center. */
+  /** "Search this region": shown after the user moves the map far (movedFar), with the circle on screen. Leave out to offer no search. */
   onSearchArea?: (center: { lat: number; lon: number; radiusM: number }) => void;
   className?: string;
 };

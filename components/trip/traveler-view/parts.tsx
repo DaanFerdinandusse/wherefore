@@ -2,10 +2,11 @@ import type { CSSProperties } from "react";
 import { Heart, Star, Utensils } from "lucide-react";
 
 import { FilmImage } from "@/components/ui/film-image";
+import type { SharedTripPlace } from "@/lib/contracts";
 import { initials } from "@/lib/ui/initials";
 import { cn } from "@/lib/ui/cn";
 
-import { dishList, type PhotoFrame as PhotoFrameSpec } from "./format";
+import { dishList, framePhoto, type PhotoFrame as PhotoFrameSpec } from "./format";
 import { PhotoFrame } from "./photo-frame";
 
 // Small pieces shared by the place blocks and the stay section. Server
@@ -147,26 +148,30 @@ export function AdvisorNote({ note, advisorName }: { note: string; advisorName: 
 /**
  * One to three photos across the page at one height: each frame grows by its
  * aspect ratio. On a phone the first photo runs full width and the rest
- * share the row under it.
+ * share the row under it. A photo alone runs the full width, so it loads large.
  */
-export function PhotoRow({ frames, alt }: { frames: readonly PhotoFrameSpec[]; alt: string }) {
+export function PhotoRow({ frames, place }: { frames: readonly PhotoFrameSpec[]; place: SharedTripPlace }) {
   if (frames.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-2 @3xl:flex-nowrap @3xl:gap-3">
-      {frames.map((frame, i) => (
-        <PhotoFrame
-          key={frame.src}
-          src={frame.src}
-          alt={i === 0 ? alt : ""}
-          sizes="(min-width: 1024px) 50vw, 100vw"
-          style={{ "--r": frame.mobileRatio, "--r-wide": frame.ratio, "--g": frame.grow } as CSSProperties}
-          className={
-            i === 0
-              ? "aspect-(--r) basis-full @3xl:aspect-(--r-wide) @3xl:basis-0 @3xl:grow-(--g)"
-              : "aspect-(--r) basis-0 grow @3xl:aspect-(--r-wide) @3xl:grow-(--g)"
-          }
-        />
-      ))}
+      {frames.map((frame, i) => {
+        const photo = framePhoto(place, frame.src, frames.length === 1);
+        return (
+          <PhotoFrame
+            key={frame.src}
+            src={photo.src}
+            credit={photo.credit}
+            alt={i === 0 ? place.name : ""}
+            sizes="(min-width: 1024px) 50vw, 100vw"
+            style={{ "--r": frame.mobileRatio, "--r-wide": frame.ratio, "--g": frame.grow } as CSSProperties}
+            className={
+              i === 0
+                ? "aspect-(--r) basis-full @3xl:aspect-(--r-wide) @3xl:basis-0 @3xl:grow-(--g)"
+                : "aspect-(--r) basis-0 grow @3xl:aspect-(--r-wide) @3xl:grow-(--g)"
+            }
+          />
+        );
+      })}
     </div>
   );
 }

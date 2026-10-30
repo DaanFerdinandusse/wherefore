@@ -25,6 +25,7 @@ import { agentModelRef, agentProviderOptions } from "@/lib/codex/provider";
 import { explainPlaces, factSnippets, type ExplainInput } from "../explain";
 import { cacheWrite, guarded, writeReasons, type TurnRef } from "../writes";
 
+import { findNamedPlace, type NamedPlace } from "./place-name";
 import { driversFor, isPlainDriver } from "./signals";
 import type { ToolTrip } from "./trip-data";
 
@@ -37,8 +38,9 @@ import type { ToolTrip } from "./trip-data";
 export type BoardItem = {
   place: NormalizedPlace;
   category: Category;
-  affinity: number;
-  score: number;
+  /** Both null for a place found with no favorites to match against. */
+  affinity: number | null;
+  score: number | null;
   signalScores: SignalScore[];
   source: TripPlaceSource;
 };
@@ -58,13 +60,17 @@ export function advisorPlaceIdOf(ctx: Pick<ToolTrip, "advisorPlaces">, entityId:
   return ctx.advisorPlaces.find((p) => p.entityId === entityId)?.id;
 }
 
+function roundedAffinity(affinity: number | null): number | null {
+  return affinity === null ? null : Math.round(affinity * 10_000) / 10_000;
+}
+
 /** The trip place row for a board item: score, the signal set it was scored on, drivers, shared tags, the advisor link. */
 export function tripPlaceRowOf(ctx: ToolTrip, item: BoardItem, placeId: string): TripPlaceUpsert {
   return {
     placeId,
     source: item.source,
     category: item.category,
-    bestAffinity: Math.round(item.affinity * 10_000) / 10_000,
+    bestAffinity: roundedAffinity(item.affinity),
     bestScore: item.score,
     signalHash: signalHashOf(ctx) ?? null,
     explainability: driversOf(ctx, item.signalScores),
@@ -106,8 +112,8 @@ export type RankedPlace = {
   tripPlaceId: string;
   entityId: string;
   category: Category;
-  affinity: number;
-  score: number;
+  affinity: number | null;
+  score: number | null;
   explainability: Explainability;
 };
 
@@ -116,7 +122,7 @@ export function rankedOf(ctx: Pick<ToolTrip, "signals">, tripPlaceId: string, it
     tripPlaceId,
     entityId: item.place.entityId,
     category: item.category,
-    affinity: Math.round(item.affinity * 10_000) / 10_000,
+    affinity: roundedAffinity(item.affinity),
     score: item.score,
     explainability: driversOf(ctx, item.signalScores),
   };
@@ -260,6 +266,48 @@ export async function explainCards(
     [...reasons.entries()].map(([tripPlaceId, reason]) => ({ tripPlaceId, reason })),
   );
   return reasons;
+}
+
+/** A trip place the model pointed at: the row, or every name it could mean. */
+export type TripPlaceMatch = NamedPlace<typeof tripPlaces.$inferSelect>;
+
+/**
+ * Trip places for what the model passed: an id, or a name (place-name.ts).
+ * Returns input to match; anything unknown is left out.
+ */
+export async function resolveTripPlaceRefs(tripId: string, refs: string[]): Promise<Map<string, TripPlaceMatch>> {
+  const out = new Map<string, TripPlaceMatch>();
+  const byId = await resolveTripPlaceIds(tripId, refs);
+  for (const [ref, row] of byId) out.set(ref, { place: row });
+  const names = [...new Set(refs.filter((ref) => !byId.has(ref) && !isUuid(ref)))];
+  if (names.length === 0) return out;
+  const rows = await db
+    .select({ row: tripPlaces, name: places.name })
+    .from(tripPlaces)
+    .innerJoin(places, eq(places.id, tripPlaces.placeId))
+    .where(eq(tripPlaces.tripId, tripId));
+  const named = rows.map((r) => ({ ...r, removed: r.row.status === "removed" }));
+  for (const name of names) {
+    const found = findNamedPlace(name, named);
+    if (found?.place) out.set(name, { place: found.place.row });
+    else if (found) out.set(name, { matches: found.matches });
+  }
+  return out;
+}
+
+/** Where a trip place is, to search around it. Undefined for an unknown id or name, or a place without coordinates. */
+export async function tripPlaceSpot(
+  tripId: string,
+  id: string,
+): Promise<{ lat: number; lon: number; name: string } | undefined> {
+  const row = (await resolveTripPlaceRefs(tripId, [id])).get(id)?.place;
+  if (!row) return undefined;
+  const [place] = await db
+    .select({ name: places.name, lat: places.lat, lon: places.lon })
+    .from(places)
+    .where(eq(places.id, row.placeId))
+    .limit(1);
+  return place && place.lat !== null && place.lon !== null ? { lat: place.lat, lon: place.lon, name: place.name } : undefined;
 }
 
 /**

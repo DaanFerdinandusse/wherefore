@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { applySlotWrites, swapWrites, writtenNoteSource } from "@/components/trip/workspace/reducer";
@@ -8,11 +8,12 @@ import { InvalidInputError, isAppError, NotFoundError } from "@/lib/auth/errors"
 import { requireUser } from "@/lib/auth/server";
 import type { Ask, ItinerarySlot, TripPlaceStatus } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { itinerarySlots } from "@/lib/db/schema";
+import { itinerarySlots, tripPlaces } from "@/lib/db/schema";
 import { getAdvisorPlaceForPlace, removeAdvisorPlace, saveAdvisorPlace, updateAdvisorPlaceNote } from "@/lib/places";
 
 import type { SetSlotsResult } from "./contracts";
-import { toSlot } from "./map";
+import { slotHolds, slotRule } from "./day-parts";
+import { asCategory, SLOT_ORDER, toSlot } from "./map";
 import { archiveAsk, clearSlot, setSlots, setTripPlaceStatus, upsertSlot, upsertTripPlaces } from "./mutations";
 import { getTrip, listTripCalls, listTripPlaceCards } from "./queries";
 
@@ -26,7 +27,7 @@ import { getTrip, listTripCalls, listTripPlaceCards } from "./queries";
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 const id = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-const slotName = z.enum(["morning", "lunch", "afternoon", "dinner", "night", "stay"]);
+const slotName = z.enum(SLOT_ORDER);
 const position = z.number().int().min(0).max(20);
 const slotInput = z.object({
   day: z.number().int().min(1).max(60),
@@ -58,6 +59,25 @@ async function tripSlots(tripId: string): Promise<ItinerarySlot[]> {
 }
 
 /**
+ * Refuses a place in a slot that may not hold it (slotHolds). Only writes that
+ * place something come here: a note on a row that is already there stays
+ * possible. The caller has checked the trip is in scope.
+ */
+async function assertSlotsHold(tripId: string, writes: { slot: ItinerarySlot["slot"]; tripPlaceId?: string | null }[]): Promise<void> {
+  const ids = writes.flatMap((w) => (w.tripPlaceId ? [w.tripPlaceId] : []));
+  if (ids.length === 0) return;
+  const rows = await db
+    .select({ id: tripPlaces.id, category: tripPlaces.category })
+    .from(tripPlaces)
+    .where(and(eq(tripPlaces.tripId, tripId), inArray(tripPlaces.id, ids)));
+  const categories = new Map(rows.map((row) => [row.id, asCategory(row.category)]));
+  for (const write of writes) {
+    const category = write.tripPlaceId ? categories.get(write.tripPlaceId) : undefined;
+    if (category && !slotHolds(write.slot, category)) throw new InvalidInputError(slotRule(category));
+  }
+}
+
+/**
  * Puts a place in one slot (or writes a slot's note). A note written without
  * the traveler flag keeps the stored row's flag, so an edit that did not say
  * so never unpublishes a note the traveler sees. An agent note stays the
@@ -68,8 +88,11 @@ export async function saveSlotAction(tripId: string, input: z.input<typeof slotI
     const user = await requireUser();
     const trip = id.parse(tripId);
     const parsed = slotInput.parse(input);
-    if (parsed.note === undefined) return upsertSlot(trip, parsed, user);
     if (!(await getTrip(trip, user))) throw new NotFoundError("trip");
+    if (parsed.note === undefined) {
+      await assertSlotsHold(trip, [parsed]);
+      return upsertSlot(trip, parsed, user);
+    }
     const [row] = await db
       .select({ note: itinerarySlots.note, noteForTraveler: itinerarySlots.noteForTraveler, noteSource: itinerarySlots.noteSource })
       .from(itinerarySlots)
@@ -118,6 +141,7 @@ export async function swapSlotsAction(
     const rows = await tripSlots(trip);
     const writes = swapWrites(rows, a, b);
     if (writes.length === 0) return { applied: rows, rejected: [] };
+    await assertSlotsHold(trip, writes);
     return setSlots(trip, applySlotWrites(rows, writes), "replace", user);
   });
 }

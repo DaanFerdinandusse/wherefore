@@ -5,26 +5,21 @@ import { Images, X } from "lucide-react";
 
 import { FilmImage } from "@/components/ui/film-image";
 import { IconButton } from "@/components/ui/icon-button";
-import type { GoogleAttribution } from "@/lib/google/contracts";
 import { cn } from "@/lib/ui/cn";
+
+import { MapsPhotosLink } from "./maps-photos-link";
+import type { PlacePhoto } from "./place-photos";
 
 // The left column: the arch photo with "1 of N photos", two smaller photos and
 // "See all N photos". Scrolled (03b), the two small photos move on top and
 // the large one below, without the arch. Google photos carry their author
 // attribution wherever they show, as Google requires.
 
-export type ProfilePhoto = {
-  src: string;
-  alt: string;
-  /** Set for Google photos: shown with the photo. */
-  attributions?: GoogleAttribution[];
-};
-
 // Provider and Google photos are served from hosts and a signed-in proxy route
 // the image optimizer cannot fetch for us, so the browser loads them directly.
 const IMAGE_PROPS = { unoptimized: true } as const;
 
-function Attribution({ photo, className }: { photo: ProfilePhoto; className?: string }) {
+function Attribution({ photo, className }: { photo: PlacePhoto; className?: string }) {
   if (!photo.attributions) return null;
   const author = photo.attributions.find((a) => a.displayName);
   return (
@@ -64,7 +59,7 @@ function SeeAllButton({ count, onClick }: { count: number; onClick: () => void }
   );
 }
 
-function OpenPhoto({ photo, sizes, priority, onOpen }: { photo: ProfilePhoto; sizes: string; priority?: boolean; onOpen: (src: string) => void }) {
+function OpenPhoto({ photo, sizes, priority, onOpen }: { photo: PlacePhoto; sizes: string; priority?: boolean; onOpen: (src: string) => void }) {
   return (
     <button type="button" aria-label={`View ${photo.alt}`} aria-haspopup="dialog" onClick={() => onOpen(photo.src)}
       className="absolute inset-0 size-full cursor-zoom-in focus-visible:outline-offset-[-4px]">
@@ -73,7 +68,7 @@ function OpenPhoto({ photo, sizes, priority, onOpen }: { photo: ProfilePhoto; si
   );
 }
 
-function SmallPhoto({ photo, className, children, onOpen }: { photo: ProfilePhoto; className?: string; children?: React.ReactNode; onOpen: (src: string) => void }) {
+function SmallPhoto({ photo, className, children, onOpen }: { photo: PlacePhoto; className?: string; children?: React.ReactNode; onOpen: (src: string) => void }) {
   return (
     <div className={cn("relative overflow-hidden rounded-photo bg-avatar", className)}>
       <OpenPhoto photo={photo} sizes="284px" onOpen={onOpen} />
@@ -90,7 +85,7 @@ export function ProfilePhotos({
   onSeeAll,
   onOpenPhoto,
 }: {
-  photos: ProfilePhoto[];
+  photos: PlacePhoto[];
   name: string;
   scrolled: boolean;
   onSeeAll: () => void;
@@ -156,7 +151,7 @@ export function ProfilePhotos({
 }
 
 /** "See all N photos": a horizontal strip over the sheet. Esc closes the strip, not the sheet. */
-export function PhotoStrip({ photos, name, onClose, onOpenPhoto }: { photos: ProfilePhoto[]; name: string; onClose: () => void; onOpenPhoto: (src: string) => void }) {
+export function PhotoStrip({ photos, name, photosUrl, onClose, onOpenPhoto }: { photos: PlacePhoto[]; name: string; photosUrl?: string; onClose: () => void; onOpenPhoto: (src: string) => void }) {
   const regionRef = useRef<HTMLDivElement>(null);
   useEffect(() => regionRef.current?.querySelector("button")?.focus(), []);
 
@@ -179,12 +174,15 @@ export function PhotoStrip({ photos, name, onClose, onOpenPhoto }: { photos: Pro
         <p className="font-display text-section">
           {name} <span className="font-sans text-ui text-text-2">{photos.length} photos</span>
         </p>
-        <IconButton
-          label="Close the photos"
-          icon={<X size={16} strokeWidth={2.2} />}
-          variant="soft"
-          onClick={onClose}
-        />
+        <div className="flex items-center gap-4">
+          {photosUrl ? <MapsPhotosLink href={photosUrl} /> : null}
+          <IconButton
+            label="Close the photos"
+            icon={<X size={16} strokeWidth={2.2} />}
+            variant="soft"
+            onClick={onClose}
+          />
+        </div>
       </div>
       <ul className="flex min-h-0 flex-1 snap-x gap-3 overflow-x-auto pb-2">
         {photos.map((photo, i) => (

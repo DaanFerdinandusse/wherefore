@@ -65,11 +65,7 @@ export function TasteButton({ placeCount, blendMyTaste }: { placeCount: number; 
       <TastePanel placeCount={placeCount} />
       <section className="flex flex-col gap-2.5 border-t border-rule pt-5">
         <BlendSwitch initial={blendMyTaste} />
-        <p className="text-ui leading-5 text-text-2">
-          Your places become extra signals next to the client{"'"}s favorites. Cards then say which of yours
-          helped.
-        </p>
-        <p className="text-ui-sm text-text-muted">Off by default. We are still testing how much weight your places should get.</p>
+        <p className="text-ui leading-5 text-text-2">Your places become extra signals next to the client{"'"}s favorites.</p>
       </section>
     </Popover>
   );

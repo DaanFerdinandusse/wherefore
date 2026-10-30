@@ -157,7 +157,8 @@ export function buildPins(input: PinInput, zoom: number): PinModel[] {
         selected: d.selected,
         highlighted: d.highlighted,
         size: pinSize(visual, d.tone, d.selected),
-        zIndex: Math.round(d.priority) + (visual === "photo" ? 2000 : visual === "number" ? 1000 : 0),
+        // An ask result stays above the rest even when it collapsed to a dot.
+        zIndex: Math.round(d.priority) + (visual === "photo" || d.tone === "ask" ? 2000 : visual === "number" ? 1000 : 0),
         showName,
       };
     })

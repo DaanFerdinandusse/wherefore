@@ -55,6 +55,12 @@ function review(patch: Partial<TripSnapshot>) {
 }
 
 describe("shareReview", () => {
+  it("uses the trip's cover over the first place photo", () => {
+    const r = shareReview({ clientName: "Ana Ruiz", coverUrl: "https://img/cover.jpg", days: [], slots: [], places: {} });
+    expect(r.cover).toBe("https://img/cover.jpg");
+    expect(r.linkDetail).toBe("a cover photo and 0 places");
+  });
+
   it("counts the places in the link and picks the first photo as the cover", () => {
     const r = review({
       places: [card("a"), card("b", { imageUrl: undefined }), card("c")],

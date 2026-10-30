@@ -3,7 +3,6 @@
 import { Banknote, CalendarDays, Check, CircleDashed, Clock, ExternalLink, MapPin, MessageCircle, Star, X } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Spinner } from "@/components/ui/spinner";
 import type { SlotTarget, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
 import type { GooglePlaceDetails } from "@/lib/google/contracts";
 import type { TripPlaceProfilePlace } from "@/lib/trips/profile-types";
@@ -25,9 +24,17 @@ import { directionsUrl, formatCount, googleHoursRows, hoursRowLabel, shortAddres
 // their source ("From Google · checked today": they are read live when the
 // tab opens, never stored). What Google does not list says so in a quiet
 // line (S4 Information states); nothing is guessed. No busy-times chart and
-// no rating distribution: Google returns neither.
+// no rating distribution: Google returns neither. While Google answers, both
+// tabs hold their full size: the sections stand and shimmering lines wait in
+// the rows, so the card does not grow when the facts arrive.
 
 const BOX = "flex flex-col rounded-card bg-surface-raised px-4.5 py-4 shadow-soft";
+const REVIEW_ROWS = 5;
+const WEEK_DAYS = 7;
+
+function Line({ className }: { className: string }) {
+  return <span aria-hidden className={cn("skeleton-shimmer block rounded-pill", className)} />;
+}
 
 function GoogleMark({ text = "From Google" }: { text?: string }) {
   return (
@@ -48,8 +55,76 @@ function Row({ icon, children, trailing, muted }: { icon: ReactNode; children: R
   );
 }
 
+function PendingRow({ icon: Icon, width }: { icon: typeof Clock; width: string }) {
+  return (
+    <Row icon={<Icon aria-hidden className="size-4" strokeWidth={2} />} muted>
+      <Line className={cn("h-3.5", width)} />
+    </Row>
+  );
+}
+
 function Quiet({ children }: { children: ReactNode }) {
   return <span className="font-normal text-text-2">{children}</span>;
+}
+
+function PendingHours() {
+  return (
+    <section className={cn(BOX, "grow-4 basis-0 gap-0.5")} aria-label="Opening hours" data-testid="place-card-hours-pending">
+      <div className="flex items-center justify-between pb-1.5">
+        <h4 className="text-ui leading-4.5 font-semibold text-text-3">Opening hours</h4>
+        <Line className="h-3 w-20" />
+      </div>
+      <ul className="flex flex-col">
+        {Array.from({ length: WEEK_DAYS }, (_, index) => (
+          <li key={index} className="flex min-h-7 items-center justify-between gap-3">
+            <Line className="h-3 w-14" />
+            <Line className="h-3 w-22" />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function PendingReviews() {
+  return (
+    <div className="flex gap-3 @max-[600px]:flex-col" data-testid="place-card-reviews">
+      <span role="status" className="sr-only">
+        Reading reviews on Google
+      </span>
+      <section className={cn(BOX, "w-59 shrink-0 gap-3")}>
+        <Line className="h-3 w-36" />
+        <div className="flex items-end gap-2.5">
+          <Line className="h-13 w-20 rounded-lg" />
+          <Line className="mb-2 h-3.5 w-20" />
+        </div>
+      </section>
+
+      <section className={cn(BOX, "min-w-0 grow basis-0 gap-0.5")}>
+        <div className="flex items-center justify-between pb-1.5">
+          <h4 className="flex items-center gap-2 text-ui leading-4.5 font-semibold text-text-3">
+            <MessageCircle aria-hidden className="size-4 text-amber" strokeWidth={2} />
+            Newest first
+          </h4>
+          <Line className="h-3 w-28" />
+        </div>
+        <ul>
+          {Array.from({ length: REVIEW_ROWS }, (_, index) => (
+            <li key={index} className="flex items-center gap-2.5 border-t border-ink/6 py-2.5">
+              <Line className="h-3.5 w-7 shrink-0" />
+              <span className="flex h-10 min-w-0 grow flex-col justify-center gap-2.5">
+                <Line className="h-3 w-full" />
+                <Line className="h-3 w-3/4" />
+              </span>
+              <span className="flex w-28 shrink-0 justify-end">
+                <Line className="h-3 w-20" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
 }
 
 export function VisitPanel({
@@ -84,19 +159,26 @@ export function VisitPanel({
 
   return (
     <div className="flex gap-3 @max-[600px]:flex-col" data-testid="place-card-visit">
+      {loading ? (
+        <span role="status" className="sr-only">
+          Checking hours on Google
+        </span>
+      ) : null}
       <section className={cn(BOX, "grow-5 basis-0 gap-0.5")}>
         <div className="flex items-center justify-between gap-2 pb-1.5">
           <h4 className="flex items-center gap-2 text-ui leading-4.5 font-semibold text-text-3">
             <Clock aria-hidden className="size-4 text-amber" strokeWidth={2} />
             {title}
           </h4>
-          {details ? <GoogleMark text="From Google · checked today" /> : null}
+          {details ? <GoogleMark text="From Google · checked today" /> : loading ? <Line className="h-3 w-40" /> : null}
         </div>
 
         {loading ? (
-          <Row icon={<Spinner size={14} label="Checking hours" />} muted>
-            <span className="inline-flex items-center rounded-pill bg-why px-2.5 py-0.5 text-ui-sm font-medium text-amber">Checking hours on Google</span>
-          </Row>
+          <>
+            {date ? <PendingRow icon={CalendarDays} width="w-44" /> : null}
+            <PendingRow icon={Star} width="w-52" />
+            <PendingRow icon={ExternalLink} width="w-36" />
+          </>
         ) : date && dayHours ? (
           <Row
             icon={<CalendarDays aria-hidden className="size-4" strokeWidth={2} />}
@@ -150,6 +232,8 @@ export function VisitPanel({
           >
             {street} {neighborhood ? <Quiet>· {neighborhood}</Quiet> : null}
           </Row>
+        ) : loading ? (
+          <PendingRow icon={MapPin} width="w-60" />
         ) : null}
 
         {details ? (
@@ -160,6 +244,8 @@ export function VisitPanel({
               Price per person not listed on Google
             </Row>
           )
+        ) : loading ? (
+          <PendingRow icon={Banknote} width="w-44" />
         ) : null}
 
         {!loading && !details && !street ? <p className="py-1 text-ui text-text-2">No visit facts for this place yet.</p> : null}
@@ -177,6 +263,8 @@ export function VisitPanel({
             ))}
           </ul>
         </section>
+      ) : loading ? (
+        <PendingHours />
       ) : week.length > 0 ? (
         <section className={cn(BOX, "grow-4 basis-0 gap-0.5")} aria-label="Opening hours">
           <div className="flex items-center justify-between pb-1.5">
@@ -206,14 +294,7 @@ export function ReviewsPanel({
   loading: boolean;
   terms: string[];
 }) {
-  if (loading) {
-    return (
-      <div className={cn(BOX, "flex-row items-center gap-2.5")} data-testid="place-card-reviews">
-        <Spinner size={14} label="Loading reviews" />
-        <span className="text-ui text-text-2">Reading reviews on Google</span>
-      </div>
-    );
-  }
+  if (loading) return <PendingReviews />;
   const reviews = reviewsNewestFirst(details?.reviews).slice(0, 5);
   if (!details || (details.rating === undefined && reviews.length === 0)) {
     return (

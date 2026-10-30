@@ -44,9 +44,10 @@ export type SignalScore = { entityId: string; score: number };
 export type PlaceResult = {
   place: NormalizedPlace;
   category: Category;
-  affinity: number;
-  /** Rank-based 60..94 within this result set (see displayScore). */
-  score: number;
+  /** Null when the search had no signals: nothing was matched to the client. */
+  affinity: number | null;
+  /** Rank-based 60..94 within this result set (see displayScore). Null with no affinity. */
+  score: number | null;
   signalScores: SignalScore[];
   /** Meters from the destination point: the API's distance, or computed from
    *  the coordinates when it gives none. Null without either. */
@@ -116,8 +117,17 @@ export type LocalityCheck = {
   dropped: number;
 };
 
+/** A wider circle around the search's point. */
+export type WiderCircle = {
+  radiusM: number;
+  /** Tried only while fewer places than this are found, instead of the usual enough. */
+  below?: number;
+};
+
 export type FindPlacesInput = {
   destination: Destination;
+  /** Wider circles around `destination`, tried in order before any filter is dropped. */
+  widen?: WiderCircle[];
   /** Entity ids of the client's favorites (and other input entities). */
   signals: string[];
   /** urn:tag ids, e.g. urn:tag:category:place:wine_bar. */
@@ -126,6 +136,8 @@ export type FindPlacesInput = {
   tagsOperator?: "union" | "intersection";
   excludeIds?: string[];
   priceMax?: number;
+  /** Leave out malls and department stores: they carry the tags of what is inside them. */
+  noShopping?: boolean;
   take: number;
   page?: number;
 };
@@ -134,6 +146,8 @@ export type FindPlacesResult = WithCalls<{
   results: PlaceResult[];
   loosened: LoosenedFilter[];
   localityCheck: LocalityCheck;
+  /** The widest circle the search actually ran. */
+  radiusM: number;
 }>;
 
 export type ScoredEntity = {

@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Eye, List, Map as MapIcon, Maximize2, Minimize2 } from "lucide-react";
+import { Eye, List, Map as MapIcon } from "lucide-react";
 
-import { AccountButton } from "@/components/shell/account-button";
 import { MenuButton } from "@/components/shell/top-nav";
 import { ShareButton, ShareReviewSheet, shareReview, useShareLink } from "@/components/share";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
@@ -16,9 +15,10 @@ import { buildDays, firstName } from "../itinerary-view/itinerary-model";
 import { ItineraryPanel } from "../itinerary-view/itinerary-panel";
 import { TripMapPanel } from "../map/trip-map-panel";
 import { TripStoreProvider, useTripStore, useTripStoreApi } from "../store";
-import { TravelerView, travelerViewFromSnapshot } from "../traveler-view";
+import { travelerViewFromSnapshot } from "../traveler-view";
 
 import { datesLabel } from "./format";
+import { TravelerPreview } from "./traveler-preview";
 import { TripSwitcher, type TripSwitcherItem } from "./trip-switcher";
 import type { UrlState } from "./url-state";
 import { useWorkspaceActions } from "./use-workspace-actions";
@@ -26,9 +26,9 @@ import { useWorkspaceActions } from "./use-workspace-actions";
 // The trip workspace (G1, G2): the composition root of /trips/[tripId]. It
 // hydrates the store from the server snapshot. On the canvas: the menu button
 // and the trip switcher over the chat column on the left, and the trip panel
-// on the right with Itinerary / Map, Traveler view, Share and a control that
-// widens the panel over the chat. Nothing searches on mount: the chat starts
-// with the advisor's brief.
+// on the right with Map / Itinerary, Traveler view and Share. The panel opens
+// on the map. Traveler view opens full screen over all of it (?view=traveler).
+// Nothing searches on mount: the chat starts with the advisor's brief.
 
 export type TripWorkspaceProps = {
   snapshot: TripSnapshot;
@@ -73,7 +73,6 @@ function WorkspaceShell({
   const toast = useTripStore((s) => s.toast);
   const { setView, setHighlight, select, applyPlaces, dismissToast, showToast } = store.getState();
 
-  const [expanded, setExpanded] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [justShared, setJustShared] = useState(false);
@@ -81,8 +80,10 @@ function WorkspaceShell({
   const link = useShareLink(trip.id, shareUrl, showToast);
 
   const traveler = view === "traveler";
-  const panelView = view === "map" ? "map" : "itinerary";
-  const wide = expanded || traveler;
+  const currentPanelView = view === "itinerary" ? "itinerary" : "map";
+  // The panel keeps its view behind the traveler view; closing returns to it.
+  const [panelView, setPanelView] = useState<"itinerary" | "map">(currentPanelView);
+  if (!traveler && panelView !== currentPanelView) setPanelView(currentPanelView);
   const client = firstName(trip.clientName);
 
   // The share token follows the server: sharing refreshes the route and the page passes the new token.
@@ -100,7 +101,7 @@ function WorkspaceShell({
   // Esc lets go of the place open in the chat, then of the highlight. Sheets and menus handle their own.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.key !== "Escape") return;
+      if (event.defaultPrevented || event.key !== "Escape" || store.getState().view === "traveler") return;
       if (store.getState().selectedPlaceId) select(null);
       else if (store.getState().highlightedPlaceId) setHighlight(null);
     };
@@ -118,14 +119,14 @@ function WorkspaceShell({
     return new Map(favorites.flatMap((f) => (f.entityId && f.imageUrl ? [[f.entityId, f.imageUrl] as const] : [])));
   }, [travelers]);
   const review = useMemo(
-    () => (reviewOpen ? shareReview({ clientName: trip.clientName, days, slots, places }) : null),
-    [reviewOpen, trip.clientName, days, slots, places],
+    () => (reviewOpen ? shareReview({ clientName: trip.clientName, coverUrl: trip.cover?.url, days, slots, places }) : null),
+    [reviewOpen, trip.clientName, trip.cover?.url, days, slots, places],
   );
   const travelerView = useMemo(
     () => (traveler ? travelerViewFromSnapshot({ trip, travelers, places: Object.values(places), asks: [], slots }, advisorName) : null),
     [traveler, trip, travelers, places, slots, advisorName],
   );
-  const switcherImage = days.flatMap((d) => d.slots).find((s) => s.card?.imageUrl)?.card?.imageUrl;
+  const switcherImage = trip.cover?.url ?? days.flatMap((d) => d.slots).find((s) => s.card?.imageUrl)?.card?.imageUrl;
 
   async function share() {
     const stageBefore = trip.stage;
@@ -137,31 +138,21 @@ function WorkspaceShell({
     setLinkOpen(true);
   }
 
-  const nav = (
-    <nav
-      aria-label="Trip"
-      className={cn(
-        "relative z-10 flex shrink-0 items-center gap-2.5 pt-1",
-        wide ? "pb-3" : "-mb-7 bg-linear-to-b from-canvas from-60% to-canvas/0 pb-7",
-      )}
-    >
-      <MenuButton />
-      <TripSwitcher
-        title={`${trip.clientName} · ${trip.destination.name}`}
-        subtitle={datesLabel(trip)}
-        imageSrc={switcherImage}
-        otherTrips={otherTrips}
-      />
-    </nav>
-  );
-
   return (
-    <div className={cn("flex h-dvh gap-5 overflow-hidden bg-canvas py-4 pr-4 pl-7 max-xl:pl-4", wide && "flex-col gap-0")}>
-      {wide ? nav : null}
-
-      {/* The chat stays mounted while the panel is wide, so a running turn keeps streaming. */}
-      <div className={cn("relative flex min-h-0 min-w-0 basis-[min(720px,51.576%)] flex-col", wide && "hidden")}>
-        {wide ? null : nav}
+    <div className="flex h-dvh gap-5 overflow-hidden bg-canvas py-4 pr-4 pl-7 max-xl:pl-4">
+      <div className="relative flex min-h-0 min-w-0 basis-[min(720px,51.576%)] flex-col">
+        <nav
+          aria-label="Trip"
+          className="relative z-10 -mb-7 flex shrink-0 items-center gap-2.5 bg-linear-to-b from-canvas from-60% to-canvas/0 pt-1 pb-7"
+        >
+          <MenuButton />
+          <TripSwitcher
+            title={`${trip.clientName} · ${trip.destination.name}`}
+            subtitle={datesLabel(trip)}
+            imageSrc={switcherImage}
+            otherTrips={otherTrips}
+          />
+        </nav>
         <div className="flex min-h-0 flex-1 flex-col">
           <ChatColumn
             key={chat.chat.id}
@@ -186,21 +177,17 @@ function WorkspaceShell({
             label="Panel view"
             value={panelView}
             onValueChange={(next) => setView(next)}
-            className={cn(traveler && "[&_[aria-checked=true]]:bg-transparent [&_[aria-checked=true]]:font-medium [&_[aria-checked=true]]:text-text-3")}
             options={[
-              { value: "itinerary", label: "Itinerary", icon: <List size={15} strokeWidth={2.2} aria-hidden /> },
               { value: "map", label: "Map", icon: <MapIcon size={15} strokeWidth={2} aria-hidden /> },
+              { value: "itinerary", label: "Itinerary", icon: <List size={15} strokeWidth={2.2} aria-hidden /> },
             ]}
           />
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              aria-pressed={traveler}
-              onClick={() => setView(traveler ? "itinerary" : "traveler")}
-              className={cn(
-                "inline-flex h-[34px] items-center gap-2 rounded-pill px-3 text-ui font-semibold text-ink transition-colors hover:bg-ink/5",
-                traveler && "bg-ink text-surface hover:bg-text-4",
-              )}
+              aria-haspopup="dialog"
+              onClick={() => setView("traveler")}
+              className="inline-flex h-[34px] items-center gap-2 rounded-pill px-3 text-ui font-semibold text-ink transition-colors hover:bg-ink/5"
             >
               <Eye size={17} strokeWidth={2} aria-hidden />
               <span className="@max-[640px]:sr-only">Traveler view</span>
@@ -220,25 +207,11 @@ function WorkspaceShell({
                 onCopied={() => showToast("Link copied")}
               />
             ) : null}
-            <button
-              type="button"
-              onClick={() => (traveler ? setView("itinerary") : setExpanded((e) => !e))}
-              aria-label={wide ? "Show the chat" : "Widen the panel"}
-              title={wide ? "Show the chat" : "Widen the panel"}
-              className="inline-flex size-[38px] items-center justify-center rounded-pill text-ink transition-colors hover:bg-ink/5"
-            >
-              {wide ? <Minimize2 size={17} strokeWidth={2} aria-hidden /> : <Maximize2 size={17} strokeWidth={2} aria-hidden />}
-            </button>
-            <span className="ml-1.5">
-              <AccountButton />
-            </span>
           </div>
         </header>
 
-        <div className={cn("min-h-0 flex-1", panelView === "map" && !traveler ? "overflow-hidden" : "overflow-y-auto")}>
-          {travelerView ? (
-            <TravelerView view={travelerView} embedded />
-          ) : panelView === "map" ? (
+        <div className={cn("min-h-0 flex-1", panelView === "map" ? "overflow-hidden" : "overflow-y-auto")}>
+          {panelView === "map" ? (
             <TripMapPanel actions={actions} favoriteImages={favoriteImages} />
           ) : (
             <ItineraryPanel actions={actions} />
@@ -266,6 +239,8 @@ function WorkspaceShell({
           </div>
         ) : null}
       </section>
+
+      <TravelerPreview open={traveler} tripId={trip.id} fallback={travelerView} onClose={() => setView(panelView)} />
     </div>
   );
 }

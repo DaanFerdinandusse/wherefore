@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 import type { SharedFavorite, SharedTripPlace, SharedTripSlot } from "@/lib/contracts";
 
-import { favoriteImage, photoFrames, placeImages, type ReasonLine, slotLine, withoutHero } from "./format";
+import { favoriteImage, framePhoto, photoFrames, placeImages, type ReasonLine, slotLine, withoutHero } from "./format";
 import { AdvisorNote, DishesChip, LovedFor, PhotoRow, ReasonRow } from "./parts";
 import { PhotoFrame } from "./photo-frame";
 
@@ -14,14 +14,11 @@ import { PhotoFrame } from "./photo-frame";
 // Everything shown is a fact from the shared view; a missing fact hides its
 // line.
 
-type Heading = "h3" | "h4";
-
 type BlockProps = {
   slot: SharedTripSlot;
   favorites: readonly SharedFavorite[];
   reasons: ReadonlyMap<SharedTripPlace, ReasonLine | null>;
   advisorName: string | null;
-  headingLevel: Heading;
   heroSrc?: string;
 };
 
@@ -30,21 +27,19 @@ function frameStyle(vars: Record<string, string | number>): CSSProperties {
 }
 
 /** A slot with only a note from the advisor: no place, so no photos. */
-export function NoteBlock({ slot, advisorName, headingLevel }: Omit<BlockProps, "favorites" | "reasons" | "heroSrc">) {
-  const Heading = headingLevel;
+export function NoteBlock({ slot, advisorName }: Omit<BlockProps, "favorites" | "reasons" | "heroSrc">) {
   if (!slot.advisorNote) return null;
   return (
     <article className="flex max-w-[640px] flex-col gap-3">
-      <Heading className="text-action font-semibold text-amber">{slotLine(slot)}</Heading>
+      <h3 className="text-action font-semibold text-amber">{slotLine(slot)}</h3>
       <AdvisorNote note={slot.advisorNote} advisorName={advisorName} />
     </article>
   );
 }
 
-export function PlaceBlock({ slot, favorites, reasons, advisorName, headingLevel, heroSrc, index }: BlockProps & { index: number }) {
-  const Heading = headingLevel;
+export function PlaceBlock({ slot, favorites, reasons, advisorName, heroSrc, index }: BlockProps & { index: number }) {
   const place = slot.place;
-  if (!place) return <NoteBlock slot={slot} advisorName={advisorName} headingLevel={headingLevel} />;
+  if (!place) return <NoteBlock slot={slot} advisorName={advisorName} />;
   const frames = photoFrames(withoutHero(placeImages(place), heroSrc), index);
   const reason = reasons.get(place) ?? null;
   const keywords = place.keywords ?? [];
@@ -53,11 +48,11 @@ export function PlaceBlock({ slot, favorites, reasons, advisorName, headingLevel
 
   return (
     <article className="flex flex-col gap-6 @3xl:gap-9">
-      <PhotoRow frames={frames} alt={place.name} />
+      <PhotoRow frames={frames} place={place} />
       <div className="flex flex-col gap-7 @5xl:flex-row @5xl:items-start @5xl:gap-20">
         <div className="flex min-w-0 flex-1 flex-col gap-5 @3xl:gap-6">
           <div className="flex flex-col gap-2">
-            <Heading className="font-display text-card-md text-ink @3xl:text-card-lg">{place.name}</Heading>
+            <h3 className="font-display text-card-md text-ink @3xl:text-card-lg">{place.name}</h3>
             <p className="text-action font-semibold text-amber">{slotLine(slot)}</p>
           </div>
           {reason ? (
@@ -87,14 +82,13 @@ export function PlaceColumn({
   favorites,
   reasons,
   advisorName,
-  headingLevel,
   heroSrc,
   frame,
 }: BlockProps & { frame: { ratio: string; grow: number } }) {
-  const Heading = headingLevel;
   const place = slot.place;
   if (!place) return null;
   const src = withoutHero(placeImages(place), heroSrc)[0];
+  const photo = src ? framePhoto(place, src, true) : null;
   const reason = reasons.get(place) ?? null;
   const keywords = place.keywords ?? [];
   const dishes = place.dishes ?? [];
@@ -104,16 +98,17 @@ export function PlaceColumn({
       style={frameStyle({ "--r-wide": frame.ratio, "--g": frame.grow })}
       className="flex flex-col gap-[18px] @3xl:basis-0 @3xl:grow-(--g)"
     >
-      {src ? (
+      {photo ? (
         <PhotoFrame
-          src={src}
+          src={photo.src}
+          credit={photo.credit}
           alt={place.name}
           sizes="(min-width: 1024px) 40vw, 100vw"
           className="aspect-4/5 w-full @3xl:aspect-(--r-wide)"
         />
       ) : null}
       <div className="flex flex-col gap-1.5">
-        <Heading className="font-display text-card-md text-ink @5xl:text-section">{place.name}</Heading>
+        <h3 className="font-display text-card-md text-ink @5xl:text-section">{place.name}</h3>
         <p className="text-action font-semibold text-amber">{slotLine(slot)}</p>
       </div>
       {reason ? (

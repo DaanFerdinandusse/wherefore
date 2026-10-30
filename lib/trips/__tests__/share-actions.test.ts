@@ -8,9 +8,9 @@ describe("shareUrl", () => {
   });
 
   it("builds the link from APP_URL without a double slash", () => {
-    vi.stubEnv("APP_URL", "https://tastebrief.app/");
+    vi.stubEnv("APP_URL", "https://wherefore.app/");
     expect(shareUrl("PlE87wF46m2u9gLKWOCuIu_7", "http://localhost:3000")).toBe(
-      "https://tastebrief.app/s/PlE87wF46m2u9gLKWOCuIu_7",
+      "https://wherefore.app/s/PlE87wF46m2u9gLKWOCuIu_7",
     );
   });
 

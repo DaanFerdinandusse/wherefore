@@ -228,7 +228,7 @@ async function* seed(
     yield output("scoring", { progress: "Scoring your places" });
     const scoreStarted = Date.now();
     try {
-      const seedAffinities = Object.values(state.byCategory).flatMap((list) => list.map((r) => r.affinity));
+      const seedAffinities = Object.values(state.byCategory).flatMap((list) => list.flatMap((r) => r.affinity ?? []));
       const { scores, calls } = await scoreAdvisorPlaces(ctx, seedAffinities);
       await logCalls(turn, ctx, calls, "seed", key("score"));
       const ids = await persistBoardItems(turn, ctx, scores.map((s) => s.item));
@@ -261,7 +261,7 @@ async function* seed(
       }
       for (const saved of ctx.advisorPlaces) {
         const s = scores.find((x) => x.item.place.entityId === saved.entityId);
-        advisorSummary.push({ name: saved.name, ...(s ? { score: s.item.score } : {}), onBoard: true });
+        advisorSummary.push({ name: saved.name, ...(typeof s?.item.score === "number" ? { score: s.item.score } : {}), onBoard: true });
       }
       cards = await cardsInOrder(ctx, order);
       scoreStep = {

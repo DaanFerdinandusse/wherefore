@@ -17,6 +17,8 @@ export {
   getSharedTripView,
   getTrip,
   getTripSnapshot,
+  getTripTravelerView,
+  isSharedGooglePlace,
   listRecentClientsForTripBar,
   listTripCalls,
   listTripPlaceCards,

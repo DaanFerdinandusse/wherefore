@@ -132,6 +132,13 @@ describe("google cid", () => {
 });
 
 describe("categoryOf", () => {
+  it("does not file a mall under what is inside it", () => {
+    const types = ["urn:tag:category:place:shopping_mall", "urn:tag:category:place:restaurant"];
+    expect(categoryOf({ primaryType: "urn:tag:genre:place:shopping_mall", types })).toBe("other");
+    expect(categoryOf({ primaryType: "urn:tag:genre:place:department_store", types })).toBe("other");
+    expect(categoryOf({ primaryType: "urn:tag:genre:place:restaurant:food_court", types })).toBe("eat");
+  });
+
   const byName = (name: string) => {
     const raw = cocktail.results.entities.find((e) => e.name === name);
     if (!raw) throw new Error(`fixture has no ${name}`);

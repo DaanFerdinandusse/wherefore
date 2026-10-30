@@ -133,6 +133,7 @@ export const createTrip: CreateTrip = async (ownerId, input) => {
       clientId: client.id,
       title,
       destination: input.destination,
+      cover: input.cover ?? null,
       startDate: input.startDate ?? null,
       endDate: input.endDate ?? null,
       datesMode: input.datesMode,

@@ -1,6 +1,47 @@
 import { describe, expect, it } from "vitest";
 
-import { imagePolicy, isProviderHost } from "./source";
+import { imagePolicy, isProviderHost, providerImageAt, unsplashLoader } from "./source";
+
+describe("unsplashLoader", () => {
+  it("asks the CDN for the width, in the browser's best format", () => {
+    const src = "https://images.unsplash.com/photo-1?crop=entropy&fm=jpg&ixid=abc&q=80&w=1080";
+    const url = new URL(unsplashLoader({ src, width: 640 }));
+    expect(url.origin + url.pathname).toBe("https://images.unsplash.com/photo-1");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      crop: "entropy",
+      ixid: "abc",
+      q: "75",
+      w: "640",
+      auto: "format",
+      fit: "max",
+    });
+  });
+
+  it("marks Unsplash as its own source, off the optimizer's default loader", () => {
+    expect(imagePolicy("https://images.unsplash.com/photo-1?w=1080")).toEqual({
+      source: "unsplash",
+      unoptimized: false,
+      placeholder: false,
+    });
+  });
+});
+
+describe("providerImageAt", () => {
+  it("changes the width in a provider image's name", () => {
+    expect(providerImageAt("https://images.qloo.com/i/A-2mwCpx-420x-outside.jpg", 1600)).toBe(
+      "https://images.qloo.com/i/A-2mwCpx-1600x-outside.jpg",
+    );
+    expect(providerImageAt("https://images.qloo.com/i/A-420x-auto.jpg", 2400)).toBe(
+      "https://images.qloo.com/i/A-2400x-auto.jpg",
+    );
+  });
+
+  it("leaves every other url alone", () => {
+    expect(providerImageAt("https://example.test/a-420x-auto.jpg", 1600)).toBe("https://example.test/a-420x-auto.jpg");
+    expect(providerImageAt("https://images.qloo.com/i/contramar.jpg", 1600)).toBe("https://images.qloo.com/i/contramar.jpg");
+    expect(providerImageAt("/images/hero-420x-auto.jpg", 1600)).toBe("/images/hero-420x-auto.jpg");
+  });
+});
 
 describe("imagePolicy", () => {
   it("loads provider images directly, lazy and async, with an explicit size", () => {
@@ -38,6 +79,11 @@ describe("imagePolicy", () => {
       placeholder: true,
     });
     expect(imagePolicy("/api/places/photo?name=a").width).toBeUndefined();
+  });
+
+  it("loads a shared trip's photo route directly, like the proxy", () => {
+    expect(imagePolicy("/api/share/abc_DEF-123/photo?name=a&w=1000")).toMatchObject({ source: "proxy", unoptimized: true });
+    expect(imagePolicy("/api/share/abc/other?name=a").unoptimized).toBe(false);
   });
 
   it("keeps the optimizer for static files, imports and public hosts", () => {

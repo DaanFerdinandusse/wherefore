@@ -4,6 +4,7 @@ import {
   boundsForCamera,
   cameraForBounds,
   fitBoundsFor,
+  movedFar,
   offscreenDirection,
   offsetCenter,
   project,
@@ -108,6 +109,39 @@ describe("radiusFromViewport", () => {
   it("stays between 200 m and 50 km", () => {
     expect(radiusFromViewport(boundsForCamera({ ...lisbon, zoom: 21 }, size))).toBe(200);
     expect(radiusFromViewport(boundsForCamera({ ...lisbon, zoom: 3 }, size))).toBe(50_000);
+  });
+});
+
+describe("movedFar", () => {
+  const start = { ...lisbon, zoom: 14 };
+
+  function panned(dx: number, dy: number) {
+    return { ...offsetCenter(start, start.zoom, dx, dy), zoom: start.zoom };
+  }
+
+  it("ignores a small pan or a small zoom", () => {
+    expect(movedFar(start, start, size)).toBe(false);
+    expect(movedFar(start, panned(100, 80), size)).toBe(false);
+    expect(movedFar(start, { ...start, zoom: 14.5 }, size)).toBe(false);
+  });
+
+  it("counts a pan of 40% of the shorter side, on either axis", () => {
+    expect(movedFar(start, panned(250, 0), size)).toBe(false);
+    expect(movedFar(start, panned(270, 0), size)).toBe(true);
+    expect(movedFar(start, panned(0, -270), size)).toBe(true);
+    expect(movedFar(start, panned(200, 200), size)).toBe(true);
+  });
+
+  it("counts one zoom level, in or out", () => {
+    expect(movedFar(start, { ...start, zoom: 15 }, size)).toBe(true);
+    expect(movedFar(start, { ...start, zoom: 13 }, size)).toBe(true);
+    // The zoom buttons add 1 to a fractional fit zoom.
+    expect(movedFar({ ...start, zoom: 13.37 }, { ...start, zoom: 13.37 + 1 }, size)).toBe(true);
+  });
+
+  it("measures the pan at the current zoom, so a pan that looks small when zoomed out is small", () => {
+    const from = { ...offsetCenter(start, 18, 270, 0), zoom: 14 };
+    expect(movedFar(from, start, size)).toBe(false);
   });
 });
 

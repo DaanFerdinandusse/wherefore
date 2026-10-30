@@ -13,7 +13,7 @@ export const STATE_PATH = "e2e/.auth/state.json";
 
 export default async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0]?.use.baseURL ?? `http://localhost:${process.env.PORT ?? 3000}`;
-  const email = process.env.E2E_EMAIL ?? `e2e-${randomBytes(4).toString("hex")}@tastebrief.test`;
+  const email = process.env.E2E_EMAIL ?? `e2e-${randomBytes(4).toString("hex")}@wherefore.test`;
   const password = process.env.E2E_PASSWORD ?? randomBytes(12).toString("base64url");
 
   const api = await request.newContext({ baseURL });

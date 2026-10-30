@@ -89,7 +89,7 @@ async function main() {
     check(because.length > 0 && sum === 100, `${r.place.name}: shares sum to 100`);
     check(Boolean(r.place.googlePlaceId), `${r.place.name}: has a Google place id`);
     console.log(
-      `   ${i + 1}. ${r.place.name} [${r.category}] score ${r.score} (affinity ${r.affinity.toFixed(4)}), ${r.place.neighborhood ?? r.place.city ?? ""}`,
+      `   ${i + 1}. ${r.place.name} [${r.category}] score ${r.score} (affinity ${r.affinity?.toFixed(4)}), ${r.place.neighborhood ?? r.place.city ?? ""}`,
     );
     console.log(`      because: ${because.map((b) => `${b.name} ${b.share}%`).join(", ")}`);
     console.log(`      shared tags: ${shared.map((t) => t.name).join(", ") || "none"}`);

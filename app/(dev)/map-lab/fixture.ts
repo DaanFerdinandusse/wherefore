@@ -14,7 +14,7 @@ import type { Ask, ItinerarySlot, TripPlaceCard, TripSnapshot } from "@/lib/cont
 // photos are the design reference images. Some are her advisor's places with
 // notes, some sit in itinerary slots, four are results of one ask.
 
-export const ASK_ID = "ask-natural-wine";
+export const ASK_ID = "00000000-0000-4000-8000-000000000001";
 
 export const trip: TripSnapshot["trip"] = {
   id: "trip-lisbon",

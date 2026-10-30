@@ -178,11 +178,11 @@ export const DEMO_TRIPS: TripSpec[] = [
     populate: {
       take: 6,
       slots: [
-        { day: 1, slot: "morning", pick: { advisorPlace: "Buna" } },
+        { day: 1, slot: "breakfast", pick: { advisorPlace: "Buna" } },
         { day: 1, slot: "lunch", pick: { advisorPlace: "Contramar" }, note: "Go before 1 pm." },
         { day: 1, slot: "dinner", pick: { category: "eat", index: 0 } },
         { day: 1, slot: "night", pick: { category: "drink", index: 0 } },
-        { day: 2, slot: "morning", pick: { advisorPlace: "Lardo" } },
+        { day: 2, slot: "breakfast", pick: { advisorPlace: "Lardo" } },
         { day: 2, slot: "lunch", pick: { category: "eat", index: 1 } },
         { day: 2, slot: "dinner", pick: { advisorPlace: "Rosetta" } },
         { day: 2, slot: "night", pick: { category: "drink", index: 1 } },

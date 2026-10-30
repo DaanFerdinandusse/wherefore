@@ -18,6 +18,7 @@ function headerState(state: string, preliminary: boolean) {
 }
 
 const SLOT_NAMES: Record<string, string> = {
+  breakfast: "Breakfast",
   morning: "Morning",
   lunch: "Lunch",
   afternoon: "Afternoon",
@@ -60,7 +61,8 @@ export function ItineraryCard({
         <ul className="flex flex-col gap-1 pl-8">
           {rejected.map((r, i) => (
             <li key={`${r.placeId}-${i}`} className="text-ui-sm text-text-3" data-testid="itinerary-rejected">
-              {placeName(r.placeId) ?? "A place"}: {r.reason}
+              {placeName(r.placeId) ? `${placeName(r.placeId)}: ` : ""}
+              {r.reason}
             </li>
           ))}
         </ul>

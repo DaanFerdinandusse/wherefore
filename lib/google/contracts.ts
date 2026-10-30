@@ -9,8 +9,10 @@ export type GoogleAttribution = { displayName?: string; uri?: string; photoUri?:
 export type GooglePhoto = {
   /** places/{placeId}/photos/{photoId}; pass it to photoProxyUrl, never store it. */
   name: string;
-  /** Same-origin proxy URL at 800 px wide, ready for an <img>. */
+  /** Same-origin proxy URL sized for tiles and thumbnails, ready for an <img>. */
   url: string;
+  /** Same-origin proxy URL sized for the full-screen viewer. */
+  fullUrl: string;
   widthPx?: number;
   heightPx?: number;
   /** Must be shown with the photo. */
@@ -32,6 +34,8 @@ export type GooglePlaceDetails = {
   name?: string;
   address?: string;
   mapsUrl?: string;
+  /** The place's whole gallery on Google Maps: the API returns 10 photos at most. */
+  photosUrl?: string;
   primaryType?: string;
   primaryTypeLabel?: string;
   businessStatus?: string;

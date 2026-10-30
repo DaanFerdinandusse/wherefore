@@ -18,15 +18,15 @@ const NOT_INDEXED: Metadata["robots"] = { index: false, follow: false, googleBot
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
   const view = await loadSharedTripView(token);
-  if (!view) return { title: "Link not active · Tastebrief", robots: NOT_INDEXED };
+  if (!view) return { title: "Link not active · Wherefore", robots: NOT_INDEXED };
   const title = view.title;
   const description = shareDescription(view);
   return {
-    title: `${title} · Tastebrief`,
+    title: `${title} · Wherefore`,
     description,
     robots: NOT_INDEXED,
     referrer: "no-referrer",
-    openGraph: { title, description, type: "website", siteName: "Tastebrief" },
+    openGraph: { title, description, type: "website", siteName: "Wherefore" },
     twitter: { card: "summary_large_image", title, description },
   };
 }
@@ -35,5 +35,5 @@ export default async function SharedTripPage({ params }: Props) {
   const { token } = await params;
   const view = await loadSharedTripView(token);
   if (!view) notFound();
-  return <TravelerView view={view} embedded={false} />;
+  return <TravelerView view={view} />;
 }

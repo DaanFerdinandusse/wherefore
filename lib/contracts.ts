@@ -7,7 +7,7 @@ import type { UIMessage } from "ai";
 export type Category = "eat" | "drink" | "coffee" | "see" | "stay" | "other";
 export type TripPlaceSource = "seed" | "ask" | "advisor" | "manual";
 export type TripPlaceStatus = "suggested" | "added" | "removed";
-export type SlotName = "morning" | "lunch" | "afternoon" | "dinner" | "night" | "stay";
+export type SlotName = "breakfast" | "morning" | "lunch" | "afternoon" | "dinner" | "night" | "stay";
 export type TripStage = "planning" | "shared" | "traveling" | "done";
 
 export type TasteTag = { tagId: string; name: string; type?: string; score?: number };
@@ -42,6 +42,15 @@ export type Destination = {
   lon: number;
   radiusM: number;
   localityEntityId?: string;
+};
+
+/** The trip's cover: a stock photo of the destination and who to credit for it. */
+export type TripCover = {
+  url: string;
+  alt: string;
+  /** The photographer, with the link to their profile. */
+  creditName: string;
+  creditUrl: string;
 };
 
 /** A word or dish reviews mention, with how many reviews mention it ("Tuna tostadas", 312). */
@@ -113,6 +122,9 @@ export type ItinerarySlot = {
   position: number;
 };
 
+/** A Google photo on the traveler view: its larger copy and the author Google requires us to show. */
+export type SharedGooglePhoto = { fullSrc: string; author?: string; authorUri?: string };
+
 // The public traveler view (/s/[token]). Only what the traveler sees: no ids,
 // no asks, no removed places, no private advisor place notes, no scores.
 export type SharedTripPlace = {
@@ -126,6 +138,8 @@ export type SharedTripPlace = {
   reason?: string;
   /** Up to three photo urls, the first one first. `imageUrl` is the first of them. */
   images?: string[];
+  /** The Google photos among `images`, by their url there. */
+  googlePhotos?: Record<string, SharedGooglePhoto>;
   /** The provider's own short description, verbatim. */
   description?: string;
   /** Review keywords, most mentioned first ("Loved for ..."). */
@@ -159,6 +173,8 @@ export type SharedTripView = {
   advisorName: string | null;
   /** Where "Message Sofía" writes to. Absent: the page shows no contact action. */
   advisorEmail?: string;
+  /** The stock photo of the destination. Without one, the hero uses a place photo. */
+  cover?: TripCover;
   /** The favorites behind the picks, most influential first, with a photo when we have one. */
   favorites?: SharedFavorite[];
   days: SharedTripDay[];
@@ -172,6 +188,8 @@ export type TripSnapshot = {
     clientId: string;
     clientName: string;
     destination: Destination;
+    /** The stock photo of the destination. Absent when the lookup found none. */
+    cover?: TripCover;
     startDate?: string;
     endDate?: string;
     datesMode: "exact" | "unset";
@@ -258,6 +276,8 @@ export type FindPlacesOutput = {
   noun?: string;
   /** The advisor's words as short chips ("seafood, lively"). */
   terms?: string[];
+  /** Where the search looked, for the model: "within 2.5 km of day 2's places". */
+  searchedArea?: string;
 };
 
 /** An itinerary slot a search or a recommendation is for. */
@@ -339,6 +359,8 @@ export type RemovePlaceOutput = {
 export type SetItineraryOutput = {
   applied: ItinerarySlot[];
   rejected: { placeId: string; reason: string }[];
+  /** For the model, when the result alone could be misread. */
+  note?: string;
 };
 
 export type TripContextOutput = {
@@ -353,7 +375,7 @@ export type TripContextOutput = {
   }[];
   advisorPlaces: { placeId: string; name: string; note: string; score?: number }[];
   board: { categories: { category: Category; count: number }[]; asks: Ask[] };
-  itinerary: ItinerarySlot[];
+  itinerary: (ItinerarySlot & { placeName?: string; neighborhood?: string })[];
   party?: { adults: number; children: number };
 };
 

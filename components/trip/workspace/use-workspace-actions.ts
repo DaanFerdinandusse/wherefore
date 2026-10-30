@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 import type { ItinerarySlot, SlotName, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
+import { addPosition, slotHolds, slotRule } from "@/lib/trips/day-parts";
 import { removeTripPlaceAction } from "@/lib/trips/profile-actions";
 import {
   archiveAskAction,
@@ -18,7 +19,7 @@ import {
 import { useTripStoreApi, type Optimistic } from "../store";
 
 import { firstName, SLOT_LABELS } from "./format";
-import { slotAt, slotKey, swapWrites, type SlotRef } from "./reducer";
+import { moveRefusal, slotAt, slotKey, swapWrites, type SlotRef } from "./reducer";
 import { createWriteQueue } from "./write-queue";
 
 // The workspace's writes: optimistic in the store first, then the server
@@ -68,17 +69,35 @@ export function useWorkspaceActions() {
       if (fresh.length > 0) store.getState().dispatch({ type: "slotsSaved", slots: fresh });
     }
 
-    /** Puts a place in a slot. Resolves false (after a toast) when the server refused. */
-    async function addToSlot(tripPlaceId: string, day: number, slot: SlotName, position = 0): Promise<boolean> {
+    /**
+     * Puts a place in a slot. Without a position a meal takes it and an open
+     * slot adds it after what is there; a place already in that slot stays
+     * put. Resolves false (after a toast) when the server refused. `quiet`
+     * skips the success toast, for a caller that shows it itself.
+     */
+    async function addToSlot(
+      tripPlaceId: string,
+      day: number,
+      slot: SlotName,
+      at?: number,
+      { quiet = false }: { quiet?: boolean } = {},
+    ): Promise<boolean> {
       const state = store.getState();
       const name = state.places[tripPlaceId]?.name ?? "The place";
+      const category = state.places[tripPlaceId]?.category;
+      if (category && !slotHolds(slot, category)) {
+        toast(slotRule(category));
+        return false;
+      }
+      if (at === undefined && state.slots.some((s) => s.day === day && s.slot === slot && s.tripPlaceId === tripPlaceId)) return true;
+      const position = at ?? addPosition(state.slots, { day, slot });
       const write = state.optimisticSlot({ day, slot, position, tripPlaceId });
       return queue.run([slotKey({ day, slot, position })], async (isCurrent) => {
         const result = await saveSlotAction(tripId(), { day, slot, position, tripPlaceId });
         if (!result.ok) return fail(write, result.error);
         write.commit();
         saveRows([result.data], isCurrent);
-        toast(`${name} added to Day ${day} ${SLOT_LABELS[slot].toLowerCase()}`);
+        if (!quiet) toast(`${name} added to Day ${day} ${SLOT_LABELS[slot].toLowerCase()}`);
         return true;
       });
     }
@@ -180,8 +199,13 @@ export function useWorkspaceActions() {
      * and each slot keeps its own note.
      */
     async function moveToSlot(from: SlotRef, to: SlotRef): Promise<boolean> {
-      if (from.day === to.day) return moveWithinDay(from, to);
       const state = store.getState();
+      const refusal = moveRefusal(state, from, to);
+      if (refusal) {
+        toast(refusal);
+        return false;
+      }
+      if (from.day === to.day) return moveWithinDay(from, to);
       const fromPosition = from.position ?? 0;
       const source = slotAt(state.slots, from.day, from.slot, fromPosition);
       if (!source?.tripPlaceId) return false;

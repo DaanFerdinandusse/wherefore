@@ -61,8 +61,8 @@ function progressFigure(output: FindPlacesOutput | undefined): string | undefine
   return undefined;
 }
 
-function dragHandler(tripPlaceId: string) {
-  return (event: DragEvent) => startPlaceDrag(event, tripPlaceId);
+function dragHandler(place: TripPlaceCard) {
+  return (event: DragEvent) => startPlaceDrag(event, place.tripPlaceId, place.category);
 }
 
 function Tile({ place, scoring, onPlacesHover, onPlaceClick }: { place: TripPlaceCard; scoring: boolean } & PlaceHandlers) {
@@ -71,7 +71,7 @@ function Tile({ place, scoring, onPlacesHover, onPlaceClick }: { place: TripPlac
       <button
         type="button"
         draggable
-        onDragStart={dragHandler(place.tripPlaceId)}
+        onDragStart={dragHandler(place)}
         data-testid="place-tile"
         data-trip-place-id={place.tripPlaceId}
         onMouseEnter={() => onPlacesHover?.(place.tripPlaceId)}
@@ -134,7 +134,7 @@ function Chip({ place, picked, selected, onPlacesHover, onPlaceClick }: { place:
       <button
         type="button"
         draggable
-        onDragStart={dragHandler(place.tripPlaceId)}
+        onDragStart={dragHandler(place)}
         data-testid="place-chip"
         data-trip-place-id={place.tripPlaceId}
         data-picked={picked ? "true" : "false"}

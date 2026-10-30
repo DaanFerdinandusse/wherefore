@@ -32,6 +32,7 @@ export function GoogleSurface({
   onPinEnter,
   onPinLeave,
   onPinClick,
+  onPinDoubleClick,
   onBackgroundClick,
   hidden,
   onTilesLoaded,
@@ -145,7 +146,10 @@ export function GoogleSurface({
           onMouseEnter={() => onPinEnter(pin.id)}
           onMouseLeave={() => onPinLeave(pin.id)}
         >
-          {renderPin(pin)}
+          {/* The marker's own click event reports only the first click of a double click. */}
+          <span onDoubleClick={() => onPinDoubleClick(pin.id)} className="block">
+            {renderPin(pin)}
+          </span>
         </AdvancedMarker>
       ))}
     </Map>

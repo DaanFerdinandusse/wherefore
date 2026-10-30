@@ -31,7 +31,8 @@ import {
   type SlotChoice,
 } from "./profile-format";
 import { PhotoViewer } from "./photo-viewer";
-import { PhotoStrip, ProfilePhotos, type ProfilePhoto } from "./profile-photos";
+import { placePhotos } from "./place-photos";
+import { PhotoStrip, ProfilePhotos } from "./profile-photos";
 import { WhyBlock } from "./profile-why";
 import { YourPick } from "./profile-your-pick";
 import { SlotPicker } from "./slot-picker";
@@ -108,19 +109,11 @@ function PlaceProfileBody({
     return () => observer.disconnect();
   }, [wantFull, place]);
 
-  // Photos: the provider's first, then Google's once loaded.
-  const photos = useMemo<ProfilePhoto[]>(() => {
-    const provider = (place?.images ?? (card.imageUrl ? [{ url: card.imageUrl }] : [])).map((image, i) => ({
-      src: image.url,
-      alt: `${card.name}, photo ${i + 1}`,
-    }));
-    const google = (details?.photos ?? []).map((photo, i) => ({
-      src: photo.url,
-      alt: `${card.name}, photo ${provider.length + i + 1}`,
-      attributions: photo.attributions,
-    }));
-    return [...provider, ...google];
-  }, [place, card.imageUrl, card.name, details]);
+  // Photos: the provider's until Google's load, then Google's alone.
+  const photos = useMemo(
+    () => placePhotos(card.name, place?.images, card.imageUrl, details?.photos),
+    [place, card.imageUrl, card.name, details],
+  );
   const [stripOpen, setStripOpen] = useState(false);
   const [viewerSrc, setViewerSrc] = useState<string | null>(null);
 
@@ -369,8 +362,8 @@ function PlaceProfileBody({
         </div>
       </div>
 
-      {viewerSrc && open ? <PhotoViewer photos={photos} name={card.name} initialSrc={viewerSrc} onClose={() => setViewerSrc(null)} /> : null}
-      {stripOpen ? <PhotoStrip onOpenPhoto={setViewerSrc} photos={photos} name={card.name} onClose={() => setStripOpen(false)} /> : null}
+      {viewerSrc && open ? <PhotoViewer photos={photos} name={card.name} initialSrc={viewerSrc} photosUrl={details?.photosUrl} onClose={() => setViewerSrc(null)} /> : null}
+      {stripOpen ? <PhotoStrip onOpenPhoto={setViewerSrc} photos={photos} name={card.name} photosUrl={details?.photosUrl} onClose={() => setStripOpen(false)} /> : null}
     </div>
   );
 }

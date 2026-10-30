@@ -12,7 +12,7 @@ import { cn } from "@/lib/ui/cn";
 // workspace's focus event. While a turn runs the field stays open, so the
 // advisor can type the next change; it sends once the turn is over.
 
-export const FOCUS_COMPOSER_EVENT = "tastebrief:focus-composer";
+export const FOCUS_COMPOSER_EVENT = "wherefore:focus-composer";
 
 type Props = {
   busy: boolean;

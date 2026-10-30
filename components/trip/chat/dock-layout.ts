@@ -35,7 +35,7 @@ export function listMaxHeight(mode: ListMode, lastTurnHeight: number | null, rea
 // windows, blocked site data); the dock then just starts open.
 
 export function collapsedKey(chatId: string) {
-  return `tastebrief.chat-dock.collapsed.${chatId}`;
+  return `wherefore.chat-dock.collapsed.${chatId}`;
 }
 
 const listeners = new Set<() => void>();

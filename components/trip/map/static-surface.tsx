@@ -26,6 +26,7 @@ export function StaticSurface({
   onPinEnter,
   onPinLeave,
   onPinClick,
+  onPinDoubleClick,
   onBackgroundClick,
 }: SurfaceProps) {
   const [camera, setCamera] = useState<Camera>(initialCamera);
@@ -123,6 +124,7 @@ export function StaticSurface({
             onFocus={() => onPinEnter(pin.id)}
             onBlur={() => onPinLeave(pin.id)}
             onClick={() => onPinClick(pin.id)}
+            onDoubleClick={() => onPinDoubleClick(pin.id)}
             style={{ left: p.x, top: p.y, zIndex: pin.zIndex }}
             className="absolute block -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-pill"
           >

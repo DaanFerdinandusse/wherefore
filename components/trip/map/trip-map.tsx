@@ -8,6 +8,7 @@ import {
   boundsForCamera,
   cameraForBounds,
   fitBoundsFor,
+  movedFar,
   offscreenDirection,
   offsetCenter,
   radiusFromViewport,
@@ -59,6 +60,13 @@ export type TripMapComponentProps = TripMapProps & {
   pinStyle?: "discover" | "itinerary";
   /** The preview card for the selected pin. Off where the chat shows the place instead. */
   preview?: boolean;
+  /** Changing it fits the map again, for a filter the tabs do not know about. */
+  fitScope?: string;
+  /** Centers the selected place in the free area, instead of moving only when it is hidden. */
+  centerSelection?: boolean;
+  onPinDoubleClick?: (tripPlaceId: string) => void;
+  /** The place just added to the itinerary: its pin plays the landing. */
+  landedPlaceId?: string | null;
 };
 
 type MapStatus = "loading" | "ready" | "unavailable";
@@ -69,6 +77,8 @@ const MAP_TIMEOUT_MS = 10_000;
 /** Where the preview card sits, from Paper 02b: 98 px from the top, 40 px from the right. */
 const CARD = { top: 98, right: 40, width: 320, height: 390 };
 const EDGE = 24;
+/** Centering waits this long: a pin that moved away would miss the second click of a double click. */
+const CENTER_DELAY_MS = 300;
 
 type Located = TripPlaceCard & { lat: number; lon: number };
 
@@ -91,6 +101,14 @@ function reveal(engine: MapEngine, card: Located, always: boolean, camera: Camer
   engine.panTo(offsetCenter(card, camera.zoom, size.width / 2 - target.x, size.height / 2 - target.y));
 }
 
+/** Pans a place to the middle of the area workspace chrome leaves free. */
+function center(engine: MapEngine, card: Located, camera: Camera | null, inset: Padding) {
+  if (!camera) return engine.panTo(card);
+  const dx = (inset.right - inset.left) / 2;
+  const dy = (inset.bottom - inset.top) / 2;
+  engine.panTo(offsetCenter(card, camera.zoom, dx, dy));
+}
+
 export function TripMap({
   trip,
   places,
@@ -111,6 +129,10 @@ export function TripMap({
   insets,
   pinStyle = "discover",
   preview = true,
+  fitScope = "",
+  centerSelection = false,
+  onPinDoubleClick,
+  landedPlaceId = null,
 }: TripMapComponentProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? "";
   const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID || "DEMO_MAP_ID";
@@ -124,6 +146,9 @@ export function TripMap({
   const [userMoved, setUserMoved] = useState(false);
 
   const cameraRef = useRef<Camera | null>(null);
+  /** Where the view was left by a fit or a search. "Search this region" measures the advisor's moves from here. */
+  const moveStart = useRef<Camera | null>(null);
+  const userMovedRef = useRef(userMoved);
   const sizeRef = useRef(size);
   const placesRef = useRef(places);
   const onCameraChangeRef = useRef(onCameraChange);
@@ -144,6 +169,7 @@ export function TripMap({
     placesRef.current = places;
     onCameraChangeRef.current = onCameraChange;
     liveActiveRef.current = liveActive;
+    userMovedRef.current = userMoved;
   });
 
   useEffect(() => {
@@ -183,6 +209,10 @@ export function TripMap({
   const selectedCard = preview && selectedPlaceId ? placesById.get(selectedPlaceId) : undefined;
   const cardOpen = selectedCard !== undefined && size.width >= CARD.width * 2;
   const inset = { top: insets?.top ?? 0, right: insets?.right ?? 0, bottom: insets?.bottom ?? 0, left: insets?.left ?? 0 };
+  const insetRef = useRef(inset);
+  useEffect(() => {
+    insetRef.current = inset;
+  });
   const fitPadding = useMemo<Padding>(
     () => ({
       // The control row (search, zoom) sits in the top 64 px.
@@ -208,27 +238,36 @@ export function TripMap({
   );
 
   const handleCamera = useCallback((next: Camera, cause: MoveCause, settled: boolean) => {
-    const moved = !sameCamera(cameraRef.current, next);
+    moveStart.current ??= cameraRef.current ?? next;
     cameraRef.current = next;
     if (settled) lastControlled.current = next;
     setCamera(next);
-    if (cause === "user" && moved) setUserMoved(true);
-    if (cause === "fit" && settled) setUserMoved(false);
-    if (settled) onCameraChangeRef.current?.(next);
+    if (settled) {
+      if (cause === "user") {
+        setUserMoved(movedFar(moveStart.current, next, sizeRef.current));
+      } else if (cause === "fit" || !userMovedRef.current) {
+        // Moves the app made never count. A pan to a pin keeps a move the advisor already made.
+        moveStart.current = next;
+        setUserMoved(false);
+      }
+      onCameraChangeRef.current?.(next);
+    }
   }, []);
 
   // Fit to the visible places (or the ask results) on load, on a tab change,
   // and when the first places arrive. A camera passed in at mount wins.
   // A new engine (the live map gave way to the plain background) fits again.
-  const fitKey = `${trip.id}|${activeTab}|${visible.length > 0}|${askResults.length > 0}`;
+  // A search with nothing to show yet leaves the view alone: its places fit
+  // when they arrive, so a region search does not jump away from the region.
+  const fitKey = `${trip.id}|${activeTab}|${fitScope}|${visible.length > 0}|${askResults.length > 0}`;
   useEffect(() => {
-    if (!engine) return;
+    if (!engine || (isAskTab(activeTab) && askResults.length === 0)) return;
     const previous = lastFit.current;
     if (previous && previous.key === fitKey && previous.engine === engine) return;
     lastFit.current = { key: fitKey, engine };
     if (!previous && startsControlled.current) return;
     engine.fit(fitBounds, fallbackCamera, fitPadding);
-  }, [engine, fitKey, fitBounds, fallbackCamera, fitPadding]);
+  }, [engine, fitKey, fitBounds, fallbackCamera, fitPadding, activeTab, askResults.length]);
 
   // Controlled camera: follow the prop when it changes to somewhere the map is
   // not. Only a new value moves the map; the echo of our own report does not.
@@ -249,18 +288,21 @@ export function TripMap({
   useEffect(() => {
     if (!engine || !selectedPlaceId) return;
     const card = placesRef.current.find((p) => p.tripPlaceId === selectedPlaceId);
-    if (located(card)) reveal(engine, card, false, cameraRef.current, sizeRef.current);
-  }, [engine, selectedPlaceId]);
+    if (!located(card)) return;
+    if (!centerSelection) return reveal(engine, card, false, cameraRef.current, sizeRef.current);
+    const timer = window.setTimeout(() => center(engine, card, cameraRef.current, insetRef.current), CENTER_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [engine, selectedPlaceId, centerSelection]);
 
   const clientName = trip.clientName;
   const renderPin = useCallback(
     (pin: PinModel) => {
-      if (pinStyle === "itinerary") return <ItineraryPinView pin={pin} />;
+      if (pinStyle === "itinerary") return <ItineraryPinView pin={pin} landed={pin.id === landedPlaceId} />;
       const card = placesById.get(pin.id);
       const label = card && pin.highlighted && !pin.selected ? pinLabel(card, clientName) : null;
       return <PinView pin={pin} label={label} />;
     },
-    [placesById, clientName, pinStyle],
+    [placesById, clientName, pinStyle, landedPlaceId],
   );
   const pinTitle = useCallback(
     (pin: PinModel) => {
@@ -285,6 +327,7 @@ export function TripMap({
       onHover(null);
     },
     onPinClick: (id: string) => onSelect(id),
+    onPinDoubleClick: (id: string) => onPinDoubleClick?.(id),
     onBackgroundClick: () => onSelect(null),
   };
 
@@ -316,6 +359,7 @@ export function TripMap({
     if (!onSearchArea) return;
     const radiusM = radiusFromViewport(boundsForCamera(view, size));
     onSearchArea({ lat: view.lat, lon: view.lon, radiusM });
+    moveStart.current = view;
     setUserMoved(false);
   }
 
@@ -391,7 +435,12 @@ export function TripMap({
       {status === "unavailable" && live ? <MapUnavailableNotice className="absolute top-[22px] left-[22px] z-30" /> : null}
 
       {userMoved && onSearchArea ? (
-        <SearchAreaButton onClick={searchArea} className="absolute top-[22px] left-1/2 z-30 -translate-x-1/2" />
+        // Under whatever the workspace puts along the top edge.
+        <SearchAreaButton
+          onClick={searchArea}
+          style={{ top: inset.top > 0 ? inset.top + 8 : 22 }}
+          className="absolute left-1/2 z-30 -translate-x-1/2"
+        />
       ) : null}
 
       <ZoomControls

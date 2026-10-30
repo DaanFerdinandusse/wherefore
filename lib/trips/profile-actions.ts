@@ -3,7 +3,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { NotFoundError } from "@/lib/auth/errors";
+import { InvalidInputError, NotFoundError } from "@/lib/auth/errors";
 import { inScope } from "@/lib/auth/scope";
 import { requireUser } from "@/lib/auth/server";
 import type { ItinerarySlot, TripPlaceCard } from "@/lib/contracts";
@@ -12,6 +12,7 @@ import { tripPlaces, trips } from "@/lib/db/schema";
 import { addDays } from "@/lib/ui/dates";
 import { getAdvisorPlaceForPlace, removeAdvisorPlace, saveAdvisorPlace, updateAdvisorPlaceNote } from "@/lib/places";
 
+import { slotHolds, slotRule } from "./day-parts";
 import { SLOT_ORDER } from "./map";
 import { setTripPlaceStatus, upsertSlot } from "./mutations";
 import type { TripPlaceProfileAdvisorPlace } from "./profile-types";
@@ -44,6 +45,8 @@ export async function addToSlotAction(
     .parse({ tripId, tripPlaceId, day, slot });
   const trip = await getTrip(input.tripId, user);
   if (!trip) throw new NotFoundError("trip");
+  const place = await cardOf(input.tripId, input.tripPlaceId, user);
+  if (place && !slotHolds(input.slot, place.category)) throw new InvalidInputError(slotRule(place.category));
   const date = trip.startDate && trip.datesMode === "exact" ? addDays(trip.startDate, input.day - 1) : null;
   const saved = await upsertSlot(
     input.tripId,

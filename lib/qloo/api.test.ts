@@ -63,6 +63,119 @@ describe("findPlaces", () => {
     expect(out.localityCheck).toEqual({ requested: "Lisboa, Portugal", resolved: "Lisbon, Portugal", ok: true, dropped: 0 });
   });
 
+  describe("without signals (a client with no favorites)", () => {
+    const unscored = (n: number) =>
+      entities(n, "plain").map(({ query, ...rest }) => {
+        const { affinity, ...others } = query;
+        void affinity;
+        return { ...rest, query: others };
+      });
+
+    it("keeps the API's order and leaves every place without a score", async () => {
+      const { client, urls } = clientFor(() => ({ results: { entities: unscored(5) } }));
+      const out = await findPlaces({ destination: lisbon, signals: [], take: 5 }, { client });
+      const q = urls[0].searchParams;
+      expect(q.has("signal.interests.entities")).toBe(false);
+      expect(q.has("feature.explainability")).toBe(false);
+      expect(out.results.map((r) => r.place.entityId)).toEqual(["plain0", "plain1", "plain2", "plain3", "plain4"]);
+      expect(out.results.every((r) => r.affinity === null && r.score === null)).toBe(true);
+    });
+
+    it("still refuses a search with signals that comes back without affinities", async () => {
+      const { client } = clientFor(() => ({ results: { entities: unscored(5) } }));
+      await expect(findPlaces({ destination: lisbon, signals, take: 5 }, { client })).rejects.toThrow(/unexpected shape/);
+    });
+  });
+
+  describe("wider circles", () => {
+    const radii = (urls: URL[]) => urls.map((u) => u.searchParams.get("filter.location.radius"));
+    const small = { ...lisbon, radiusM: 2_500 };
+    const tags = ["urn:tag:category:place:wine_bar"];
+    const widen = [{ radiusM: 5_000 }, { radiusM: 8_000 }, { radiusM: 25_000, below: 3 }];
+    /** Exact matches per circle; a wider circle holds the places of the smaller ones, as the API does. */
+    const byRadius = (counts: Record<string, number>) => (url: URL) => {
+      const radius = url.searchParams.get("filter.location.radius") ?? "";
+      const tagged = url.searchParams.has("filter.tags");
+      const rows = tagged ? entities(counts[radius] ?? 0, "exact") : entities(6, "open");
+      return { results: { entities: rows.map((row) => ({ ...row, query: { ...row.query, distance: 100 } })) } };
+    };
+
+    it("stops at the first circle with enough places", async () => {
+      const { client, urls } = clientFor(byRadius({ 2500: 5 }));
+      const out = await findPlaces({ destination: small, widen, signals, tags, take: 5 }, { client });
+      expect(radii(urls)).toEqual(["2500"]);
+      expect(out.radiusM).toBe(2_500);
+      expect(out.loosened).toEqual([]);
+    });
+
+    it("goes wider before it drops a filter, closest places first", async () => {
+      const { client, urls } = clientFor(byRadius({ 2500: 2, 5000: 5 }));
+      const out = await findPlaces({ destination: small, widen, signals, tags, take: 5 }, { client });
+      expect(radii(urls)).toEqual(["2500", "5000"]);
+      expect(out.radiusM).toBe(5_000);
+      expect(out.loosened).toEqual([]);
+      expect(out.results.map((r) => r.place.entityId)).toEqual(["exact0", "exact1", "exact2", "exact3", "exact4"]);
+    });
+
+    it("leaves the last resort circle out while a few exact matches exist, and drops the tags close by", async () => {
+      const { client, urls } = clientFor(byRadius({ 2500: 1, 5000: 2, 8000: 3 }));
+      const out = await findPlaces({ destination: small, widen, signals, tags, take: 5 }, { client });
+      expect(radii(urls)).toEqual(["2500", "5000", "8000", "8000"]);
+      expect(urls[3].searchParams.has("filter.tags")).toBe(false);
+      expect(out.radiusM).toBe(8_000);
+      expect(out.loosened).toEqual(["tags"]);
+    });
+
+    it("searches the last resort circle when almost nothing matches", async () => {
+      const { client, urls } = clientFor(byRadius({ 25000: 5 }));
+      const out = await findPlaces({ destination: small, widen, signals, tags, take: 5 }, { client });
+      expect(radii(urls)).toEqual(["2500", "5000", "8000", "25000"]);
+      expect(out.radiusM).toBe(25_000);
+      expect(out.loosened).toEqual([]);
+    });
+
+    it("keeps its 1.5x distance guard for each circle", async () => {
+      const rows = entities(6, "near").map((row, i) => ({ ...row, query: { ...row.query, distance: i === 0 ? 4_000 : 100 } }));
+      const { client } = clientFor(() => ({ results: { entities: rows } }));
+      const out = await findPlaces({ destination: small, signals, take: 6 }, { client });
+      expect(out.results.map((r) => r.place.entityId)).not.toContain("near0");
+      expect(out.localityCheck.dropped).toBe(1);
+    });
+
+    it("lets a wider circle keep a place that was too far for a smaller one", async () => {
+      const rows = entities(6, "near").map((row, i) => ({ ...row, query: { ...row.query, distance: i < 2 ? 4_000 : 100 } }));
+      const { client } = clientFor(() => ({ results: { entities: rows } }));
+      const out = await findPlaces({ destination: small, widen, signals, take: 6 }, { client });
+      expect(out.results.map((r) => r.place.entityId)).toContain("near0");
+      expect(out.localityCheck.dropped).toBe(0);
+    });
+  });
+
+  describe("noShopping", () => {
+    const mainly =(genre: string, id: string) => {
+      const entity = entities(1, id)[0]!;
+      return { ...entity, properties: { ...entity.properties, primary_genre: { id: `urn:tag:genre:place:${genre}` } } };
+    };
+
+    it("leaves out malls, keeps food halls, and asks for spares so the list stays full", async () => {
+      const rows = [mainly("shopping_mall", "mall"), mainly("restaurant:food_court", "hall"), ...entities(6, "strict")];
+      const { client, urls } = clientFor(() => ({ results: { entities: rows } }));
+      const out = await findPlaces({ destination: lisbon, signals, noShopping: true, take: 5 }, { client });
+      expect(urls[0].searchParams.get("take")).toBe("10");
+      const ids = out.results.map((r) => r.place.entityId);
+      expect(ids).toHaveLength(5);
+      expect(ids).not.toContain("mall0");
+      expect(ids).toContain("hall0");
+    });
+
+    it("keeps malls and asks for the usual number otherwise", async () => {
+      const { client, urls } = clientFor(() => ({ results: { entities: [mainly("shopping_mall", "mall"), ...entities(5, "strict")] } }));
+      const out = await findPlaces({ destination: lisbon, signals, take: 5 }, { client });
+      expect(urls[0].searchParams.get("take")).toBe("5");
+      expect(out.results.map((r) => r.place.entityId)).toContain("mall0");
+    });
+  });
+
   it("drops the tags, then the price cap, when fewer than 5 come back", async () => {
     const { client, urls } = clientFor((url) => {
       const q = url.searchParams;

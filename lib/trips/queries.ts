@@ -4,7 +4,7 @@ import { and, asc, desc, eq, inArray, isNotNull, ne, or, sql, type SQL } from "d
 
 import { inScope, isUuid } from "@/lib/auth/scope";
 import { listRecentClients } from "@/lib/clients/queries";
-import type { TripPlaceCard, TripSnapshot, TripStage } from "@/lib/contracts";
+import type { SharedTripView, TripPlaceCard, TripSnapshot, TripStage } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import {
   advisorPlaces,
@@ -24,8 +24,10 @@ import {
 import type {
   ClientPastDestinations,
   GetSharedTripView,
+  GetTripTravelerView,
   GetTrip,
   GetTripSnapshot,
+  IsSharedGooglePlace,
   ListRecentClientsForTripBar,
   ListTripCalls,
   ListTripPlaceCards,
@@ -47,6 +49,7 @@ import {
   travelerFavorites,
 } from "./map";
 import { type SharedFavoriteRow, type SharedSlotRow, toSharedTripView } from "./share";
+import { sharePhotoPath, withGooglePhotos } from "./traveler-photos";
 import { DEV_TRIP_PREFIX } from "./dev";
 import { computeStage, isTripStage, todayIso, tripDayCount } from "./stage";
 
@@ -210,6 +213,7 @@ export const getTripSnapshot: GetTripSnapshot = async (tripId, ownerId) => {
       clientId: trip.clientId,
       clientName: trip.clientName,
       destination: trip.destination,
+      ...(trip.cover ? { cover: trip.cover } : {}),
       startDate: trip.startDate ?? undefined,
       endDate: trip.endDate ?? undefined,
       datesMode: trip.datesMode === "exact" ? "exact" : "unset",
@@ -239,30 +243,56 @@ function asSeedStatus(value: string): TripSnapshot["trip"]["seedStatus"] {
   return value === "running" || value === "done" || value === "failed" ? value : "pending";
 }
 
+const SHARE_TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
+
+export const getSharedTripView: GetSharedTripView = async (token) => {
+  if (!SHARE_TOKEN_RE.test(token)) return null;
+  return travelerViewOf(eq(trips.shareToken, token), sharePhotoPath(token));
+};
+
+export const isSharedGooglePlace: IsSharedGooglePlace = async (token, googlePlaceId) => {
+  if (!SHARE_TOKEN_RE.test(token)) return false;
+  const [row] = await db
+    .select({ id: places.id })
+    .from(itinerarySlots)
+    .innerJoin(trips, eq(trips.id, itinerarySlots.tripId))
+    .innerJoin(tripPlaces, and(eq(tripPlaces.id, itinerarySlots.tripPlaceId), ne(tripPlaces.status, "removed")))
+    .innerJoin(places, eq(places.id, tripPlaces.placeId))
+    .where(and(eq(trips.shareToken, token), eq(places.googlePlaceId, googlePlaceId)))
+    .limit(1);
+  return Boolean(row);
+};
+
+export const getTripTravelerView: GetTripTravelerView = async (tripId, scope) => {
+  if (!isUuid(tripId)) return null;
+  return travelerViewOf(and(eq(trips.id, tripId), inScope(trips, scope)) as SQL);
+};
+
 /**
- * The public traveler view. It never goes through the advisor snapshot: the
+ * The traveler view of the trip `match` finds. It never goes through the advisor snapshot: the
  * selects below name every column the traveler may see, and
  * `toSharedTripView` drops what the page does not show (ids, scores, asks,
  * advisor place notes, slot notes not marked for the traveler). Removed
  * places do not join. The last two read the travelers' favorites with their
  * photos for "Built from your favorites"; only the favorites that drove a
- * shown place reach the page.
+ * shown place reach the page. `photoPath` is where this viewer can load Google
+ * photos from.
  */
-export const getSharedTripView: GetSharedTripView = async (token) => {
-  if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
-  const sharedTripId = db.select({ id: trips.id }).from(trips).where(eq(trips.shareToken, token));
+async function travelerViewOf(match: SQL, photoPath?: string): Promise<SharedTripView | null> {
+  const matchedTripId = db.select({ id: trips.id }).from(trips).where(match);
   // The trip's client and every traveler with a profile.
   const tripClientIds = sql`(
-    select t.client_id from trips t where t.share_token = ${token}
+    select ${trips.clientId} from ${trips} where ${match}
     union
-    select tt.client_id from trip_travelers tt join trips t on t.id = tt.trip_id
-    where t.share_token = ${token} and tt.client_id is not null
+    select ${tripTravelers.clientId} from ${tripTravelers}
+    where ${tripTravelers.clientId} is not null and ${inArray(tripTravelers.tripId, matchedTripId)}
   )`;
   const [tripRows, slotRows, favoriteRows, mediaRows] = await db.batch([
     db
       .select({
         title: trips.title,
         destinationName: sql<string>`${trips.destination} ->> 'name'`,
+        cover: trips.cover,
         startDate: trips.startDate,
         endDate: trips.endDate,
         clientName: trips.clientName,
@@ -272,7 +302,7 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
       })
       .from(trips)
       .leftJoin(advisors, eq(advisors.userId, trips.ownerId))
-      .where(eq(trips.shareToken, token))
+      .where(match)
       .limit(1),
     db
       .select({
@@ -287,6 +317,7 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
         category: tripPlaces.category,
         imageUrl: sql<string | null>`${places.images} -> 0 ->> 'url'`,
         images: places.images,
+        googlePlaceId: places.googlePlaceId,
         neighborhood: places.neighborhood,
         description: places.description,
         keywords: sql<unknown>`${places.properties} -> 'keywords'`,
@@ -302,7 +333,7 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
         and(eq(tripPlaces.id, itinerarySlots.tripPlaceId), ne(tripPlaces.status, "removed")),
       )
       .leftJoin(places, eq(places.id, tripPlaces.placeId))
-      .where(inArray(itinerarySlots.tripId, sharedTripId)),
+      .where(inArray(itinerarySlots.tripId, matchedTripId)),
     db
       .select({
         entityId: places.entityId,
@@ -336,6 +367,7 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
             category: row.category ?? "other",
             imageUrl: row.imageUrl,
             images: (row.images ?? []).map((image) => image.url),
+            googlePlaceId: row.googlePlaceId,
             neighborhood: row.neighborhood,
             description: row.description,
             keywords: row.keywords,
@@ -356,8 +388,8 @@ export const getSharedTripView: GetSharedTripView = async (token) => {
       })),
     ),
   ];
-  return toSharedTripView(trip, slots, favorites);
-};
+  return toSharedTripView(trip, await withGooglePhotos(slots, photoPath), favorites);
+}
 
 export const listTripPlaceCards: ListTripPlaceCards = async (tripId, scope, options = {}) => {
   const trip = await getTrip(tripId, scope);
@@ -492,7 +524,8 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
     .orderBy(tripAsks.tripId, desc(tripAsks.createdAt))
     .as("last_asks");
 
-  // The city photo: the first image of the best scored place still on the trip.
+  // The city photo of a trip without a cover: the first image of the best
+  // scored place still on the trip.
   const covers = db
     .selectDistinctOn([tripPlaces.tripId], {
       tripId: tripPlaces.tripId,
@@ -569,7 +602,7 @@ export const listTrips: ListTrips = async (ownerId, options = {}) => {
       shareLastOpenedAt: t.shareLastOpenedAt,
       shareOpensTracked: t.shareOpensTracked,
       seedStatus: t.seedStatus,
-      imageUrl: row.imageUrl ?? null,
+      imageUrl: t.cover?.url ?? row.imageUrl ?? null,
       clientFavorites: row.favorites ?? 0,
       lastAsk:
         row.askStatus === null

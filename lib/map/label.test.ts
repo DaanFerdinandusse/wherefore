@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { becauseLine, joinNames, pinLabel, typeLine } from "./label";
+import { becauseLine, isLongPinName, joinNames, pinLabel, typeLine } from "./label";
 
 const senhorUva = {
   name: "Senhor Uva",
@@ -11,6 +11,17 @@ const senhorUva = {
     { entityId: "e1", name: "Via Carota", share: 70 },
   ],
 };
+
+describe("isLongPinName", () => {
+  it("keeps everyday names at full size", () => {
+    expect(isLongPinName("Senhor Uva")).toBe(false);
+    expect(isLongPinName("Taberna da Rua das Flores")).toBe(false);
+  });
+
+  it("flags hotel style names", () => {
+    expect(isLongPinName("Las Alcobas, a Luxury Collection Hotel, Mexico City")).toBe(true);
+  });
+});
 
 describe("pinLabel", () => {
   it("builds the hover label from the card", () => {

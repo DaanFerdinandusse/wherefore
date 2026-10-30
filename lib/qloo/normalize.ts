@@ -146,6 +146,8 @@ export function signalScoresOf(raw: RawPlace): SignalScore[] {
 // ------------------------------------------------------------------ category
 
 const GENRE_PREFIX = "urn:tag:genre:place:";
+/** Main types of places that sell things. They carry tags for what is inside (a mall has "restaurant"). */
+const SHOPPING_LEAVES = new Set(["shopping", "shopping_mall", "department_store"]);
 
 const STAY_LEAVES = new Set([
   "hotel",
@@ -217,6 +219,12 @@ function categoryOfLeaf(leaf: string): Category | undefined {
   return undefined;
 }
 
+/** Is a mall or a department store what this place mainly is? A food hall is not, whatever is around it. */
+export function isShoppingPlace(place: Pick<NormalizedPlace, "primaryType">): boolean {
+  const leaf = place.primaryType?.startsWith(GENRE_PREFIX) ? place.primaryType.slice(GENRE_PREFIX.length) : null;
+  return leaf !== null && SHOPPING_LEAVES.has(leaf);
+}
+
 /**
  * Board category. The primary genre decides; the category tags only break the
  * tie when there is no genre. Category filters upstream are loose (restaurants
@@ -225,6 +233,7 @@ function categoryOfLeaf(leaf: string): Category | undefined {
  * genre is plain "restaurant" stays in "eat" whatever its tags say.
  */
 export function categoryOf(place: Pick<NormalizedPlace, "primaryType" | "types">): Category {
+  if (isShoppingPlace(place)) return "other";
   const genre = place.primaryType?.startsWith(GENRE_PREFIX) ? place.primaryType.slice(GENRE_PREFIX.length) : null;
   if (genre) {
     const segments = genre.split(":");

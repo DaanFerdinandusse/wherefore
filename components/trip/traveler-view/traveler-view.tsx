@@ -1,6 +1,7 @@
 import { Heart } from "lucide-react";
 
 import type { SharedFavorite, SharedTripDay, SharedTripView } from "@/lib/contracts";
+import { CoverCredit } from "@/components/ui/cover-credit";
 import { FilmImage } from "@/components/ui/film-image";
 import { cn } from "@/lib/ui/cn";
 
@@ -24,31 +25,27 @@ import {
   withoutHero,
 } from "./format";
 import { AdvisorInitials, AdvisorNote, FavoritePhoto, LovedFor, PhotoRow, ReasonRow, StayFacts } from "./parts";
+import { PhotoCredit } from "./photo-credit";
 import { PlaceBlock, PlaceColumn } from "./place-block";
 
 // The itinerary as the traveler sees it (Paper "K1 Traveler itinerary"): a
 // hero with the city photo and a short letter, the favorites the picks were
 // built from, one section per planned day, the stay, and a footer with the
-// advisor. The same body renders on the public page /s/[token] and inside
-// the workspace's "Traveler view" tab; `embedded` moves every heading one
-// level down so the workspace keeps its own h1. Layout follows the width of
-// the component (container queries), not the window, so it holds in a
-// narrow workspace panel as well as on a phone. Free days are not shown.
-// No state and no server-only imports, so it renders on either side.
+// advisor. The same page renders at /s/[token] and in the workspace's
+// full-screen traveler view. Layout follows the width of the component
+// (container queries), not the window. Free days are not shown. No state and
+// no server-only imports, so it renders on either side.
 
 const GUTTER = "px-4 @3xl:px-10 @5xl:px-16";
 
 type Reasons = ReturnType<typeof pageReasons>;
 
-type Levels = { title: "h1" | "h2"; section: "h2" | "h3"; place: "h3" | "h4" };
-
 function Wordmark() {
   // The Wordmark component links to the advisor's Trips page; a traveler has no account there.
-  return <span className="font-display text-wordmark-sm text-ink">Tastebrief</span>;
+  return <span className="font-display text-wordmark-sm text-ink">Wherefore</span>;
 }
 
-function Hero({ view, level, image }: { view: SharedTripView; level: Levels["title"]; image: ReturnType<typeof heroImage> }) {
-  const Title = level;
+function Hero({ view, image }: { view: SharedTripView; image: ReturnType<typeof heroImage> }) {
   const dates = dateRangeLabel(view.startDate, view.endDate);
   const intro = heroIntro(view);
   const advisor = view.advisorName?.trim();
@@ -72,7 +69,10 @@ function Hero({ view, level, image }: { view: SharedTripView; level: Levels["tit
       </div>
       {image ? (
         <div className="relative mx-4 aspect-4/5 overflow-hidden rounded-photo bg-avatar @3xl:mx-10 @3xl:aspect-16/10 @5xl:col-start-1 @5xl:row-span-2 @5xl:row-start-1 @5xl:mx-0 @5xl:aspect-auto @5xl:rounded-none">
-          <FilmImage src={image.src} alt={image.alt} priority sizes="(min-width: 1024px) 55vw, 100vw" />
+          {/* The largest photo on the page, shown as it is: the film grade flattens it. */}
+          <FilmImage src={image.photo.src} alt={image.alt} priority sizes="(min-width: 1024px) 55vw, 100vw" className="filter-none!" />
+          {image.photo.credit ? <PhotoCredit credit={image.photo.credit} /> : null}
+          {image.cover ? <CoverCredit cover={image.cover} className="absolute right-3 bottom-3 rounded-pill bg-ink/50 px-2.5 py-1 text-white" /> : null}
         </div>
       ) : null}
       <div
@@ -82,11 +82,11 @@ function Hero({ view, level, image }: { view: SharedTripView; level: Levels["tit
           image && "@5xl:col-start-2 @5xl:row-start-2",
         )}
       >
-        <Title className="font-display text-name text-ink @3xl:text-hero">
+        <h1 className="font-display text-name text-ink @3xl:text-hero">
           {view.destinationName},
           <br />
           for {view.preparedFor}
-        </Title>
+        </h1>
         {intro ? (
           <p className="max-w-[470px] font-display text-reason-sm text-text-4 italic @3xl:text-intro">{intro}</p>
         ) : null}
@@ -104,16 +104,7 @@ function Hero({ view, level, image }: { view: SharedTripView; level: Levels["tit
   );
 }
 
-function FavoritesBand({
-  favorites,
-  heading,
-  level,
-}: {
-  favorites: SharedFavorite[];
-  heading: string;
-  level: Levels["section"];
-}) {
-  const Heading = level;
+function FavoritesBand({ favorites, heading }: { favorites: SharedFavorite[]; heading: string }) {
   return (
     <section
       className={cn(
@@ -126,9 +117,9 @@ function FavoritesBand({
           <Heart aria-hidden className="size-4" strokeWidth={2} />
           Built from your favorites
         </p>
-        <Heading className="max-w-[420px] font-display text-card-sm text-ink @3xl:text-card-md">
+        <h2 className="max-w-[420px] font-display text-card-sm text-ink @3xl:text-card-md">
           {heading}
-        </Heading>
+        </h2>
       </div>
       {/* One row: on a phone it scrolls sideways instead of wrapping. */}
       <ul className="-mx-4 flex gap-4 overflow-x-auto px-4 py-1.5 @3xl:mx-0 @3xl:gap-7 @3xl:overflow-visible @3xl:px-0">
@@ -144,12 +135,11 @@ function FavoritesBand({
   );
 }
 
-function DayHeader({ day, level }: { day: SharedTripDay; level: Levels["section"] }) {
-  const Heading = level;
+function DayHeader({ day }: { day: SharedTripDay }) {
   const { title, detail } = dayTitle(day);
   return (
     <header className="flex flex-col gap-1 border-b border-rule-strong pb-4 @3xl:flex-row @3xl:items-baseline @3xl:gap-6 @3xl:pb-5">
-      <Heading className="font-display text-title text-ink @3xl:text-day">{title}</Heading>
+      <h2 className="font-display text-title text-ink @3xl:text-day">{title}</h2>
       {detail ? <p className="text-body-lg text-text-3 @3xl:text-prose">{detail}</p> : null}
     </header>
   );
@@ -158,19 +148,18 @@ function DayHeader({ day, level }: { day: SharedTripDay; level: Levels["section"
 function DaySection(props: {
   day: SharedTripDay;
   layout: "stack" | "row";
-  levels: Levels;
   favorites: SharedFavorite[];
   reasons: Reasons;
   advisorName: string | null;
   heroSrc?: string;
   firstBlock: number;
 }) {
-  const { day, layout, levels, favorites, reasons, advisorName, heroSrc, firstBlock } = props;
+  const { day, layout, favorites, reasons, advisorName, heroSrc, firstBlock } = props;
   if (layout === "row") {
     const frames = rowFrames(day.slots.length);
     return (
       <section className={cn("flex flex-col gap-8 pt-14 pb-16 @3xl:gap-10 @3xl:pt-[72px] @3xl:pb-24", GUTTER)}>
-        <DayHeader day={day} level={levels.section} />
+        <DayHeader day={day} />
         <div className="flex flex-col gap-12 @3xl:flex-row @3xl:items-start @3xl:gap-8">
           {day.slots.map((slot, i) => (
             <PlaceColumn
@@ -179,7 +168,6 @@ function DaySection(props: {
               favorites={favorites}
               reasons={reasons}
               advisorName={advisorName}
-              headingLevel={levels.place}
               heroSrc={heroSrc}
               frame={frames[i] ?? { ratio: "1 / 1", grow: 1 }}
             />
@@ -190,7 +178,7 @@ function DaySection(props: {
   }
   return (
     <section className={cn("flex flex-col gap-12 pt-16 pb-10 @3xl:gap-[88px] @3xl:pt-[104px]", GUTTER)}>
-      <DayHeader day={day} level={levels.section} />
+      <DayHeader day={day} />
       {day.slots.map((slot, i) => (
         <PlaceBlock
           key={`${slot.slot}-${slot.position}`}
@@ -198,7 +186,6 @@ function DaySection(props: {
           favorites={favorites}
           reasons={reasons}
           advisorName={advisorName}
-          headingLevel={levels.place}
           heroSrc={heroSrc}
           index={firstBlock + i}
         />
@@ -213,7 +200,6 @@ function StaySection({
   favorites,
   reasons,
   advisorName,
-  level,
   heroSrc,
 }: {
   stay: StayEntry;
@@ -221,10 +207,8 @@ function StaySection({
   favorites: SharedFavorite[];
   reasons: Reasons;
   advisorName: string | null;
-  level: Levels["section"];
   heroSrc?: string;
 }) {
-  const Heading = level;
   const { place } = stay;
   // Two photos at most, as a wide pair.
   const frames = photoFrames(withoutHero(placeImages(place), heroSrc).slice(0, 2), 2);
@@ -234,8 +218,8 @@ function StaySection({
 
   return (
     <section className={cn("flex flex-col gap-8 bg-sand py-16 @3xl:gap-10 @3xl:py-[104px]", GUTTER)}>
-      <Heading className="font-display text-title text-ink @3xl:text-day">You stay at {place.name}</Heading>
-      <PhotoRow frames={frames} alt={place.name} />
+      <h2 className="font-display text-title text-ink @3xl:text-day">You stay at {place.name}</h2>
+      <PhotoRow frames={frames} place={place} />
       <div className="flex flex-col gap-7 @5xl:flex-row @5xl:items-start @5xl:gap-20">
         <div className="min-w-0 flex-1">
           {reason ? (
@@ -255,8 +239,7 @@ function StaySection({
   );
 }
 
-function Footer({ view, level }: { view: SharedTripView; level: Levels["section"] }) {
-  const Heading = level;
+function Footer({ view }: { view: SharedTripView }) {
   const advisor = view.advisorName?.trim();
   const first = advisor?.split(/\s+/)[0];
   const subject = encodeURIComponent(view.title);
@@ -270,7 +253,7 @@ function Footer({ view, level }: { view: SharedTripView; level: Levels["section"
       <div className="flex items-center gap-4">
         {advisor ? <AdvisorInitials name={advisor} size={52} /> : null}
         <div className="flex flex-col gap-0.5">
-          <Heading className="font-display text-card-sm text-ink">Want to change something?</Heading>
+          <h2 className="font-display text-card-sm text-ink">Want to change something?</h2>
           <p className="text-body text-text-3">
             {advisor ? `${advisor} plans this trip for you.` : "Your advisor plans this trip for you."}
           </p>
@@ -288,10 +271,7 @@ function Footer({ view, level }: { view: SharedTripView; level: Levels["section"
   );
 }
 
-export function TravelerView({ view, embedded }: { view: SharedTripView; embedded: boolean }) {
-  const levels: Levels = embedded
-    ? { title: "h2", section: "h3", place: "h4" }
-    : { title: "h1", section: "h2", place: "h3" };
+export function TravelerView({ view }: { view: SharedTripView }) {
   const { days, stays } = splitStays(view);
   const layouts = dayLayouts(days);
   const favorites = favoritesBehind(view);
@@ -306,11 +286,11 @@ export function TravelerView({ view, embedded }: { view: SharedTripView; embedde
   ]);
 
   return (
-    <div className={cn("@container bg-surface text-ink", !embedded && "min-h-dvh")}>
-      <div className={embedded ? "w-full" : "mx-auto max-w-[1440px]"}>
-        <Hero view={view} level={levels.title} image={image} />
+    <div className="@container min-h-dvh bg-surface text-ink">
+      <div className="mx-auto max-w-[1440px]">
+        <Hero view={view} image={image} />
         {favorites.length > 0 ? (
-          <FavoritesBand favorites={favorites} heading={bandHeading(view)} level={levels.section} />
+          <FavoritesBand favorites={favorites} heading={bandHeading(view)} />
         ) : null}
         {days.length === 0 && stays.length === 0 ? (
           <p className={cn("py-16 text-body-lg text-text-2", GUTTER)}>
@@ -322,7 +302,6 @@ export function TravelerView({ view, embedded }: { view: SharedTripView; embedde
             key={day.day}
             day={day}
             layout={layouts[i] ?? "stack"}
-            levels={levels}
             favorites={favorites}
             reasons={reasons}
             advisorName={view.advisorName}
@@ -338,11 +317,10 @@ export function TravelerView({ view, embedded }: { view: SharedTripView; embedde
             favorites={favorites}
             reasons={reasons}
             advisorName={view.advisorName}
-            level={levels.section}
             heroSrc={heroSrc}
           />
         ))}
-        <Footer view={view} level={levels.section} />
+        <Footer view={view} />
       </div>
     </div>
   );

@@ -145,6 +145,7 @@ Recommended: taste-portrait tag overlap as the similarity score, with the shared
 - Reliable fix: `/search?query=Copenhagen&types=urn:entity:locality` returns candidates with lat/lon (the Danish one is "Københavns Kommune"). Then query with
   `filter.location=POINT(12.5683 55.6761)&filter.location.radius=5000` (lon first). This returned proper Copenhagen results.
 - Passing a locality `entity_id` to `filter.location.query` returns HTTP 400.
+- `filter.location.radius` is a hard cut (tested 30 Oct 2026 in Mexico City at 1.5, 2.5, 5, 8 and 25 km: nothing past the radius). Ranking ignores distance, so the radius is the only proximity control. `signal.location` with `signal.location.radius` and `signal.location.weight` raises every affinity but does not favor close places: a museum 17 km out stayed in the top 8.
 
 Product implication: the destination field should be a picker backed by locality search, showing the disambiguation, not free text.
 

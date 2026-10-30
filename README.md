@@ -1,4 +1,4 @@
-# Tastebrief
+# Wherefore
 
 An itinerary builder with an agent, for travel advisors and hotel concierge teams. The advisor sets up a trip in a booking-style bar, the client's saved favorites drive the first search, the agent refines it in a chat that keeps running through reloads, and the result is a day-by-day itinerary shared with the traveler as a link. Every recommendation says why: the client's taste and the advisor's own saved places.
 
@@ -42,4 +42,4 @@ Useful scripts:
 
 ## Deploy
 
-Vercel project `tastebrief`. Deploy with `vercel deploy --prod --archive=tgz`. Env vars are the ones in `.env.example`; Workflows run on Vercel's Workflow backend automatically.
+Vercel project `wherefore`. Deploy with `vercel deploy --prod --archive=tgz`. Env vars are the ones in `.env.example`; Workflows run on Vercel's Workflow backend automatically.

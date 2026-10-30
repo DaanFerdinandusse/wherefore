@@ -3,6 +3,7 @@ import "server-only";
 import { eq, inArray, sql } from "drizzle-orm";
 import { FatalError } from "workflow";
 
+import { isUuid } from "@/lib/auth/scope";
 import type {
   Category,
   LookupPlaceOutput,
@@ -11,7 +12,7 @@ import type {
   SlotName,
 } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { askPlaces, places, tripAsks, tripPlaces } from "@/lib/db/schema";
+import { askPlaces, itinerarySlots, places, tripAsks, tripPlaces } from "@/lib/db/schema";
 import {
   CATEGORY_FILTER_TAGS,
   findPlaces,
@@ -20,16 +21,20 @@ import {
 } from "@/lib/qloo";
 import { upsertPlaces } from "@/lib/places";
 import { saveReplacement, setSlots, setTripPlaceStatus, type SlotInput } from "@/lib/trips";
+import { appendPositions, slotHolds, slotRule } from "@/lib/trips/day-parts";
+import { asCategory, toSlot } from "@/lib/trips/map";
 
 import { cacheWrite, guarded, type TurnRef } from "../writes";
 
 import { cleanAgentNote } from "./notes";
+import { severalPlacesError } from "./place-name";
+import { chooseSearchArea, searchAreaSchema } from "./search-area";
 import {
   cardsInOrder,
   DESCRIPTION_KEYS,
   descriptionTexts,
   driversOf,
-  resolveTripPlaceIds,
+  resolveTripPlaceRefs,
   tripPlaceRowOf,
   type BoardItem,
 } from "./search-core";
@@ -102,7 +107,11 @@ export function lookupFromRow(row: typeof places.$inferSelect, tripPlaceId?: str
 }
 
 export async function lookupPlaceTool(input: { place_id: string }, turn: TurnRef): Promise<LookupPlaceOutput> {
-  const found = (await resolveTripPlaceIds(turn.tripId, [input.place_id])).get(input.place_id);
+  const match = (await resolveTripPlaceRefs(turn.tripId, [input.place_id])).get(input.place_id);
+  if (match?.matches) {
+    return { placeId: input.place_id, name: "", tags: [], error: severalPlacesError(input.place_id, match.matches) };
+  }
+  const found = match?.place;
   if (!found) {
     return { placeId: input.place_id, name: "", tags: [], error: "That place is not on this trip." };
   }
@@ -138,38 +147,60 @@ export async function setItineraryTool(
   turn: TurnRef,
   toolCallId: string,
 ): Promise<SetItineraryOutput> {
-  void toolCallId; // Slots are keyed by (trip, day, slot, position): a retry writes the same rows.
+  void toolCallId; // Slots are keyed by (trip, day, slot, position): a retry writes the same rows (appendPositions).
   const ctx = await loadToolTrip(turn.tripId);
   const asked = input.days.flatMap((d) => d.slots.map((s) => ({ day: d.day, ...s })));
-  const known = await resolveTripPlaceIds(
+  const known = await resolveTripPlaceRefs(
     turn.tripId,
     asked.map((s) => s.place_id),
   );
-  const facts = await noteFacts([...known.values()].map((row) => row.placeId));
+  const facts = await noteFacts([...known.values()].flatMap((m) => (m.place ? [m.place.placeId] : [])));
   const rejected: SetItineraryOutput["rejected"] = [];
   const slots: SlotInput[] = [];
-  const positions = new Map<string, number>();
+  let unsettled = false;
   for (const s of asked) {
-    const row = known.get(s.place_id);
+    const match = known.get(s.place_id);
+    if (match?.matches) {
+      unsettled = true;
+      rejected.push({ placeId: s.place_id, reason: severalPlacesError(s.place_id, match.matches) });
+      continue;
+    }
+    const row = match?.place;
     if (!row) {
-      rejected.push({ placeId: s.place_id, reason: "This place is not on this trip." });
+      const reason = isUuid(s.place_id) ? "This place is not on this trip." : `No place on this trip matches "${s.place_id}".`;
+      rejected.push({ placeId: s.place_id, reason });
       continue;
     }
     if (row.status === "removed") {
       rejected.push({ placeId: s.place_id, reason: "This place was removed from the trip." });
       continue;
     }
-    const key = `${s.day}|${s.slot}`;
-    const position = positions.get(key) ?? 0;
-    positions.set(key, position + 1);
+    const category = asCategory(row.category);
+    if (!slotHolds(s.slot, category)) {
+      rejected.push({ placeId: s.place_id, reason: slotRule(category) });
+      continue;
+    }
     // The model's note is an agent note: for the advisor only, never shown
     // to the traveler, and stripped of hours, prices and reservations it
     // can not quote from the place's facts.
     const note = cleanAgentNote(s.note, facts.get(row.placeId) ?? []);
-    slots.push({ day: s.day, slot: s.slot, tripPlaceId: row.id, note, noteSource: "agent", noteForTraveler: false, position });
+    slots.push({ day: s.day, slot: s.slot, tripPlaceId: row.id, note, noteSource: "agent", noteForTraveler: false });
+  }
+  // Replace clears the itinerary first: never do that while a place is in doubt.
+  if (unsettled && input.mode === "replace") {
+    return { applied: [], rejected, note: "Nothing changed: the itinerary was not cleared and is exactly as it was." };
   }
   if (slots.length === 0 && input.mode !== "replace") return { applied: [], rejected };
-  const result = await guarded(turn, (guard) => setSlots(turn.tripId, slots, input.mode, ctx.scope, { turn: guard }));
+  const stored =
+    input.mode === "merge"
+      ? (await db.select().from(itinerarySlots).where(eq(itinerarySlots.tripId, turn.tripId))).map(toSlot)
+      : [];
+  const positions = appendPositions(
+    slots.map((s) => ({ day: s.day, slot: s.slot, tripPlaceId: s.tripPlaceId ?? "" })),
+    stored,
+  );
+  const placed = slots.map((s, i) => ({ ...s, position: positions[i] }));
+  const result = await guarded(turn, (guard) => setSlots(turn.tripId, placed, input.mode, ctx.scope, { turn: guard }));
   return {
     applied: result.applied,
     rejected: [...rejected, ...result.rejected.map((r) => ({ placeId: r.tripPlaceId, reason: r.reason }))],
@@ -191,7 +222,10 @@ export async function removePlaceTool(
   toolCallId: string,
 ): Promise<RemovePlaceOutput> {
   const ctx = await loadToolTrip(turn.tripId);
-  const found = (await resolveTripPlaceIds(turn.tripId, [input.place_id])).get(input.place_id);
+  const match = (await resolveTripPlaceRefs(turn.tripId, [input.place_id])).get(input.place_id);
+  // A name that could mean two places removes neither.
+  if (match?.matches) return { error: severalPlacesError(input.place_id, match.matches) };
+  const found = match?.place;
   if (!found) return { error: "That place is not on this trip." };
   const [placeRow] = await db.select().from(places).where(eq(places.id, found.placeId)).limit(1);
   const removed = {
@@ -231,6 +265,9 @@ export async function removePlaceTool(
         ? CATEGORY_FILTER_TAGS[removed.category]
         : [];
   const priceMax = typeof query.priceMax === "number" ? query.priceMax : undefined;
+  // The same circle as the search it came from, so a replacement stays near the day.
+  const stored = searchAreaSchema.safeParse(query.searchArea);
+  const area = stored.success ? stored.data : chooseSearchArea({ destination: ctx.destination, placed: [] });
 
   const onTrip = await db
     .select({ entityId: places.entityId })
@@ -243,7 +280,8 @@ export async function removePlaceTool(
   try {
     const result = await findPlaces(
       {
-        destination: ctx.destination,
+        destination: { ...ctx.destination, lat: area.lat, lon: area.lon, radiusM: area.radiusM },
+        widen: area.widen,
         signals: ctx.signals.signals,
         ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
         ...(priceMax ? { priceMax } : {}),

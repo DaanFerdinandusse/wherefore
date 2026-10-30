@@ -4,11 +4,13 @@ import type {
   Category,
   Explainability,
   SharedFavorite,
+  SharedGooglePhoto,
   SharedTripDay,
   SharedTripPlace,
   SharedTripSlot,
   SharedTripView,
   TasteTag,
+  TripCover,
 } from "@/lib/contracts";
 
 import { favoriteDrivers } from "@/lib/qloo/normalize";
@@ -25,6 +27,7 @@ import { asCategory, asSlotName, SLOT_ORDER } from "./map";
 export type SharedTripRow = {
   title: string;
   destinationName: string;
+  cover?: TripCover | null;
   startDate: string | null;
   endDate: string | null;
   clientName: string;
@@ -53,6 +56,10 @@ export type SharedSlotRow = {
     reason: string | null;
     /** Every photo url of the place, in the provider's order. */
     images?: readonly string[];
+    /** Only for the lookup in traveler-photos.ts: never reaches the page. */
+    googlePlaceId?: string | null;
+    /** Google's photos when it has them: they replace `images`. */
+    googlePhotos?: readonly (SharedGooglePhoto & { src: string })[];
     description?: string | null;
     /** properties.keywords: `{ name, count }[]` from reviews. */
     keywords?: unknown;
@@ -84,7 +91,7 @@ export function dayDate(startDate: string | null, day: number): string | undefin
   return new Date(start + (day - 1) * 86_400_000).toISOString().slice(0, 10);
 }
 
-/** Only absolute http(s) urls: the photo proxy needs a session the traveler does not have. */
+/** Only absolute http(s) urls: stored proxy urls need a session the traveler does not have. */
 function isPublicImage(url: string | null | undefined): url is string {
   return typeof url === "string" && /^https?:\/\//i.test(url.trim());
 }
@@ -188,7 +195,8 @@ export function imagesOf(place: Pick<NonNullable<SharedSlotRow["place"]>, "image
 
 function toSharedPlace(place: NonNullable<SharedSlotRow["place"]>): SharedTripPlace {
   const category: Category = asCategory(place.category);
-  const images = imagesOf(place);
+  const google = place.googlePhotos?.slice(0, MAX_PLACE_IMAGES) ?? [];
+  const images = google.length > 0 ? google.map((photo) => photo.src) : imagesOf(place);
   const description = place.description?.trim();
   const keywords = keywordsOf(place.keywords, place.name);
   const dishes = dishesOf(place.dishes);
@@ -203,6 +211,7 @@ function toSharedPlace(place: NonNullable<SharedSlotRow["place"]>): SharedTripPl
     sharedTags: place.sharedTags.map((tag) => tag.name),
     reason: place.reason?.trim() || undefined,
     ...(images.length > 0 ? { images } : {}),
+    ...(google.length > 0 ? { googlePhotos: Object.fromEntries(google.map(({ src, ...photo }) => [src, photo])) } : {}),
     ...(description ? { description } : {}),
     ...(keywords.length > 0 ? { keywords } : {}),
     ...(dishes.length > 0 ? { dishes } : {}),
@@ -297,6 +306,7 @@ export function toSharedTripView(
     preparedFor: firstName(trip.clientName),
     advisorName: trip.advisorName,
     ...(advisorEmail && z.email().safeParse(advisorEmail).success ? { advisorEmail } : {}),
+    ...(trip.cover ? { cover: trip.cover } : {}),
     ...(favorites.length > 0 ? { favorites } : {}),
     days,
   };

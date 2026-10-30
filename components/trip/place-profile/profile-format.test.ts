@@ -7,6 +7,7 @@ import {
   googleHoursRows,
   hoursRowLabel,
   namedDrivers,
+  isSlotTaken,
   nextFreeSlot,
   openState,
   parseRanges,
@@ -45,7 +46,7 @@ describe("nextFreeSlot", () => {
   it("takes the first free slot that suits the category", () => {
     expect(nextFreeSlot("eat", days, [slot(1, "lunch", "a"), slot(1, "dinner", "b")])).toEqual({ day: 2, slot: "lunch" });
     expect(nextFreeSlot("drink", days, [])).toEqual({ day: 1, slot: "night" });
-    expect(nextFreeSlot("coffee", days, [slot(1, "morning", "a")])).toEqual({ day: 1, slot: "afternoon" });
+    expect(nextFreeSlot("coffee", days, [slot(1, "breakfast", "a")])).toEqual({ day: 1, slot: "morning" });
   });
 
   it("an empty slot row does not count as taken", () => {
@@ -54,11 +55,18 @@ describe("nextFreeSlot", () => {
 
   it("falls back to any free slot, then to day 1", () => {
     const full = days.flatMap((d) => [slot(d.day, "lunch", "x"), slot(d.day, "dinner", "y")]);
-    expect(nextFreeSlot("eat", days, full)).toEqual({ day: 1, slot: "morning" });
+    expect(nextFreeSlot("eat", days, full)).toEqual({ day: 1, slot: "breakfast" });
     const packed = days.flatMap((d) =>
-      (["morning", "lunch", "afternoon", "dinner", "night"] as const).map((s) => slot(d.day, s, "z")),
+      (["breakfast", "morning", "lunch", "afternoon", "dinner", "night"] as const).map((s) => slot(d.day, s, "z")),
     );
     expect(nextFreeSlot("eat", days, packed)).toEqual({ day: 1, slot: "lunch" });
+    expect(nextFreeSlot("see", days, packed)).toEqual({ day: 1, slot: "morning" });
+  });
+
+  it("a taken meal says so, an open slot never does", () => {
+    const slots = [slot(1, "lunch", "a"), slot(1, "afternoon", "b")];
+    expect(isSlotTaken({ day: 1, slot: "lunch" }, slots)).toBe(true);
+    expect(isSlotTaken({ day: 1, slot: "afternoon" }, slots)).toBe(false);
   });
 });
 

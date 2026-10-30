@@ -3,7 +3,7 @@
 export const HOME_PATH = "/trips";
 
 // A fixed origin to parse against: the value only has to stay on it.
-const BASE = "https://tastebrief.invalid";
+const BASE = "https://wherefore.invalid";
 const BASE_ORIGIN = new URL(BASE).origin;
 
 // Control characters (tab and newline among them, which URL parsers strip)

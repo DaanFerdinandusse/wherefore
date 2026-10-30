@@ -3,7 +3,7 @@
 // fact is missing the line says less, never more.
 
 import type { TripCard } from "@/lib/trips/contracts";
-import { SLOT_ORDER } from "@/lib/trips/map";
+import { DAY_PARTS } from "@/lib/trips/day-parts";
 
 import { dayMonthLabel, firstName, plural, tripDayToday } from "./format";
 
@@ -31,9 +31,9 @@ export function agoLabel(then: Date, now: Date): string {
   return `${days} days ago`;
 }
 
-/** Slots the itinerary offers: every slot of every day, as the itinerary counts them. */
+/** Slots the itinerary asks to fill: the meal of each part of each day. */
 export function totalSlots(card: Pick<TripCard, "counts">): number {
-  return card.counts.days * SLOT_ORDER.length;
+  return card.counts.days * DAY_PARTS.length;
 }
 
 /** A trip still being planned for a client without a single favorite. */

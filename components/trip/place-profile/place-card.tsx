@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { useId, useMemo, useRef, useState, type DragEvent, type ReactNode, type Ref } from "react";
 import {
   BedDouble,
   Bookmark,
   Check,
+  ChevronUp,
   Clock,
   Coffee,
   Heart,
@@ -22,6 +23,7 @@ import {
 import { FilmImage } from "@/components/ui/film-image";
 import type { Category, ItinerarySlot, SlotName, SlotTarget, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
 import type { GoogleAttribution } from "@/lib/google/contracts";
+import { slotHolds } from "@/lib/trips/day-parts";
 import type { TripPlaceProfileDriver } from "@/lib/trips/profile-types";
 import { cn } from "@/lib/ui/cn";
 
@@ -30,7 +32,9 @@ import { startPlaceDrag } from "../workspace/dnd";
 import { PhotoViewer } from "./photo-viewer";
 import { LoadingPhoto } from "./loading-photo";
 import { keywordBars, shortAuthor } from "./card-format";
+import { MapsPhotosLink } from "./maps-photos-link";
 import { ReviewsPanel, VisitPanel } from "./place-card-panels";
+import { placePhotos, type PlacePhoto } from "./place-photos";
 import { firstName, namedDrivers, nextFreeSlot, priceSigns, tripDays, type SlotChoice } from "./profile-format";
 import { SlotPicker } from "./slot-picker";
 import { useGoogleDetails, useTripPlaceProfile } from "./use-profile-data";
@@ -64,8 +68,6 @@ export type PlaceCardProps = {
 };
 
 type Tab = "for" | "visit" | "reviews";
-
-export type CardPhoto = { src: string; alt: string; attributions?: GoogleAttribution[] };
 
 const CATEGORY_ICON: Record<Category, typeof Utensils> = {
   eat: Utensils,
@@ -101,23 +103,29 @@ export function PlaceCard({
   const [gallery, setGallery] = useState<{ placeId: string; src: string } | null>(null);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const photosExpanded = expandedPlaceId === card.placeId;
+  const galleryId = useId();
+  const moreTileRef = useRef<HTMLButtonElement>(null);
+  const collapsePhotos = () => {
+    setExpandedPlaceId(null);
+    // The grid turns inert as it closes, so focus goes back to the tile that opened it.
+    // A plain focus() would jump the thread and cut the fade off.
+    const tile = moreTileRef.current;
+    tile?.focus({ preventScroll: true });
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tile?.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+  };
   const { profile, failed: profileFailed } = useTripPlaceProfile(true, card.tripPlaceId);
   const place = profile?.place ?? null;
   const wantFull = tab !== "for";
   const { details, full, fullLoading, basicLoading } = useGoogleDetails(card.placeId, Boolean(place?.googlePlaceId), true, wantFull);
+  const profileLoading = !profile && !profileFailed;
 
-  const photos = useMemo<CardPhoto[]>(() => {
-    const provider = (place?.images.length ? place.images : card.imageUrl ? [{ url: card.imageUrl }] : []).map((image, i) => ({
-      src: image.url,
-      alt: `${card.name}, photo ${i + 1}`,
-    }));
-    const google = (details?.photos ?? []).map((photo, i) => ({
-      src: photo.url,
-      alt: `${card.name}, photo ${provider.length + i + 1}`,
-      attributions: photo.attributions,
-    }));
-    return [...provider, ...google];
-  }, [place, card.imageUrl, card.name, details]);
+  const photos = useMemo(
+    () => placePhotos(card.name, place?.images, card.imageUrl, details?.photos),
+    [place, card.imageUrl, card.name, details],
+  );
+  const photosLoading = profileLoading || basicLoading;
+  const morePhotos = photosLoading ? [] : photos.slice(3);
 
   const neighborhood = card.neighborhood ?? place?.neighborhood ?? undefined;
   const kind = place?.kind ?? CATEGORY_WORD[card.category];
@@ -155,12 +163,17 @@ export function PlaceCard({
 
       <div>
         <PhotoStrip
-          photos={photos}
-          loading={(!profile && !profileFailed) || basicLoading}
+          // The frames stay empty until Google answers, so a tile does not
+          // show a provider image and then swap to a different photo.
+          photos={photosLoading ? [] : photos}
+          loading={photosLoading}
           name={card.name}
           tall={variant === "overlay"}
           tripPlaceId={card.tripPlaceId}
+          category={card.category}
           expanded={photosExpanded}
+          galleryId={galleryId}
+          moreTileRef={moreTileRef}
           onExpand={() => setExpandedPlaceId(card.placeId)}
           onOpenGallery={(src) => setGallery({ placeId: card.placeId, src })}
           chips={
@@ -178,26 +191,47 @@ export function PlaceCard({
           }
         />
 
-        {photosExpanded ? (
-          <div role="region" aria-label={`More photos of ${card.name}`} className="mt-1.5 grid grid-cols-3 gap-1.5" data-testid="place-card-gallery">
-            {photos.slice(3).map((photo, index) => (
-              <button
-                key={`${photo.src}-${index}`}
-                type="button"
-                aria-label={`View photo ${index + 4} of ${card.name}`}
-                aria-haspopup="dialog"
-                onClick={() => setGallery({ placeId: card.placeId, src: photo.src })}
-                className="relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-lg bg-avatar focus-visible:outline-offset-[-4px]"
-              >
-                <LoadingPhoto photo={photo} sizes="240px" />
-                <GoogleCredit attributions={photo.attributions} />
-              </button>
-            ))}
+        {morePhotos.length > 0 ? (
+          // Stays mounted so closing can play; inert keeps a closed grid out of reach.
+          <div key={card.placeId} id={galleryId} className="place-photos-reveal" data-expanded={photosExpanded} inert={!photosExpanded}>
+            <div className="place-photos-clip">
+              <div role="region" aria-label={`More photos of ${card.name}`} className="grid grid-cols-3 gap-1.5 pt-1.5" data-testid="place-card-gallery">
+                {morePhotos.map((photo, index) => (
+                  <button
+                    key={`${photo.src}-${index}`}
+                    type="button"
+                    aria-label={`View photo ${index + 4} of ${card.name}`}
+                    aria-haspopup="dialog"
+                    onClick={() => setGallery({ placeId: card.placeId, src: photo.src })}
+                    className="relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-lg bg-avatar focus-visible:outline-offset-[-4px]"
+                  >
+                    <LoadingPhoto photo={photo} sizes="240px" />
+                    <GoogleCredit attributions={photo.attributions} />
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pr-1">
+                <button
+                  type="button"
+                  data-photo-toggle
+                  onClick={collapsePhotos}
+                  aria-label={`Collapse photos of ${card.name}`}
+                  aria-expanded={photosExpanded}
+                  aria-controls={galleryId}
+                  data-testid="place-card-collapse-photos"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-pill bg-track pr-3.5 pl-2.75 text-ui font-semibold text-text-3 transition-colors hover:bg-rule hover:text-ink focus-visible:outline-offset-[-4px]"
+                >
+                  <ChevronUp aria-hidden className="size-4" strokeWidth={2.2} />
+                  Collapse photos
+                </button>
+                {details?.photosUrl ? <MapsPhotosLink href={details.photosUrl} /> : null}
+              </div>
+            </div>
           </div>
         ) : null}
 
         {gallery?.placeId === card.placeId ? (
-          <PhotoViewer photos={photos} name={card.name} initialSrc={gallery.src} onClose={() => setGallery(null)} />
+          <PhotoViewer photos={photos} name={card.name} initialSrc={gallery.src} photosUrl={details?.photosUrl} onClose={() => setGallery(null)} />
         ) : null}
       </div>
 
@@ -208,7 +242,7 @@ export function PlaceCard({
           card={card}
           place={place}
           details={full}
-          loading={fullLoading}
+          loading={profileLoading || fullLoading}
           target={target}
           trip={trip}
           client={client}
@@ -216,7 +250,7 @@ export function PlaceCard({
       ) : (
         <ReviewsPanel
           details={full}
-          loading={fullLoading}
+          loading={profileLoading || fullLoading}
           terms={[...(card.keywords ?? []).map((k) => k.name), ...(card.dishes ?? [])]}
         />
       )}
@@ -235,30 +269,33 @@ function PhotoChip({ icon: Icon, children }: { icon?: typeof Utensils; children:
   );
 }
 
-function GoogleCredit({ attributions }: { attributions?: GoogleAttribution[] }) {
+function GoogleCredit({ attributions, top = false }: { attributions?: GoogleAttribution[]; top?: boolean }) {
   const author = shortAuthor(attributions?.[0]?.displayName);
   if (!attributions) return null;
   return (
-    <span className="absolute right-2 bottom-2 rounded-pill bg-photo-chip px-2 py-0.5 text-meta font-medium text-white">
+    <span className={cn("absolute right-2 rounded-pill bg-photo-chip px-2 py-0.5 text-meta font-medium text-white", top ? "top-2" : "bottom-2")}>
       Google{author ? ` · ${author}` : ""}
     </span>
   );
 }
 
 /** Photo frames reserve space while details load and open the selected image. */
-function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGallery, expanded, onExpand }: {
-  photos: CardPhoto[];
+function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, category, onOpenGallery, expanded, galleryId, moreTileRef, onExpand }: {
+  photos: PlacePhoto[];
   loading: boolean;
   name: string;
   tall: boolean;
   chips: ReactNode;
   tripPlaceId: string;
+  category: Category;
   onOpenGallery: (src: string) => void;
   expanded: boolean;
+  galleryId: string;
+  moreTileRef: Ref<HTMLButtonElement>;
   onExpand: () => void;
 }) {
   const slotCount = loading ? 3 : Math.min(photos.length, 3);
-  const onDragStart = (event: DragEvent) => startPlaceDrag(event, tripPlaceId);
+  const onDragStart = (event: DragEvent) => startPlaceDrag(event, tripPlaceId, category);
   const height = tall ? "h-62" : "h-50";
 
   if (slotCount === 0) {
@@ -278,6 +315,7 @@ function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGal
         return (
           <button
             key={index}
+            ref={index === 2 ? moreTileRef : undefined}
             type="button"
             disabled={!photo}
             onClick={() => {
@@ -287,6 +325,8 @@ function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGal
             aria-label={hasMore ? `Open more photos of ${name}` : `View photo ${index + 1} of ${name}`}
             aria-haspopup={hasMore ? undefined : "dialog"}
             aria-expanded={hasMore ? false : undefined}
+            aria-controls={hasMore ? galleryId : undefined}
+            data-photo-toggle={hasMore ? true : undefined}
             className={cn(
               "relative overflow-hidden bg-avatar text-left focus-visible:outline-offset-[-4px]",
               hasMore ? "cursor-pointer" : "enabled:cursor-zoom-in",
@@ -301,7 +341,8 @@ function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGal
                 <span className="text-ui-sm font-semibold">Open more photos</span>
               </span>
             ) : null}
-            <GoogleCredit attributions={photo?.attributions} />
+            {/* The first tile's chips sit along the bottom, so its credit goes on top. */}
+            <GoogleCredit attributions={photo?.attributions} top={index === 0} />
             {index === 0 ? <span className="absolute bottom-3.5 left-3.5 flex flex-wrap gap-1.5">{chips}</span> : null}
           </button>
         );
@@ -483,7 +524,7 @@ function CardActions({
   card,
   trip,
   slots,
-  target,
+  target: asked,
   client,
   actions,
 }: {
@@ -494,11 +535,15 @@ function CardActions({
   client: string;
   actions: PlaceCardActions;
 }) {
+  // A search aimed at a slot can turn up a place that slot may not hold: the picker offers the ones that fit.
+  const target = asked && slotHolds(asked.slot, card.category) ? asked : undefined;
   const [busy, setBusy] = useState<"add" | "remove" | null>(null);
   const days = useMemo(() => tripDays(trip, slots), [trip, slots]);
   const [choice, setChoice] = useState<SlotChoice | null>(null);
   const current = slots.find((s) => s.tripPlaceId === card.tripPlaceId);
-  const picked: SlotChoice = target ? { day: target.day, slot: target.slot } : (choice ?? nextFreeSlot(card.category, days, slots));
+  const picked: SlotChoice = target
+    ? { day: target.day, slot: target.slot }
+    : (choice ?? (current ? { day: current.day, slot: current.slot } : nextFreeSlot(card.category, days, slots)));
   const inTarget = Boolean(current && current.day === picked.day && current.slot === picked.slot);
   const isStay = picked.slot === "stay";
 

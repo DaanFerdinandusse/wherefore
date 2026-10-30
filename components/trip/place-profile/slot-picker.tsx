@@ -12,8 +12,9 @@ import { isAgentNote } from "../agent-note";
 import { SLOT_LABELS, isSlotTaken, pickerSlots, slotChoiceLabel, type SlotChoice, type TripDay } from "./profile-format";
 
 // "Day 2 · Lunch": the slot the place will be added to. Opens upward (it sits
-// at the bottom of the sheet) with one row per day and a pill per slot;
-// taken slots say so, and picking one replaces what is there.
+// at the bottom of the sheet) with one row per day and a pill per slot. A
+// taken meal says so, and picking it replaces what is there. Morning,
+// Afternoon and Night are never taken: the place joins what is in them.
 
 export function SlotPicker({
   value,
@@ -59,9 +60,8 @@ export function SlotPicker({
               {offered.map((slot) => {
                 const choice = { day: day.day, slot };
                 const selected = value.day === day.day && value.slot === slot;
-                const holder = slots.find((s) => s.day === day.day && s.slot === slot && s.tripPlaceId);
-                const taken = isSlotTaken(choice, slots) && holder?.tripPlaceId !== tripPlaceId;
-                const here = holder?.tripPlaceId === tripPlaceId;
+                const here = slots.some((s) => s.day === day.day && s.slot === slot && s.tripPlaceId === tripPlaceId);
+                const taken = isSlotTaken(choice, slots) && !here;
                 const agentNote = slots.find((s) => s.day === day.day && s.slot === slot && isAgentNote(s));
                 return (
                   <button

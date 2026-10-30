@@ -8,6 +8,7 @@ import {
   initialState,
   applySlotWrites,
   liveAsks,
+  moveRefusal,
   nextFreeSlot,
   reduce,
   swapWrites,
@@ -145,8 +146,8 @@ describe("ask tabs", () => {
     expect(state.asks[ASK].status).toBe("done");
   });
 
-  it("opens the itinerary by default, and reads the retired board as the itinerary", () => {
-    expect(initialState(snapshot()).view).toBe("itinerary");
+  it("opens the map by default, and reads the retired board as the itinerary", () => {
+    expect(initialState(snapshot()).view).toBe("map");
     expect(initialState(snapshot(), { view: "board" }).view).toBe("itinerary");
   });
 
@@ -247,10 +248,32 @@ describe("slots and days", () => {
 
   it("finds the next free slot that suits the category", () => {
     const state = initialState(snapshot({ places: [card("a")], slots: [slot(1, "lunch", "a"), slot(1, "dinner", "a")] }));
-    expect(nextFreeSlot(state, "eat")).toEqual({ day: 2, slot: "lunch" });
-    expect(nextFreeSlot(state, "coffee")).toEqual({ day: 1, slot: "morning" });
+    expect(nextFreeSlot(state, "eat")).toEqual({ day: 2, slot: "lunch", position: 0 });
+    expect(nextFreeSlot(state, "coffee")).toEqual({ day: 1, slot: "breakfast", position: 0 });
     const full: WorkspaceState = { ...state, slots: [1, 2, 3, 4].map((d) => slot(d, "stay", "a")) };
     expect(nextFreeSlot(full, "stay")).toBeNull();
+  });
+
+  it("spreads places over the days, then adds to an open slot once every day is full", () => {
+    const state = initialState(snapshot({ places: [card("a")] }));
+    const days = [1, 2, 3, 4, 5];
+    const full: WorkspaceState = {
+      ...state,
+      slots: days.flatMap((d) => [slot(d, "morning", "a"), slot(d, "afternoon", "a"), slot(d, "night", "a")]),
+    };
+    expect(nextFreeSlot(full, "see")).toEqual({ day: 1, slot: "morning", position: 1 });
+  });
+
+  it("refuses a move into a slot that may not hold the place, in both directions", () => {
+    const places = { food: card("food", { category: "eat" }), museum: card("museum", { category: "see" }), cafe: card("cafe", { category: "coffee" }) };
+    const slots = [slot(1, "lunch", "food"), slot(1, "dinner", "food"), slot(1, "afternoon", "museum"), slot(1, "breakfast", "cafe")];
+    const state = { slots, places };
+    expect(moveRefusal(state, { day: 1, slot: "lunch" }, { day: 1, slot: "night" })).toBe("Restaurants go in breakfast, lunch or dinner.");
+    expect(moveRefusal(state, { day: 1, slot: "afternoon" }, { day: 1, slot: "dinner" })).toBe("Sights go in morning, afternoon or night.");
+    expect(moveRefusal(state, { day: 1, slot: "lunch" }, { day: 2, slot: "dinner" })).toBeNull();
+    expect(moveRefusal(state, { day: 1, slot: "afternoon" }, { day: 2, slot: "night" })).toBeNull();
+    // The cafe may go in the afternoon, but the museum there may not go to breakfast.
+    expect(moveRefusal(state, { day: 1, slot: "breakfast" }, { day: 1, slot: "afternoon" })).toBe("Sights go in morning, afternoon or night.");
   });
 
   it("reorder swaps place, note and traveler flag exactly", () => {
@@ -304,14 +327,17 @@ describe("url state", () => {
     const params = new URLSearchParams(`view=map&tab=${ASK}&place=${ASK}&x=1`);
     const state = readUrlState(params);
     expect(state).toEqual({ view: "map", activeTab: `ask:${ASK}`, selectedPlaceId: ASK, camera: null });
-    expect(writeUrlState("?x=1", { view: "itinerary", activeTab: "eat", selectedPlaceId: null })).toBe("?x=1&tab=eat");
-    expect(readUrlState(new URLSearchParams("view=nope&tab=nope")).view).toBe("itinerary");
+    expect(writeUrlState("?x=1", { view: "map", activeTab: "eat", selectedPlaceId: null })).toBe("?x=1&tab=eat");
+    expect(writeUrlState("?x=1", { view: "itinerary", activeTab: "all", selectedPlaceId: null })).toBe("?x=1&view=itinerary");
+    expect(readUrlState(new URLSearchParams("")).view).toBe("map");
+    expect(readUrlState(new URLSearchParams("view=itinerary")).view).toBe("itinerary");
+    expect(readUrlState(new URLSearchParams("view=nope&tab=nope")).view).toBe("map");
     expect(readUrlState(new URLSearchParams("view=board")).view).toBe("itinerary");
   });
 
   it("round-trips the map camera and drops a bad one", () => {
     const search = writeUrlState("", { view: "map", activeTab: "all", selectedPlaceId: null, camera: { lat: 38.712345678, lon: -9.1, zoom: 13.25 } });
-    expect(search).toBe("?view=map&cam=38.71235%2C-9.1%2C13.25");
+    expect(search).toBe("?cam=38.71235%2C-9.1%2C13.25");
     expect(readUrlState(new URLSearchParams(search)).camera).toEqual({ lat: 38.71235, lon: -9.1, zoom: 13.25 });
     expect(readUrlState(new URLSearchParams("cam=91,0,3")).camera).toBeNull();
     expect(readUrlState(new URLSearchParams("cam=abc")).camera).toBeNull();

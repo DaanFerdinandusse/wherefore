@@ -47,6 +47,10 @@ export type TripStoreActions = {
   toast: { message: string; id: number } | null;
   showToast: (message: string) => void;
   dismissToast: () => void;
+  /** A prompt from outside the chat (the map's "Search this region"). The chat sends it as soon as it is free. */
+  chatPrompt: { text: string; id: number } | null;
+  askChat: (text: string) => void;
+  clearChatPrompt: () => void;
 };
 
 export type TripStore = WorkspaceState & TripStoreActions;
@@ -84,6 +88,7 @@ export function createTripStore(initial: WorkspaceState): StoreApi<TripStore> {
     };
 
     let toastId = 0;
+    let chatPromptId = 0;
 
     return {
       ...initial,
@@ -105,6 +110,9 @@ export function createTripStore(initial: WorkspaceState): StoreApi<TripStore> {
       toast: null,
       showToast: (message) => set({ toast: { message, id: ++toastId } }),
       dismissToast: () => set({ toast: null }),
+      chatPrompt: null,
+      askChat: (text) => set({ chatPrompt: { text, id: ++chatPromptId } }),
+      clearChatPrompt: () => set({ chatPrompt: null }),
     };
   });
 }

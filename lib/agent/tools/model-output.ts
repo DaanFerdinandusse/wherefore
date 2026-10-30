@@ -81,6 +81,7 @@ export function findPlacesForModel(output: FindPlacesOutput): ModelText {
     ask_id: output.askId,
     label: output.label,
     ...(output.target ? { for_slot: output.target.label } : {}),
+    ...(output.searchedArea ? { searched_area: output.searchedArea } : {}),
     count: output.count,
     elapsed_ms: output.elapsedMs,
     ...(output.loosened.length ? { loosened: loosenedCopy(output.loosened) } : {}),
@@ -123,6 +124,7 @@ export function setItineraryForModel(output: SetItineraryOutput): ModelText {
   return modelText({
     applied: output.applied.map((s) => ({ day: s.day, slot: s.slot, id: s.tripPlaceId, ...(s.note ? { note: s.note } : {}) })),
     rejected: output.rejected,
+    ...(output.note ? { note: output.note } : {}),
   });
 }
 

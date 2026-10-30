@@ -74,4 +74,4 @@ Clicking a card on `/clients` goes to a 404, while the direct link `/clients/<id
   - Client search results are labelled "Places", not "From Google Maps", because they come from the recommendation search.
   - "Guides and transfers" on My places is left out (no such places in the data model).
   - The calendar and stepper in the New trip panel differ slightly from the design (shared `components/ui` pieces).
-- **Memory:** project notes for this run are in `~/.claude/projects/-Users-daanferdinandusse-qloo/memory/tastebrief-v3-build.md`.
+- **Memory:** project notes for this run are in `~/.claude/projects/-Users-daanferdinandusse-qloo/memory/wherefore-v3-build.md`.

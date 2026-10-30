@@ -18,6 +18,7 @@ import type {
   SharedTripView,
   SlotName,
   TasteTag,
+  TripCover,
   TripPlaceCard,
   TripPlaceSource,
   TripPlaceStatus,
@@ -43,6 +44,8 @@ export type TravelerInput = {
 export type CreateTripInput = {
   clientId: string;
   destination: Destination;
+  /** The destination's stock photo, when one was found. */
+  cover?: TripCover | null;
   startDate?: string | null;
   endDate?: string | null;
   datesMode: "exact" | "unset";
@@ -81,7 +84,7 @@ export type TripCard = {
   /** Opens of this link are recorded (it was created after tracking began), so "not opened" is a fact. */
   shareOpensTracked: boolean;
   seedStatus: string;
-  /** First image of the trip's best scored place, for the city photo. */
+  /** The city photo: the trip's cover, else the first image of its best scored place. */
   imageUrl: string | null;
   /** Favorites on the client's profile. 0 means a search has nothing to start from. */
   clientFavorites: number;
@@ -226,6 +229,10 @@ export type GetTripSnapshot = (tripId: string, ownerId: ScopeInput) => Promise<T
  * the result holds only what the traveler may see (see SharedTripView).
  */
 export type GetSharedTripView = (token: string) => Promise<SharedTripView | null>;
+/** The same view by trip id, for the advisor's preview: it works before a share link exists. */
+export type GetTripTravelerView = (tripId: string, scope: ScopeInput) => Promise<SharedTripView | null>;
+/** Whether the Google place is on the itinerary of the trip shared by this token. */
+export type IsSharedGooglePlace = (token: string, googlePlaceId: string) => Promise<boolean>;
 /** The Trips board: each stage bounded to a page, newest first. */
 export type ListTrips = (ownerId: ScopeInput, options?: ListTripsOptions) => Promise<TripsByStage>;
 /** Cards for some or all of a trip's places, for tool outputs that stream cards. */

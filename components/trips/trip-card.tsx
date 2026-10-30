@@ -14,7 +14,7 @@ import { DatesMeta, StatusMeta } from "./status-line";
 import { TripActionsMenu } from "./trip-actions-menu";
 
 // One trip on the board. A big card for trips in progress: the city photo
-// (the trip's best scored place; no photo before there is one), the city in
+// (the trip's cover, else its best scored place), the city in
 // Bodoni with the client on the right, then the dates and one status line.
 // A trip for a client without favorites is a dashed card without a photo.
 // Done trips are compact rows: a thumbnail, the city, "Elena Costa, Sep".

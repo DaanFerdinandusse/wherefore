@@ -13,3 +13,5 @@ Both transcript views share `streaming-parts.tsx`: new words fade into ink witho
 The activity row fades in over 200ms and out over 140ms, retaining its last label until removal at 160ms. Exiting rows are immediately inert and hidden from assistive technology, with their dots stopped. A new phase cancels removal. Reduced motion shows content immediately and hides exiting rows immediately.
 
 Search chips switch the card inline within their own search. Browsing does not change the recommended pick or itinerary. Place selection from the itinerary or map opens a native modal, keeping the transcript and composer mounted underneath. Escape, the close action, and the backdrop dismiss the modal.
+
+The map's Search this region reaches the chat through the store (`askChat`). `ChatColumn` sends it like a typed message as soon as no reply is running, and says so in a toast when it has to wait. The marker line with the coordinates stays in the stored text, so a retry keeps it, and the bubble leaves it out (`withoutRegionMarker`).

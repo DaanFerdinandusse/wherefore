@@ -63,6 +63,9 @@ export const placeQuerySchema = z.looseObject({
   ),
 });
 
+/** Without signals the API sends no affinity. */
+const unsignedQuerySchema = placeQuerySchema.extend({ affinity: nullish(z.number()) });
+
 /** One place as /search, /entities or /v2/insights returns it. */
 export const rawPlaceSchema = z.looseObject({
   entity_id: z.string(),
@@ -75,7 +78,7 @@ export const rawPlaceSchema = z.looseObject({
   properties: nullish(placePropertiesSchema),
   tags: nullish(z.array(rawTagSchema)),
   external: nullish(externalSchema),
-  query: nullish(placeQuerySchema),
+  query: nullish(unsignedQuerySchema),
 });
 export type RawPlace = z.infer<typeof rawPlaceSchema>;
 
@@ -99,6 +102,18 @@ export const insightsPlacesResponseSchema = z.looseObject({
   ),
 });
 export type InsightsPlacesResponse = z.infer<typeof insightsPlacesResponseSchema>;
+
+/**
+ * The same answer to a search without signals (a client with no favorites):
+ * the API ranks the places itself and sends no affinity. With signals a missing
+ * affinity is still an error, so this schema is only for that one case.
+ */
+export const unsignedPlacesResponseSchema = insightsPlacesResponseSchema.extend({
+  results: z.looseObject({
+    entities: z.array(rawPlaceSchema.extend({ query: unsignedQuerySchema })),
+  }),
+});
+export type UnsignedPlacesResponse = z.infer<typeof unsignedPlacesResponseSchema>;
 
 export const searchResponseSchema = z.looseObject({ results: z.array(rawPlaceSchema) });
 export type SearchResponse = z.infer<typeof searchResponseSchema>;

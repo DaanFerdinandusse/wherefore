@@ -12,7 +12,10 @@ export {
   PHOTO_PROXY_PATH,
   clampPhotoWidth,
   fetchPhoto,
+  fullPhotoWidth,
   isPhotoName,
+  photoPlaceId,
   photoProxyUrl,
+  tilePhotoWidth,
 } from "./photos";
 export type { PhotoStream } from "./photos";

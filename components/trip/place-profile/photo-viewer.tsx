@@ -7,17 +7,20 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { FilmImage } from "@/components/ui/film-image";
 import { cn } from "@/lib/ui/cn";
 import { LoadingPhoto } from "./loading-photo";
-import type { CardPhoto } from "./place-card";
+import { MapsPhotosLink } from "./maps-photos-link";
+import type { PlacePhoto } from "./place-photos";
 
 /** Native modal keeps focus in the viewer and returns it to the clicked photo. */
-export function PhotoViewer({ photos, name, initialSrc, onClose }: {
-  photos: CardPhoto[];
+export function PhotoViewer({ photos, name, initialSrc, photosUrl, onClose }: {
+  photos: PlacePhoto[];
   name: string;
   initialSrc: string;
+  photosUrl?: string;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const [selectedSrc, setSelectedSrc] = useState(initialSrc);
   const index = Math.max(0, photos.findIndex((photo) => photo.src === selectedSrc));
   const photo = photos[index];
@@ -27,6 +30,8 @@ export function PhotoViewer({ photos, name, initialSrc, onClose }: {
     const trigger = document.activeElement;
     const { overflow } = document.documentElement.style;
     dialog?.showModal();
+    // showModal focuses the first control, which can be the Google Maps link.
+    closeRef.current?.focus();
     document.documentElement.style.overflow = "hidden";
     return () => {
       dialog?.close();
@@ -70,10 +75,19 @@ export function PhotoViewer({ photos, name, initialSrc, onClose }: {
       <div className="flex h-full min-h-0 flex-col gap-3 p-3 sm:gap-4 sm:p-5">
         <header className="flex shrink-0 items-center gap-3">
           <h2 className="min-w-0 flex-1 truncate font-display text-card-xs sm:text-card-md">{name}</h2>
-          <button type="button" autoFocus aria-label="Close photos" onClick={onClose} className={control}><X aria-hidden className="size-5" /></button>
+          {photosUrl ? <MapsPhotosLink href={photosUrl} /> : null}
+          <button ref={closeRef} type="button" aria-label="Close photos" onClick={onClose} className={control}><X aria-hidden className="size-5" /></button>
         </header>
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-avatar">
-          {photo ? <LoadingPhoto key={photo.src} photo={photo} sizes="1100px" contain /> : null}
+          {photo ? (
+            <LoadingPhoto
+              key={photo.src}
+              photo={{ ...photo, src: photo.fullSrc ?? photo.src }}
+              previewSrc={photo.fullSrc && photo.fullSrc !== photo.src ? photo.src : undefined}
+              sizes="1100px"
+              contain
+            />
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <button type="button" aria-label="Previous photo" disabled={photos.length < 2} onClick={() => move(-1)} className={control}><ChevronLeft aria-hidden className="size-5" /></button>

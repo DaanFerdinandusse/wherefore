@@ -52,6 +52,8 @@ function hasReason(card: TripPlaceCard): boolean {
 
 export function shareReview(input: {
   clientName: string;
+  /** The trip's cover. Without one, the first place photo is the cover. */
+  coverUrl?: string;
   days: DayView[];
   slots: ItinerarySlot[];
   places: Record<string, TripPlaceCard>;
@@ -62,7 +64,7 @@ export function shareReview(input: {
   const unique = [...new Map(inLink.map((c) => [c.tripPlaceId, c])).values()];
 
   const withImages = unique.filter((c): c is TripPlaceCard & { imageUrl: string } => !!c.imageUrl);
-  const cover = withImages[0]?.imageUrl;
+  const cover = input.coverUrl ?? withImages[0]?.imageUrl;
   const placeCount = unique.length;
   const placesText = `${placeCount} ${placeCount === 1 ? "place" : "places"}`;
   const linkDetail = cover ? `a cover photo and ${placesText}` : placesText;

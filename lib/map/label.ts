@@ -33,6 +33,13 @@ export type PinLabel = {
   text: string;
 };
 
+const LONG_NAME_CHARS = 28;
+
+/** Names past this length take the compact pill on the map. */
+export function isLongPinName(name: string): boolean {
+  return name.trim().length > LONG_NAME_CHARS;
+}
+
 /** The hover label of a highlighted pin. */
 export function pinLabel(card: Pick<TripPlaceCard, "name" | "score" | "yourPlace" | "because">, clientName: string): PinLabel {
   const title = typeof card.score === "number" ? `${card.name} · ${card.score}` : card.name;

@@ -4,30 +4,14 @@
 
 import type { Category, Explainability, ItinerarySlot, SlotName } from "@/lib/contracts";
 import { favoriteDrivers } from "@/lib/qloo/normalize";
+import { isOpenSlot, overflowSlot, PREFERRED_SLOTS, SLOT_LABELS, SLOT_ORDER, slotHolds } from "@/lib/trips/day-parts";
 
-export const SLOT_LABELS: Record<SlotName, string> = {
-  morning: "Morning",
-  lunch: "Lunch",
-  afternoon: "Afternoon",
-  dinner: "Dinner",
-  night: "Night",
-  stay: "Stay",
-};
+export { SLOT_LABELS };
 
-/** Slots offered in the picker, in day order. Stay only for places to stay. */
+/** Slots offered in the picker, in day order: the ones that may hold this kind of place. */
 export function pickerSlots(category: Category): SlotName[] {
-  return category === "stay" ? ["stay"] : ["morning", "lunch", "afternoon", "dinner", "night"];
+  return SLOT_ORDER.filter((slot) => slotHolds(slot, category));
 }
-
-// Which slots suit a place, best first. The board category decides.
-const PREFERRED: Record<Category, SlotName[]> = {
-  eat: ["lunch", "dinner"],
-  drink: ["night", "dinner"],
-  coffee: ["morning", "afternoon"],
-  see: ["morning", "afternoon"],
-  stay: ["stay"],
-  other: ["morning", "lunch", "afternoon", "dinner", "night"],
-};
 
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
@@ -101,24 +85,28 @@ export function currentSlotOf(tripPlaceId: string, slots: readonly ItinerarySlot
   return slot ? { day: slot.day, slot: slot.slot } : null;
 }
 
+const holdsPlace = (choice: SlotChoice, slots: readonly ItinerarySlot[]) =>
+  slots.some((s) => s.day === choice.day && s.slot === choice.slot && Boolean(s.tripPlaceId));
+
+/** A meal holds one place, so adding replaces it. An open slot is never taken: a new place joins it. */
 export function isSlotTaken(choice: SlotChoice, slots: readonly ItinerarySlot[]): boolean {
-  return slots.some((s) => s.day === choice.day && s.slot === choice.slot && Boolean(s.tripPlaceId));
+  return !isOpenSlot(choice.slot) && holdsPlace(choice, slots);
 }
 
 /**
- * The default slot for "Add to itinerary": the first free slot that suits the
- * place's category, day by day; else the first free slot of any kind; else
- * day 1 in the best suited slot.
+ * The default slot for "Add to itinerary": the first empty slot that suits the
+ * place's category, day by day; else the first empty slot of any kind; else
+ * day 1 in the best suited open slot, which takes one more.
  */
 export function nextFreeSlot(category: Category, days: readonly TripDay[], slots: readonly ItinerarySlot[]): SlotChoice {
-  const preferred = PREFERRED[category];
+  const preferred = PREFERRED_SLOTS[category];
   for (const { day } of days) {
-    for (const slot of preferred) if (!isSlotTaken({ day, slot }, slots)) return { day, slot };
+    for (const slot of preferred) if (!holdsPlace({ day, slot }, slots)) return { day, slot };
   }
   for (const { day } of days) {
-    for (const slot of pickerSlots(category)) if (!isSlotTaken({ day, slot }, slots)) return { day, slot };
+    for (const slot of pickerSlots(category)) if (!holdsPlace({ day, slot }, slots)) return { day, slot };
   }
-  return { day: days[0]?.day ?? 1, slot: preferred[0] ?? "morning" };
+  return { day: days[0]?.day ?? 1, slot: overflowSlot(category) ?? preferred[0] ?? "morning" };
 }
 
 export function priceSigns(level: number | null | undefined): string | null {

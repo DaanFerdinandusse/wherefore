@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wherefore",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "next",
+        "dev",
+        "-p",
+        "3105"
+      ],
+      "env": {
+        "AGENT_DEV_TOOLS": "1"
+      },
+      "port": 3105
+    },
+    {
+      "name": "wherefore-running",
+      "url": "http://localhost:3105"
+    }
+  ]
+}

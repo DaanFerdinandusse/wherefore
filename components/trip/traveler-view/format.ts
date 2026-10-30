@@ -5,7 +5,9 @@ import type {
   SharedTripSlot,
   SharedTripView,
   SlotName,
+  TripCover,
 } from "@/lib/contracts";
+import { providerImageAt } from "@/lib/images/source";
 import { ADVISOR_DRIVER_NAME, OTHER_FAVORITES_NAME } from "@/lib/qloo/normalize";
 
 // Pure helpers for the traveler view. Every sentence the page says about a
@@ -216,6 +218,7 @@ export function nightsOf(startDate?: string, endDate?: string): number | null {
 }
 
 const SLOT_LABELS: Record<SlotName, string> = {
+  breakfast: "Breakfast",
   morning: "Morning",
   lunch: "Lunch",
   afternoon: "Afternoon",
@@ -341,20 +344,48 @@ export function placeImages(place: Pick<SharedTripPlace, "images" | "imageUrl">)
   return place.imageUrl ? [place.imageUrl] : [];
 }
 
+// The provider's stored 420 px images are stretched up to six times here.
+const PROVIDER_FRAME_WIDTH = 1600;
+const PROVIDER_LARGE_WIDTH = 2400;
+
+export type PhotoCreditFacts = { author?: string; authorUri?: string };
+export type FramePhoto = { src: string; credit?: PhotoCreditFacts };
+
 /**
- * The hero of the page: the first photo of the first place, in itinerary
- * order, that has a second photo to keep for its own block, so the page
- * does not open with the same photo twice. Else the last place's photo.
+ * What a frame loads for one of a place's photos. `large` is for a frame most
+ * of the page wide or tall. A Google photo brings its larger copy and the
+ * credit it must carry; a provider image is asked for at the frame's size.
  */
-export function heroImage(view: Pick<SharedTripView, "days">): { src: string; alt: string } | null {
-  let fallback: { src: string; alt: string } | null = null;
+export function framePhoto(place: Pick<SharedTripPlace, "googlePhotos">, src: string, large: boolean): FramePhoto {
+  const google = place.googlePhotos?.[src];
+  if (!google) return { src: providerImageAt(src, large ? PROVIDER_LARGE_WIDTH : PROVIDER_FRAME_WIDTH) };
+  const { fullSrc, ...credit } = google;
+  return { src: large ? fullSrc : src, credit };
+}
+
+export type HeroImage = { src: string; alt: string; photo: FramePhoto; cover?: TripCover };
+
+function heroOf(place: SharedTripPlace, src: string): HeroImage {
+  return { src, alt: place.name, photo: framePhoto(place, src, true) };
+}
+
+/**
+ * The hero of the page: the trip's cover. Without one, the first photo of the
+ * first place, in itinerary order, that has a second photo to keep for its own
+ * block, so the page does not open with the same photo twice. Else the last
+ * place's photo. `src` is the photo's url in `images`, what `withoutHero`
+ * matches on.
+ */
+export function heroImage(view: Pick<SharedTripView, "days" | "cover">): HeroImage | null {
+  if (view.cover) return { src: view.cover.url, alt: view.cover.alt, photo: { src: view.cover.url }, cover: view.cover };
+  let fallback: HeroImage | null = null;
   for (const day of view.days) {
     for (const slot of day.slots) {
       const images = slot.place ? placeImages(slot.place) : [];
       if (!slot.place || !images[0]) continue;
-      if (images.length >= 2) return { src: images[0], alt: slot.place.name };
+      if (images.length >= 2) return heroOf(slot.place, images[0]);
       // The last place's photo: it repeats far down the page, not right under the hero.
-      fallback = { src: images[0], alt: slot.place.name };
+      fallback = heroOf(slot.place, images[0]);
     }
   }
   return fallback;

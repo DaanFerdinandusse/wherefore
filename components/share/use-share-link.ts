@@ -18,7 +18,7 @@ export type ShareLink = {
   stop: () => Promise<boolean>;
 };
 
-/** "tastebrief.app/s/7pXq2mLk": the link without its scheme, for display. */
+/** "wherefore.app/s/7pXq2mLk": the link without its scheme, for display. */
 export function displayLink(url: string): string {
   return url.replace(/^https?:\/\//, "");
 }

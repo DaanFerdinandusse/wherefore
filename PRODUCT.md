@@ -49,7 +49,7 @@ Every recommendation combines two kinds of judgment: the client's taste, through
 - Agent tools: resolve_favorites, taste_portrait, find_places, score_shortlist (also scores the advisor's own places for a client), explain_pick, add_to_itinerary, swap_slot, save_place.
 - Qloo coverage outside the US is unverified; demo cities still to be tested.
 - Exact shape of Qloo explainability output is unverified.
-- Final product name is undecided. Working name in designs: **Tastebrief** (placeholder).
+- Product name: **Wherefore**.
 
 ## Brand Commitments
 

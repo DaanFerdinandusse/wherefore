@@ -1,6 +1,6 @@
 # components/ui
 
-Primitives for Tastebrief, built from the Paper file "qloo", page "v2 Itinerary builder". One file per primitive, props typed inline, token classes from `app/globals.css` only (no hex). Server components unless they hold state. Icons are lucide-react at stroke width 2. See every primitive in every state at `/design` (`app/(dev)/design`).
+Primitives for Wherefore, built from the Paper file "qloo", page "v2 Itinerary builder". One file per primitive, props typed inline, token classes from `app/globals.css` only (no hex). Server components unless they hold state. Icons are lucide-react at stroke width 2. See every primitive in every state at `/design` (`app/(dev)/design`).
 
 `className` is appended, not merged. To override a size or padding that the primitive sets, use the important suffix (`px-4!`, `h-[38px]!`). Size cards and photos from the caller (`className="h-[300px]"`).
 
@@ -31,7 +31,7 @@ Primitives for Tastebrief, built from the Paper file "qloo", page "v2 Itinerary 
 | UnderlineField | underline-field.tsx | Underlined input with icon slot and clear button; amber underline on focus | `border-nav-pill` `border-glow` `text-text-muted` |
 | Popover | popover.tsx | Panel anchored under its trigger; Esc, outside click, focus trap, focus return | `bg-surface` `border-rule-strong` `rounded-menu` `shadow-menu` `rise-in` |
 | Menu, MenuItem, MenuLabel, MenuSeparator | menu.tsx | Action list in a Popover; arrow keys, Tab closes | `hover:bg-canvas` `rounded-row` `label-caps` |
-| Sheet | sheet.tsx | Native dialog over a blurred scrim: `right` (place profile) or `center`; scroll lock | `backdrop:bg-scrim-soft` `rounded-panel` `shadow-panel` `rise-in` |
+| Sheet | sheet.tsx | Native dialog over a blurred scrim: `right` (place profile), `center` or `full` (traveler view); scroll lock | `backdrop:bg-scrim-soft` `rounded-panel` `shadow-panel` `rise-in` |
 | GlassDock | glass-dock.tsx | Frosted bottom dock with a centered toggle slot above it | `glass-dock` `rounded-dock` `shadow-dock` |
 | Stepper | stepper.tsx | Adults / Children count with minus and plus | `border-pill-outline` `text-body` |
 | Calendar | calendar.tsx | Controlled two-month range picker, Exact dates / Not set yet, footer label, Clear, action slot | `bg-avatar` `bg-ink` `border-rule` `text-action` (helpers in `lib/ui/dates.ts`) |

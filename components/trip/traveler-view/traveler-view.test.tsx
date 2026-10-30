@@ -55,7 +55,7 @@ const view: SharedTripView = {
 
 describe("TravelerView", () => {
   it("renders the hero, the favorites, the day, the stay and the footer from facts", () => {
-    const html = renderToStaticMarkup(<TravelerView view={view} embedded={false} />);
+    const html = renderToStaticMarkup(<TravelerView view={view} />);
     expect(html).toContain("<h1");
     expect(html).toContain("Lisbon,<br/>for Ana");
     expect(html).toContain("14 to 18 May");
@@ -75,11 +75,9 @@ describe("TravelerView", () => {
     expect(html).toContain("Message Sofía");
   });
 
-  it("leaves the contact action out without an email, and moves headings down when embedded", () => {
-    const html = renderToStaticMarkup(<TravelerView view={{ ...view, advisorEmail: undefined }} embedded />);
+  it("leaves the contact action out without an email", () => {
+    const html = renderToStaticMarkup(<TravelerView view={{ ...view, advisorEmail: undefined }} />);
     expect(html).not.toContain("mailto:");
-    expect(html).not.toContain("<h1");
-    expect(html).toContain(">Friday</h3>");
     expect(html).toContain("Want to change something?");
   });
 });

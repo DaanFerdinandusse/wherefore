@@ -46,6 +46,7 @@ export const placeDetailsSchema = z.looseObject({
   displayName: localizedText.optional(),
   formattedAddress: z.string().optional(),
   googleMapsUri: z.string().optional(),
+  googleMapsLinks: z.looseObject({ photosUri: z.string().optional() }).optional(),
   primaryType: z.string().optional(),
   primaryTypeDisplayName: localizedText.optional(),
   businessStatus: z.string().optional(),

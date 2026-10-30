@@ -26,6 +26,7 @@ import {
 import { addDays, nameTokens, tripDates } from "@/lib/demo/rules";
 import { db } from "@/lib/db";
 import { clients, trips } from "@/lib/db/schema";
+import { findCoverPhoto, markCoverPhotoUsed } from "@/lib/unsplash";
 import { getAdvisorPlaceForPlace, saveAdvisorPlace, upsertPlaces } from "@/lib/places";
 import {
   CATEGORY_FILTER_TAGS,
@@ -269,9 +270,12 @@ async function seedTrip(
   if (existing) {
     trip = existing;
   } else {
+    const photo = await findCoverPhoto(destination.name);
+    if (photo) await markCoverPhotoUsed(photo.downloadLocation);
     const created = await createTrip(ownerId, {
       clientId: client.id,
       destination,
+      cover: photo?.cover ?? null,
       startDate: dates.start,
       endDate: dates.end,
       datesMode: "exact",
@@ -405,7 +409,7 @@ async function populateTrip(
       favorites,
     });
     await logCalls(scored.calls);
-    const setAffinities = all.map((r) => r.affinity);
+    const setAffinities = all.flatMap((r) => r.affinity ?? []);
     for (const s of scored.scores) {
       const mine = cityPlaces.find((c) => c.entityId === s.entityId);
       if (!mine) continue;

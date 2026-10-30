@@ -5,7 +5,7 @@ import { buildNudges, mailtoHref, nudgeDraft, summaryLine } from "./nudges";
 
 const today = "2026-11-10";
 const now = new Date("2026-11-10T15:00:00Z");
-const url = (token: string) => `https://tastebrief.app/s/${token}`;
+const url = (token: string) => `https://wherefore.app/s/${token}`;
 const tokyo = { name: "Tokyo", lat: 35.68, lon: 139.69, radiusM: 20000 };
 
 describe("buildNudges", () => {
@@ -32,8 +32,8 @@ describe("buildNudges", () => {
       title: "Marcus hasn't opened Tokyo",
       detail: "Sent 4 days ago · leaves 3 Dec",
     });
-    expect(nudge.draft?.url).toBe("https://tastebrief.app/s/tok");
-    expect(nudge.draft?.message).toContain("Hi Marcus, your Tokyo itinerary is ready: https://tastebrief.app/s/tok");
+    expect(nudge.draft?.url).toBe("https://wherefore.app/s/tok");
+    expect(nudge.draft?.message).toContain("Hi Marcus, your Tokyo itinerary is ready: https://wherefore.app/s/tok");
   });
 
   it("stays quiet about a link sent yesterday, opened, or shared before opens were recorded", () => {

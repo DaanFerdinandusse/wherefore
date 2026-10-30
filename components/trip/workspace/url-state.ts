@@ -5,7 +5,7 @@
 
 import type { BoardTab, MapCamera, TripView } from "../contracts";
 
-import { askIdOf, BOARD_CATEGORIES } from "./reducer";
+import { askIdOf, BOARD_CATEGORIES, DEFAULT_VIEW } from "./reducer";
 
 export type UrlState = { view: TripView; activeTab: BoardTab; selectedPlaceId: string | null; camera: MapCamera | null };
 
@@ -15,16 +15,20 @@ const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type ParamsLike = { get(name: string): string | null };
 
 export function readUrlState(params: ParamsLike): UrlState {
-  const view = params.get("view");
   const tab = params.get("tab");
   const place = params.get("place");
   return {
-    // "board" is the retired Discover board: old links open the itinerary.
-    view: view && view !== "board" && (VIEWS as readonly string[]).includes(view) ? (view as TripView) : "itinerary",
+    view: parseView(params.get("view")),
     activeTab: parseTab(tab),
     selectedPlaceId: place && ID_RE.test(place) ? place : null,
     camera: parseCamera(params.get("cam")),
   };
+}
+
+function parseView(view: string | null): TripView {
+  // "board" is the retired Discover board: old links open the itinerary.
+  if (view === "board") return "itinerary";
+  return view && (VIEWS as readonly string[]).includes(view) ? (view as TripView) : DEFAULT_VIEW;
 }
 
 function parseCamera(value: string | null): MapCamera | null {
@@ -61,8 +65,8 @@ function parseTab(tab: string | null): BoardTab {
 /** The search string for a state, keeping unrelated params. Defaults are left out. */
 export function writeUrlState(current: string, state: Omit<UrlState, "camera"> & { camera?: MapCamera | null }): string {
   const params = new URLSearchParams(current);
-  if (state.view === "itinerary" || state.view === "board") params.delete("view");
-  else params.set("view", state.view);
+  if (state.view === DEFAULT_VIEW) params.delete("view");
+  else params.set("view", state.view === "board" ? "itinerary" : state.view);
   const askId = askIdOf(state.activeTab);
   if (state.activeTab === "all") params.delete("tab");
   else params.set("tab", askId ?? state.activeTab);

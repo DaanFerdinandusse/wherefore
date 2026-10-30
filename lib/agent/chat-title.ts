@@ -1,4 +1,5 @@
 import type { AppUIMessage } from "@/lib/contracts";
+import { withoutRegionMarker } from "@/lib/map/region-prompt";
 
 // A chat's title is the advisor's first message, cut to a short line on a
 // word boundary. Pure: chat-store writes it in the statement that takes the
@@ -8,11 +9,8 @@ export const CHAT_TITLE_MAX = 60;
 
 /** The text of a user message, whitespace collapsed. */
 function messageText(message: Pick<AppUIMessage, "parts">): string {
-  return message.parts
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = message.parts.map((part) => (part.type === "text" ? part.text : "")).join(" ");
+  return withoutRegionMarker(text).replace(/\s+/g, " ").trim();
 }
 
 /** `text` cut to at most `max` characters on a word boundary, with an ellipsis when cut. */

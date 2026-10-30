@@ -10,7 +10,7 @@ export default function SharedTripNotFound() {
       <p className="max-w-[420px] text-body-lg text-text-2">
         Your advisor may have stopped sharing this itinerary or sent you a newer link. Ask them for the latest one.
       </p>
-      <p className="font-display text-wordmark text-ink">Tastebrief</p>
+      <p className="font-display text-wordmark text-ink">Wherefore</p>
     </main>
   );
 }

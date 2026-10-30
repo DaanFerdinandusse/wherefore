@@ -5,7 +5,7 @@ import type { PinModel } from "@/lib/map/pins";
 
 // What TripMap needs from whatever draws the map: the live map or the static
 // fallback. Both take the same pins and report camera moves with a cause, so
-// "Search this area" only follows moves the advisor made.
+// "Search this region" only follows moves the advisor made.
 
 export type MoveCause = "fit" | "pan" | "user";
 
@@ -30,6 +30,7 @@ export type SurfaceProps = {
   onPinEnter: (id: string) => void;
   onPinLeave: (id: string) => void;
   onPinClick: (id: string) => void;
+  onPinDoubleClick: (id: string) => void;
   onBackgroundClick: () => void;
 };
 

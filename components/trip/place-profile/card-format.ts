@@ -57,6 +57,7 @@ export function hoursOnDate(openingHours: readonly string[] | undefined, date: s
 // The hours a slot covers, in minutes from midnight. A guide for "open for
 // the slot", not a booking time: the place only has to be open for part of it.
 const SLOT_WINDOWS: Record<SlotName, [number, number] | null> = {
+  breakfast: [7 * 60, 11 * 60],
   morning: [9 * 60, 12 * 60],
   lunch: [12 * 60, 15 * 60],
   afternoon: [14 * 60, 18 * 60],

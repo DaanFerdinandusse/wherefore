@@ -14,18 +14,15 @@ import {
   dayTitle,
   defaultSlots,
   findingLabel,
-  headline,
   mostCommon,
   openDay,
-  orderItems,
   priceLabel,
-  slotChip,
-  slotList,
+  slotReasons,
   subLine,
   suggestionHint,
   suggestionsBySlot,
-  usesCards,
-  whyBox,
+  tasteBadges,
+  usesCover,
 } from "./itinerary-model";
 
 const ASK = "11111111-1111-4111-8111-111111111111";
@@ -87,11 +84,10 @@ describe("dates", () => {
 });
 
 describe("days", () => {
-  it("offers morning, lunch and dinner, and the last day ends after lunch", () => {
-    expect(defaultSlots(1, 5)).toEqual(["morning", "lunch", "dinner"]);
-    expect(defaultSlots(5, 5)).toEqual(["morning", "lunch"]);
-    expect(defaultSlots(1, 1)).toEqual(["morning", "lunch", "dinner"]);
-    expect(slotList(defaultSlots(2, 5))).toBe("Morning, lunch, dinner");
+  it("offers breakfast, lunch and dinner, and the last day ends after lunch", () => {
+    expect(defaultSlots(1, 5)).toEqual(["breakfast", "lunch", "dinner"]);
+    expect(defaultSlots(5, 5)).toEqual(["breakfast", "lunch"]);
+    expect(defaultSlots(1, 1)).toEqual(["breakfast", "lunch", "dinner"]);
     expect(dayNote(1, 5)).toBe("Day 1 · Arrival");
     expect(dayNote(5, 5)).toBe("Day 5 · Departure");
     expect(dayNote(3, 5)).toBe("Day 3");
@@ -110,14 +106,14 @@ describe("days", () => {
     );
     const days = buildDays(state);
     expect(days).toHaveLength(5);
-    expect(days[0].slots.map((s) => s.slot)).toEqual(["morning", "lunch", "dinner", "night"]);
+    expect(days[0].slots.map((s) => s.slot)).toEqual(["breakfast", "morning", "lunch", "dinner", "night"]);
     expect(days[0].filled).toBe(3);
     expect(days[0].neighborhood).toBe("Príncipe Real");
-    expect(dayTitle(days[0])).toEqual({ lead: "Friday", place: "Príncipe Real" });
-    expect(dayTitle(days[1])).toEqual({ lead: "Saturday" });
-    expect(dayStatus(days[0])).toBe("3 of 4 picked");
+    expect(dayTitle(days[0])).toEqual({ lead: "Friday 14 May", place: "Príncipe Real" });
+    expect(dayTitle(days[1])).toEqual({ lead: "Saturday 15 May" });
+    expect(dayStatus(days[0])).toBe("3 of 5 added");
     expect(dayStatus(days[1])).toBe("Open");
-    expect(usesCards(days)).toBe(true);
+    expect(usesCover(days)).toBe(true);
   });
 
   it("titles a day without dates by its number", () => {
@@ -136,8 +132,8 @@ describe("days", () => {
 
     days = buildDays(initialState(snapshot({ places, asks: [{ ...running, status: "done" }] })));
     expect(days[0].slots.find((s) => s.slot === "dinner")?.suggestion?.tripPlaceId).toBe("b");
-    expect(suggestionHint({ score: 92 })).toBe("92 match. Add it from the card, or drag it here.");
-    expect(suggestionHint({})).toBe("Add it from the card, or drag it here.");
+    expect(suggestionHint({ score: 92 })).toBe("Suggested in chat, 92 match. Not added yet.");
+    expect(suggestionHint({})).toBe("Suggested in chat. Not added yet.");
   });
 
   it("does not suggest a place for a filled slot or a removed place", () => {
@@ -153,7 +149,80 @@ describe("days", () => {
   it("suggests the place open in the chat for its next free slot", () => {
     const state = initialState(snapshot({ places: [card("a", { category: "coffee" })] }), { selectedPlaceId: "a" });
     const days = buildDays(state);
-    expect(days[0].slots.find((s) => s.slot === "morning")?.suggestion?.tripPlaceId).toBe("a");
+    expect(days[0].slots.find((s) => s.slot === "breakfast")?.suggestion?.tripPlaceId).toBe("a");
+  });
+
+  it("groups a day into parts: the meal, then what else is added", () => {
+    const state = initialState(
+      snapshot({
+        places: [card("lunch"), card("museum", { category: "see" }), card("gallery", { category: "see" })],
+        slots: [
+          slot(1, "lunch", "lunch"),
+          slot(1, "afternoon", "museum"),
+          slot(1, "afternoon", "gallery", { id: "1-afternoon-1", position: 1 }),
+        ],
+      }),
+    );
+    const [day] = buildDays(state);
+    expect(day.parts.map((p) => p.label)).toEqual(["Morning", "Afternoon", "Night"]);
+    const afternoon = day.parts[1];
+    expect(afternoon.slots.map((s) => s.card?.tripPlaceId)).toEqual(["lunch", "museum", "gallery"]);
+    expect(afternoon.add).toEqual({ day: 1, slot: "afternoon", position: 2 });
+    expect(day.parts[0].slots.map((s) => s.slot)).toEqual(["breakfast"]);
+    expect(day.filled).toBe(3);
+  });
+
+  it("has no night on the last day of a longer trip until a place is added to it", () => {
+    const days = buildDays(initialState(snapshot({ places: [card("bar", { category: "drink" })], slots: [slot(5, "night", "bar")] })));
+    expect(days[4].parts.map((p) => p.part)).toEqual(["morning", "afternoon", "night"]);
+    expect(buildDays(initialState(snapshot()))[4].parts.map((p) => p.part)).toEqual(["morning", "afternoon"]);
+  });
+
+  it("drops an open slot row left empty, but keeps one with the advisor's note", () => {
+    const days = buildDays(
+      initialState(
+        snapshot({
+          slots: [slot(1, "afternoon"), slot(2, "afternoon", undefined, { note: "Keep this free" })],
+        }),
+      ),
+    );
+    expect(days[0].parts[1].slots.map((s) => s.slot)).toEqual(["lunch"]);
+    expect(days[1].parts[1].slots.map((s) => s.slot)).toEqual(["lunch", "afternoon"]);
+  });
+
+  it("shows a search for an open slot after what is in it", () => {
+    const running: Ask = { id: ASK, label: "Museums", status: "running", resultCount: 0, loosened: [], target: { day: 1, slot: "afternoon" } };
+    const state = initialState(snapshot({ places: [card("museum", { category: "see" })], asks: [running], slots: [slot(1, "afternoon", "museum")] }));
+    const afternoon = buildDays(state)[0].parts[1];
+    expect(afternoon.slots.map((s) => [s.slot, s.position, !!s.finding])).toEqual([
+      ["lunch", 0, false],
+      ["afternoon", 0, false],
+      ["afternoon", 1, true],
+    ]);
+  });
+
+  it("suggests the best place of a search for an open slot until one of them is in it", () => {
+    const ask: Ask = { id: ASK, label: "Museums", status: "done", resultCount: 2, loosened: [], target: { day: 1, slot: "afternoon" } };
+    const places = [
+      card("best", { category: "see", score: 90, askIds: [ASK] }),
+      card("next", { category: "see", score: 80, askIds: [ASK] }),
+    ];
+    const open = buildDays(initialState(snapshot({ places, asks: [ask] })))[0].parts[1];
+    expect(open.slots.find((s) => s.slot === "afternoon")?.suggestion?.tripPlaceId).toBe("best");
+    const added = buildDays(initialState(snapshot({ places, asks: [ask], slots: [slot(1, "afternoon", "best")] })))[0].parts[1];
+    expect(added.slots.filter((s) => s.suggestion)).toEqual([]);
+  });
+
+  it("says what a search for an open slot is finding", () => {
+    expect(findingLabel("dinner")).toBe("Finding dinner in the chat");
+    expect(findingLabel("afternoon")).toBe("Finding something for the afternoon in the chat");
+  });
+
+  it("suggests only a place the slot may hold", () => {
+    const ask: Ask = { id: ASK, label: "Afternoon", status: "done", resultCount: 2, loosened: [], target: { day: 1, slot: "afternoon" } };
+    const places = [card("food", { score: 99, askIds: [ASK] }), card("museum", { category: "see", score: 50, askIds: [ASK] })];
+    const afternoon = buildDays(initialState(snapshot({ places, asks: [ask] })))[0].parts[1];
+    expect(afternoon.slots.find((s) => s.slot === "afternoon")?.suggestion?.tripPlaceId).toBe("museum");
   });
 
   it("finds the most common value, ties to the earliest", () => {
@@ -164,7 +233,7 @@ describe("days", () => {
 });
 
 describe("cover and brief", () => {
-  it("lists dates, travelers, the stay and open slots", () => {
+  it("lists dates, travelers, the stay, and what is added and open", () => {
     const state = initialState(
       snapshot({ places: [card("h", { category: "stay", name: "Valverde" })], slots: [slot(1, "stay", "h")] }),
     );
@@ -173,84 +242,71 @@ describe("cover and brief", () => {
       dates: "Fri 14 to Tue 18 May · 4 nights",
       travelers: "Ana and Clara",
       stay: "Staying at Valverde",
-      open: "14 slots open",
+      progress: "1 added · 14 open",
     });
   });
 
   it("writes the brief sentence from facts only", () => {
     const state = initialState(snapshot());
     expect(briefSentence(state.trip, state.travelers, buildDays(state))).toBe(
-      "Ana and Clara, 2 adults. Fri 14 to Tue 18 May. Nothing picked yet: tell me what Ana wants and I start with one slot.",
+      "Ana and Clara, 2 adults. Fri 14 to Tue 18 May. Nothing added yet: tell me what Ana wants and I start with one slot.",
     );
     const one = initialState(snapshot({ places: [card("a")], slots: [slot(1, "dinner", "a")] }, { party: undefined }));
-    expect(briefSentence(one.trip, one.travelers, buildDays(one))).toBe("Ana and Clara. Fri 14 to Tue 18 May. 1 of 14 slots picked.");
+    expect(briefSentence(one.trip, one.travelers, buildDays(one))).toBe("Ana and Clara. Fri 14 to Tue 18 May. 1 of 14 slots added.");
   });
 });
 
-describe("a place card", () => {
-  it("leads with a dish, then a keyword, then a favorite, else nothing", () => {
-    expect(headline({ dishes: ["Oysters"], keywords: [{ name: "fish", count: 50 }], because: [] })).toBe("For the oysters");
-    expect(headline({ keywords: [{ name: "Tinned fish", count: 132 }], because: [] })).toBe("Known for tinned fish");
-    expect(headline({ keywords: [{ name: "rare", count: 1 }], because: [{ entityId: "E1", name: "Devoción", share: 70 }] })).toBe(
-      "Devoción fans come here",
-    );
-    expect(headline({ because: [] })).toBeNull();
-    expect(headline({ dishes: ["Sweet Onions Cooked In Whey Comte Cheese", "Le Steak"], because: [] })).toBe("For the le steak");
-    expect(headline({ dishes: ["Sweet Onions Cooked In Whey Comte Cheese"], keywords: [{ name: "mole", count: 9 }], because: [] })).toBe(
-      "Known for mole",
-    );
-  });
-
-  it("lists dishes to order, at most three", () => {
-    expect(orderItems({ dishes: ["Oysters", "Carabineiro prawns", "Fish by weight", "Bread"] })).toEqual([
-      "Oysters",
-      "Carabineiro prawns",
-      "Fish by weight",
-    ]);
-    expect(orderItems({})).toEqual([]);
-  });
-
-  it("writes the chip and the type line with the local price sign", () => {
-    expect(slotChip("morning", "coffee")).toBe("Morning · Coffee");
+describe("a place in a slot", () => {
+  it("writes the type line with the local price sign", () => {
     expect(subLine({ category: "eat", neighborhood: "Chiado", priceLevel: 3 }, "PT")).toBe("Restaurant · Chiado · €€€");
     expect(subLine({ category: "drink" }, "MX")).toBe("Bar");
     expect(priceLabel(2, "GB")).toBe("££");
     expect(priceLabel(undefined, "PT")).toBeNull();
   });
 
-  it("builds the Why box from the note, favorites, keywords and shared tags", () => {
-    const box = whyBox(
+  it("takes the first shared taste tags as badges", () => {
+    const sharedTags = ["Stylish", " Romantic ", "", "Social", "Cozy"].map((name, i) => ({ tagId: `t${i}`, name }));
+    expect(tasteBadges({ sharedTags })).toEqual(["Stylish", "Romantic", "Social"]);
+    expect(tasteBadges({ sharedTags: [] })).toEqual([]);
+  });
+
+  it("gathers the note, favorites, dishes and review mentions a row opens to", () => {
+    const reasons = slotReasons(
       {
-        keywords: [{ name: "Pour-over", count: 96 }],
-        because: [
-          { entityId: "E1", name: "Death & Co", share: 82 },
-          { entityId: "E2", name: "Lilia", share: 18 },
+        score: 85,
+        dishes: ["Oysters", "Carabineiro prawns", "Fish by weight", "Bread"],
+        keywords: [
+          { name: "Pour-over", count: 96 },
+          { name: "Rare", count: 2 },
+          { name: "Pastries", count: 40 },
+          { name: "Bar seating", count: 12 },
         ],
-        sharedTags: [
-          { tagId: "t1", name: "Intimate" },
-          { tagId: "t2", name: "Natural wine" },
-          { tagId: "t3", name: "Loud" },
+        because: [
+          { entityId: "E2", name: "Lilia", share: 18 },
+          { entityId: "E1", name: "Death & Co", share: 82 },
+          { entityId: "E3", name: "None", share: 0 },
         ],
       },
       "Ana Ruiz",
-      { slotNote: { note: "Pour-over, every morning", noteSource: "advisor" }, favoriteImages: new Map([["E1", "https://img/1.jpg"]]) },
+      { slotNote: { note: " Go before 1 pm. ", noteSource: "advisor" }, favoriteImages: new Map([["E1", "https://img/1.jpg"]]) },
     );
-    expect(box).toEqual({
+    expect(reasons).toEqual({
       title: "Why Ana",
-      note: { text: "Pour-over, every morning", label: "Your note on Ana" },
-      lines: [
-        { kind: "favorite", entityId: "E1", text: "Death & Co fans go here, 82%", imageUrl: "https://img/1.jpg" },
-        { kind: "favorite", entityId: "E2", text: "Lilia fans too, 18%" },
-        { kind: "keyword", text: "96 reviews mention pour-over" },
-        { kind: "shares", text: "Shares: intimate, natural wine" },
+      score: 85,
+      note: { text: "Go before 1 pm.", label: "Your note on Ana" },
+      favorites: [
+        { entityId: "E1", name: "Death & Co", share: 82, imageUrl: "https://img/1.jpg" },
+        { entityId: "E2", name: "Lilia", share: 18 },
       ],
+      order: ["Oysters", "Carabineiro prawns", "Fish by weight"],
+      mentions: ["96 reviews mention pour-over", "40 reviews mention pastries"],
     });
   });
 
   it("never quotes an agent note, falls back to the saved place note, and is empty without facts", () => {
-    const base = { because: [], sharedTags: [] };
-    expect(whyBox(base, "Ana", { slotNote: { note: "Agent wrote this", noteSource: "agent" } })).toBeNull();
-    expect(whyBox({ ...base, yourPlace: { advisorPlaceId: "p", note: "Ask for the counter" } }, "Ana")?.note).toEqual({
+    const base = { because: [] };
+    expect(slotReasons({ ...base, score: 85 }, "Ana", { slotNote: { note: "Agent wrote this", noteSource: "agent" } })).toBeNull();
+    expect(slotReasons({ ...base, yourPlace: { advisorPlaceId: "p", note: "Ask for the counter" } }, "Ana")?.note).toEqual({
       text: "Ask for the counter",
       label: "Your note on this place",
     });

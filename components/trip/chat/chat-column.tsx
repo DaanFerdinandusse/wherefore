@@ -95,6 +95,9 @@ export function ChatColumn({
   const selectedPlaceId = useTripStore((s) => s.selectedPlaceId);
   const select = useTripStore((s) => s.select);
   const setHighlight = useTripStore((s) => s.setHighlight);
+  const chatPrompt = useTripStore((s) => s.chatPrompt);
+  const clearChatPrompt = useTripStore((s) => s.clearChatPrompt);
+  const showToast = useTripStore((s) => s.showToast);
   const workspaceActions = useWorkspaceActions();
   const actions = givenActions ?? workspaceActions;
 
@@ -194,6 +197,21 @@ export function ChatColumn({
     setShowJump(false);
     send(text);
   };
+
+  // A prompt from the map waits for the reply in progress, then goes out like a typed message.
+  const sendRef = useRef(sendAndFollow);
+  useEffect(() => {
+    sendRef.current = sendAndFollow;
+  });
+  useEffect(() => {
+    if (!chatPrompt) return;
+    if (busy) {
+      showToast("This search starts when the current reply ends");
+      return;
+    }
+    clearChatPrompt();
+    sendRef.current(chatPrompt.text);
+  }, [chatPrompt, busy, clearChatPrompt, showToast]);
 
   // ------------------------------------------------- the card over the thread
   const selected = selectedPlaceId ? (places[selectedPlaceId] ?? chatPlaces.get(selectedPlaceId)) : undefined;

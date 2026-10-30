@@ -216,7 +216,8 @@ export async function replaceTripPlace(
   // Score against the trip's own set, so the replacement reads in line with
   // the cards around it rather than as the top of a one-off query.
   const tripAffinities = tripRows.flatMap((row) => (typeof row.affinity === "number" ? [row.affinity] : []));
-  const score = tripAffinities.length > 0 ? displayScore(best.affinity, [...tripAffinities, best.affinity]) : best.score;
+  const score =
+    best.affinity !== null && tripAffinities.length > 0 ? displayScore(best.affinity, [...tripAffinities, best.affinity]) : best.score;
   const explainability = explainabilityFor(best, favorites);
 
   const newTripPlaceId = await saveReplacement(

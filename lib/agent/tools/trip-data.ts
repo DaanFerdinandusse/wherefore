@@ -1,20 +1,22 @@
 import "server-only";
 
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 
 import { getAdvisor } from "@/lib/auth/advisor";
 import type { ScopeInput } from "@/lib/auth/scope";
 import { listFavorites, type Client } from "@/lib/clients";
 import type { Destination, TasteTag } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { clients, trips, tripTravelers } from "@/lib/db/schema";
+import { clients, itinerarySlots, places, tripPlaces, trips, tripTravelers } from "@/lib/db/schema";
 import { listAdvisorPlaces, type AdvisorPlaceRow } from "@/lib/places";
 import { haversineM, MAX_DISTANCE_FACTOR } from "@/lib/qloo/normalize";
 import { logTripCall, type Trip } from "@/lib/trips";
+import { asSlotName } from "@/lib/trips/map";
 import type { QlooCall } from "@/lib/qloo";
 
 import { guarded, type TurnRef } from "../writes";
 
+import type { PlacedPoint } from "./search-area";
 import { buildSignals, type TripSignals } from "./signals";
 
 // What a tool step needs to know about its trip, read once per step: the
@@ -118,6 +120,19 @@ export async function loadToolTrip(tripId: string): Promise<ToolTrip> {
     advisorPlaces,
     blendMyTaste,
   };
+}
+
+/** The itinerary's places that have coordinates: what a search stays close to. */
+export async function loadPlacedPoints(tripId: string): Promise<PlacedPoint[]> {
+  const rows = await db
+    .select({ day: itinerarySlots.day, slot: itinerarySlots.slot, name: places.name, lat: places.lat, lon: places.lon })
+    .from(itinerarySlots)
+    .innerJoin(tripPlaces, eq(tripPlaces.id, itinerarySlots.tripPlaceId))
+    .innerJoin(places, eq(places.id, tripPlaces.placeId))
+    .where(and(eq(itinerarySlots.tripId, tripId), ne(tripPlaces.status, "removed")));
+  return rows.flatMap((r) =>
+    r.lat !== null && r.lon !== null ? [{ day: r.day, slot: asSlotName(r.slot), name: r.name, lat: r.lat, lon: r.lon }] : [],
+  );
 }
 
 /** "Ana" from "Ana Ruiz". */

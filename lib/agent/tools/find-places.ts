@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { Category, FindPlacesOutput, SlotName, SlotTarget, ToolStep, TripPlaceCard } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { tripAsks } from "@/lib/db/schema";
+import { MAP_REGION_LABEL } from "@/lib/map/region-prompt";
 import { createAsk, updateAsk } from "@/lib/trips";
 import {
   CATEGORY_FILTER_TAGS,
@@ -36,6 +37,7 @@ import {
   WIDENED_IN_CATEGORY,
   type SearchCategory,
 } from "./labels";
+import { chooseSearchArea, searchedAreaText, widenedNote, type SearchAreaInput } from "./search-area";
 import {
   cardsInOrder,
   explainCards,
@@ -43,10 +45,11 @@ import {
   persistBoardItems,
   rankedOf,
   scoreAdvisorPlaces,
+  tripPlaceSpot,
   type BoardItem,
   type RankedPlace,
 } from "./search-core";
-import { firstName, loadToolTrip, logCalls, type ToolTrip } from "./trip-data";
+import { firstName, loadPlacedPoints, loadToolTrip, logCalls, type ToolTrip } from "./trip-data";
 
 // find_places (PLAN 7): one ask from the advisor becomes one board and map
 // tab. Three phases, each yielded as a preliminary output the card renders:
@@ -65,6 +68,14 @@ export type FindPlacesInput = {
   tags?: string[];
   price_max?: number;
   area?: string;
+  /** The exact circle to search, from the map's "Search this region". Wins over `area`. */
+  near?: { lat: number; lon: number; radius_m: number };
+  /** Search around this trip place. Loses to `area`. */
+  around_place_id?: string;
+  /** Search around this trip day when the ask has no slot. `target` already does. */
+  around_day?: number;
+  /** How far the search may go. Without it the area picks its own radius (search-area.ts). */
+  radius_m?: number;
   day_hint?: string;
   /** The itinerary slot this search is for: the ask carries it, the workspace highlights it. */
   target?: { day: number; slot: SlotName };
@@ -78,7 +89,6 @@ export const MIN_TAKE = 3;
 export const MAX_TAKE = 8;
 /** At most this many of the advisor's own places join a small search beyond its results. */
 const MAX_ADVISOR_EXTRAS = 2;
-const AREA_RADIUS_M = 1_500;
 const GENERIC_NOUNS: Record<string, SearchCategory> = {
   bar: "drink",
   bars: "drink",
@@ -88,6 +98,7 @@ const GENERIC_NOUNS: Record<string, SearchCategory> = {
   restaurants: "eat",
   dinner: "eat",
   lunch: "eat",
+  breakfast: "eat",
   brunch: "eat",
   cafe: "coffee",
   cafes: "coffee",
@@ -103,7 +114,7 @@ const FILLER = new Set(["places", "place", "spots", "spot", "options", "ideas", 
 
 /** The category a slot implies when the ask names none: a meal is a restaurant, the stay a hotel. */
 export function slotCategory(slot: SlotName | undefined): SearchCategory | undefined {
-  if (slot === "lunch" || slot === "dinner") return "eat";
+  if (slot === "breakfast" || slot === "lunch" || slot === "dinner") return "eat";
   if (slot === "stay") return "stay";
   return undefined;
 }
@@ -137,6 +148,16 @@ function namedIn(text: string, name: string): boolean {
     .every((word) => hay.includes(` ${word} `) || hay.includes(` ${word}s `));
 }
 
+/** A tag for what a place is, not for what it has or what is near it. */
+export function isKindTag(tagId: string): boolean {
+  return /^urn:tag:(genre|category):place:/.test(tagId);
+}
+
+/** "shopping malls" -> "shopping mall". Null when the text does not end in a plural. */
+export function singularOf(text: string): string | null {
+  return /[^s]s$/i.test(text) ? text.slice(0, -1) : null;
+}
+
 /** Free words to tag ids; ids pass through. At most 4 ids. */
 async function resolveTags(
   texts: string[],
@@ -152,9 +173,20 @@ async function resolveTags(
       ids.push(trimmed);
       continue;
     }
-    const found = await findTags(trimmed, { tripId: ctx.trip.id });
-    calls.push(...found.calls);
-    for (const tag of found.tags.filter((t) => namedIn(trimmed, t.name)).slice(0, 3)) {
+    const matches = async (query: string) => {
+      const found = await findTags(query, { tripId: ctx.trip.id });
+      calls.push(...found.calls);
+      return found.tags.filter((t) => namedIn(trimmed, t.name));
+    };
+    // The lookup reads a plural differently: "shopping malls" finds "near
+    // shopping malls", "shopping mall" finds what a mall is.
+    let tags = await matches(trimmed);
+    const singular = singularOf(trimmed);
+    if (singular && !tags.some((t) => isKindTag(t.tagId))) {
+      const kinds = await matches(singular);
+      if (kinds.some((t) => isKindTag(t.tagId))) tags = kinds;
+    }
+    for (const tag of tags.slice(0, 3)) {
       if (!ids.includes(tag.tagId)) ids.push(tag.tagId);
       if (!names.includes(tag.name)) names.push(tag.name);
     }
@@ -216,8 +248,8 @@ const rankedSchema = z.object({
   tripPlaceId: z.string(),
   entityId: z.string(),
   category: z.enum(["eat", "drink", "coffee", "see", "stay", "other"]),
-  affinity: z.number(),
-  score: z.number(),
+  affinity: z.number().nullable(),
+  score: z.number().nullable(),
   explainability: z.array(z.object({ entityId: z.string(), name: z.string(), share: z.number() })),
 });
 const stepSchema = z.object({
@@ -236,6 +268,7 @@ const checkpointSchema = z.object({
       loosened: z.array(z.string()),
       details: z.string(),
       areaNote: z.string().optional(),
+      searchedArea: z.string().optional(),
       note: z.string(),
       constraints: z.object({
         tagIds: z.array(z.string()),
@@ -270,8 +303,13 @@ export async function* findPlacesTool(
   const target: SlotTarget | undefined = input.target
     ? slotTarget(input.target, { startDate: ctx.trip.startDate ?? undefined, destinationName: ctx.destination.name })
     : undefined;
-  const label = askLabel(input.intent, target?.label ?? input.day_hint);
+  const label = askLabel(input.intent, input.near ? MAP_REGION_LABEL : (target?.label ?? input.day_hint));
+  // A region on the map is searched as given, in the destination or not.
+  const region = input.near ? { lat: input.near.lat, lon: input.near.lon, radiusM: input.near.radius_m } : undefined;
+  const searchedPlace = region ? "this region of the map" : ctx.destination.name;
   const terms = searchTerms(input.tags, split.text);
+  // "see" stays open: it is the nearest fit for a search that really wants a mall.
+  const noShopping = askCategory !== undefined && askCategory !== "see";
   const basedOn = basedOnFavorites(ctx.signals.favoritesUsed.map((f) => f.clientName));
   const key = (step: string) => ({ toolCallId, step });
 
@@ -281,6 +319,7 @@ export async function* findPlacesTool(
     ...(input.tags?.length ? { tags: input.tags } : {}),
     ...(input.price_max ? { priceMax: input.price_max } : {}),
     ...(input.area ? { area: input.area } : {}),
+    ...(region ? { region } : {}),
     ...(input.day_hint ? { day: input.day_hint } : {}),
     // The slot this ask is for (Ask.target): lib/trips reads it back from the query.
     ...(input.target ? { target: { day: input.target.day, slot: input.target.slot } } : {}),
@@ -301,6 +340,7 @@ export async function* findPlacesTool(
   let cards: TripPlaceCard[] = [];
   let loosened: string[] = [];
   let details = searchDetails({ destination: ctx.destination.name, basedOn });
+  let searchedArea: string | undefined;
 
   const output = (phase: FindPlacesOutput["phase"], extra: Partial<FindPlacesOutput> = {}): FindPlacesOutput => ({
     phase,
@@ -325,6 +365,7 @@ export async function* findPlacesTool(
     noun: categoryNoun(askCategory, 2),
     ...(terms.length ? { terms } : {}),
     ...(target ? { target } : {}),
+    ...(searchedArea ? { searchedArea } : {}),
     ...extra,
   });
   const failAsk = () => finishAsk(turn, ask.id, { status: "failed", elapsedMs: elapsed(), loosened: [], resultCount: 0 });
@@ -345,27 +386,39 @@ export async function* findPlacesTool(
       loosened = checkpoint.search.loosened;
       details = checkpoint.search.details;
       areaNote = checkpoint.search.areaNote;
+      searchedArea = checkpoint.search.searchedArea;
       constraints = checkpoint.search.constraints;
       searchStep = { ...searchStep, state: "done", note: checkpoint.search.note };
     } else {
       const calls: QlooCall[] = [];
 
-      // The area, only when it resolves to a place inside the destination.
-      let destination = ctx.destination;
-      let area: AskConstraints["area"];
-      if (input.area?.trim()) {
+      // What the advisor named, when it resolves to a place inside the
+      // destination, else what the trip already holds (search-area.ts).
+      let spot: SearchAreaInput["spot"];
+      let missedArea = false;
+      if (!region && input.area?.trim()) {
         const found = await resolveLocality(`${input.area}, ${ctx.destination.name}`, { tripId: ctx.trip.id }).catch(() => undefined);
         if (found) calls.push(...found.calls);
         const near = found?.candidates.find(
           (c) => haversineM(c.lat, c.lon, ctx.destination.lat, ctx.destination.lon) <= ctx.destination.radiusM,
         );
-        if (near) {
-          destination = { ...ctx.destination, lat: near.lat, lon: near.lon, radiusM: AREA_RADIUS_M };
-          area = { lat: near.lat, lon: near.lon, radiusM: AREA_RADIUS_M };
-          details = searchDetails({ destination: ctx.destination.name, area: near.name, basedOn });
-        } else {
-          areaNote = `Could not place "${input.area}" on the map, so the search covers all of ${ctx.destination.name}.`;
-        }
+        if (near) spot = { lat: near.lat, lon: near.lon, name: near.name };
+        else missedArea = true;
+      }
+      if (!region && !spot && input.around_place_id) spot = await tripPlaceSpot(turn.tripId, input.around_place_id);
+      const searchArea = chooseSearchArea({
+        destination: ctx.destination,
+        placed: region || spot ? [] : await loadPlacedPoints(turn.tripId),
+        region,
+        spot,
+        day: input.around_day ?? input.target?.day,
+        forStay: askCategory === "stay",
+        radiusM: input.radius_m,
+      });
+      const destination = { ...ctx.destination, lat: searchArea.lat, lon: searchArea.lon, radiusM: searchArea.radiusM };
+      details = searchDetails({ destination: region ? MAP_REGION_LABEL : ctx.destination.name, area: searchArea.near, basedOn });
+      if (missedArea) {
+        areaNote = `Could not place "${input.area}" on the map, so the search stayed ${searchedAreaText(searchArea, searchArea.radiusM, ctx.destination.name)}.`;
       }
 
       // Tags: what the advisor asked for in free text, else the category filter.
@@ -374,17 +427,20 @@ export async function* findPlacesTool(
       const tags = resolved.ids.length > 0 ? resolved.ids : askCategory ? CATEGORY_FILTER_TAGS[askCategory] : [];
       // Kept on the ask so remove_place can rerun the same search.
       await guarded(turn, (guard) =>
-        updateAsk(ask.id, { query: { ...askQuery, resolvedTags: tags } }, ctx.scope, { turn: guard }),
+        updateAsk(ask.id, { query: { ...askQuery, resolvedTags: tags, searchArea } }, ctx.scope, { turn: guard }),
       );
 
       let results: PlaceResult[];
+      let reachedM = searchArea.radiusM;
       try {
         const found = await findPlaces(
           {
             destination,
+            widen: searchArea.widen,
             signals: ctx.signals.signals,
             ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
             ...(input.price_max ? { priceMax: input.price_max } : {}),
+            noShopping,
             take,
           },
           { tripId: ctx.trip.id },
@@ -392,6 +448,7 @@ export async function* findPlacesTool(
         calls.push(...found.calls);
         loosened = found.loosened;
         results = found.results;
+        reachedM = found.radiusM;
       } catch (error) {
         await logCalls(turn, ctx, calls, source, key("search"));
         if (error instanceof QlooLocalityMismatchError) {
@@ -400,7 +457,9 @@ export async function* findPlacesTool(
           scoreStep = { ...scoreStep, state: "skipped" };
           explainStep = { ...explainStep, state: "skipped" };
           return output("done", {
-            error: `The search returned places in ${error.resolved}, not in ${ctx.destination.name}. Nothing was added. Try again, or check the trip's destination.`,
+            error: region
+              ? "No places came back for this region of the map. Move the map or zoom out, then search again."
+              : `The search returned places in ${error.resolved}, not in ${ctx.destination.name}. Nothing was added. Try again, or check the trip's destination.`,
           });
         }
         if (abortSignal?.aborted) throw error;
@@ -417,21 +476,24 @@ export async function* findPlacesTool(
             const fill = await findPlaces(
               {
                 destination,
+                widen: searchArea.widen,
                 signals: ctx.signals.signals,
                 tags: CATEGORY_FILTER_TAGS[askCategory],
                 tagsOperator: "union",
                 ...(input.price_max ? { priceMax: input.price_max } : {}),
                 ...(exact.length ? { excludeIds: exact.map((r) => r.place.entityId) } : {}),
-                take: Math.min(50, room + 4),
+                noShopping,
+                take: Math.min(45, room + 4),
               },
               { tripId: ctx.trip.id },
             );
             calls.push(...fill.calls);
             const fillers = fill.results.filter((r) => r.category === askCategory).slice(0, room);
             if (fillers.length > 0) {
+              reachedM = Math.max(reachedM, fill.radiusM);
               const merged = [...exact, ...fillers];
-              const affinities = merged.map((r) => r.affinity);
-              results = merged.map((r) => ({ ...r, score: displayScore(r.affinity, affinities) }));
+              const affinities = merged.flatMap((r) => r.affinity ?? []);
+              results = merged.map((r) => ({ ...r, score: r.affinity === null ? null : displayScore(r.affinity, affinities) }));
               loosened = [
                 ...new Set([
                   ...loosened.filter((l) => l !== "tags"),
@@ -466,10 +528,25 @@ export async function* findPlacesTool(
         return tripPlaceId ? [rankedOf(ctx, tripPlaceId, item)] : [];
       });
       await persistAskPlaces(turn, ctx, ask.id, ranked);
-      constraints = askConstraints({ tagIds: resolved.ids, loosened, priceMax: input.price_max, area });
+      constraints = askConstraints({
+        tagIds: resolved.ids,
+        loosened,
+        priceMax: input.price_max,
+        area: { lat: searchArea.lat, lon: searchArea.lon, radiusM: reachedM },
+      });
+      searchedArea = region ? undefined : searchedAreaText(searchArea, reachedM, ctx.destination.name);
+      areaNote = [areaNote, widenedNote(searchArea, reachedM)].filter(Boolean).join(" ") || undefined;
       const note = `${ranked.length} found · ${seconds(elapsed())}`;
       searchStep = { ...searchStep, state: "done", note };
-      checkpoint.search = { ranked, loosened, details, ...(areaNote ? { areaNote } : {}), note, constraints };
+      checkpoint.search = {
+        ranked,
+        loosened,
+        details,
+        ...(areaNote ? { areaNote } : {}),
+        ...(searchedArea ? { searchedArea } : {}),
+        note,
+        constraints,
+      };
       await saveCheckpoint(checkpoint);
     }
     cards = await cardsInOrder(ctx, ranked.map((r) => r.tripPlaceId));
@@ -478,7 +555,7 @@ export async function* findPlacesTool(
       await finishAsk(turn, ask.id, { status: "done", elapsedMs: elapsed(), loosened, resultCount: 0 });
       scoreStep = { ...scoreStep, state: "skipped" };
       explainStep = { ...explainStep, state: "skipped" };
-      return output("done", { error: `No places matched in ${ctx.destination.name}. Try a broader ask.` });
+      return output("done", { error: `No places matched in ${searchedPlace}. Try a broader ask.` });
     }
 
     // Score the advisor's places in the city; keep the ones that fit the ask.
@@ -502,7 +579,7 @@ export async function* findPlacesTool(
       try {
         const { scores, calls: scoreCalls } = await scoreAdvisorPlaces(
           ctx,
-          ranked.map((r) => r.affinity),
+          ranked.flatMap((r) => r.affinity ?? []),
         );
         await logCalls(turn, ctx, scoreCalls, source, key("score"));
         const inResults = new Set(ranked.map((r) => r.entityId));
@@ -520,7 +597,7 @@ export async function* findPlacesTool(
         const extra = kept
           .filter((s) => !inResults.has(s.item.place.entityId))
           .map((s) => s.item)
-          .sort((a, b) => b.affinity - a.affinity)
+          .sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0))
           .slice(0, MAX_ADVISOR_EXTRAS);
         const extraIds = await persistBoardItems(turn, ctx, extra);
         ranked = [
@@ -529,7 +606,7 @@ export async function* findPlacesTool(
             const tripPlaceId = extraIds.get(item.place.entityId);
             return tripPlaceId ? [rankedOf(ctx, tripPlaceId, item)] : [];
           }),
-        ].sort((a, b) => b.affinity - a.affinity);
+        ].sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0));
         await persistAskPlaces(turn, ctx, ask.id, ranked);
         cards = await cardsInOrder(ctx, ranked.map((r) => r.tripPlaceId));
         scoreStep = {

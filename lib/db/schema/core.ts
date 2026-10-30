@@ -24,6 +24,7 @@ import type {
   PlaceImage,
   PlaceTag,
   TasteTag,
+  TripCover,
 } from "@/lib/contracts";
 
 // Shared column sets. Every owned row carries owner_id (Neon Auth user id)
@@ -176,6 +177,9 @@ export const trips = pgTable(
       .references(() => clients.id, { onDelete: "restrict" }),
     title: text("title").notNull(),
     destination: jsonb("destination").$type<Destination>().notNull(),
+    // The destination's stock photo, set when the trip is created. Null when
+    // the lookup found none: the trip falls back to a place photo.
+    cover: jsonb("cover").$type<TripCover>(),
     startDate: date("start_date"),
     endDate: date("end_date"),
     // exact | unset
@@ -332,7 +336,9 @@ export const itinerarySlots = pgTable(
       .references(() => trips.id, { onDelete: "cascade" }),
     day: integer("day").notNull(),
     date: date("date"),
-    // morning | lunch | afternoon | dinner | night | stay
+    // breakfast | morning | lunch | afternoon | dinner | night | stay. A meal
+    // holds one place; morning, afternoon and night hold any number, by
+    // position (lib/trips/day-parts.ts).
     slot: text("slot").notNull(),
     tripPlaceId: uuid("trip_place_id").references(() => tripPlaces.id, {
       onDelete: "set null",

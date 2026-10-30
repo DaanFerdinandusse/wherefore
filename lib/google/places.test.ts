@@ -5,7 +5,7 @@ vi.mock("server-only", () => ({}));
 import fullFixture from "./__fixtures__/place-details-full.json";
 import { GoogleApiError, GoogleInputError, GoogleNotConfiguredError, GooglePhotoTooLargeError } from "./errors";
 import { googleErrorResponse } from "./http";
-import { MAX_PHOTO_BYTES, fetchPhoto, isPhotoName, limitBytes, photoProxyUrl } from "./photos";
+import { MAX_PHOTO_BYTES, fetchPhoto, fullPhotoWidth, isPhotoName, limitBytes, photoPlaceId, photoProxyUrl, tilePhotoWidth } from "./photos";
 import { createPlaceDetails, fieldMask, priceRangeOf } from "./places";
 
 const PLACE_ID = "ChIJh32rQULLHg0RkgF8wCakjIk";
@@ -50,6 +50,7 @@ describe("placeDetails", () => {
     expect(headers.get("X-Goog-Api-Key")).toBe("server-key");
     expect(headers.get("X-Goog-FieldMask")).toBe(fieldMask("basic"));
     expect(fieldMask("basic")).toContain("photos");
+    expect(fieldMask("basic").split(",")).toContain("googleMapsLinks");
     expect(fieldMask("basic").split(",")).toContain("utcOffsetMinutes");
     expect(fieldMask("basic")).not.toContain("reviews");
     expect(fieldMask("basic")).not.toContain("OpeningHours");
@@ -77,7 +78,8 @@ describe("placeDetails", () => {
     expect(place.openingHours).toHaveLength(7);
     expect(place.photos[0]).toMatchObject({
       name: PHOTO,
-      url: photoProxyUrl(PHOTO, 800),
+      url: photoProxyUrl(PHOTO, 1333),
+      fullUrl: photoProxyUrl(PHOTO, 2400),
       attributions: [{ displayName: "A Visitor", uri: "https://maps.google.com/maps/contrib/100000000000000000001" }],
     });
     expect(place.reviews?.[0]).toMatchObject({
@@ -161,13 +163,39 @@ describe("photos", () => {
 
   it("builds the proxy URL with an encoded name and a clamped width", () => {
     expect(photoProxyUrl(PHOTO, 640)).toBe(`/api/places/photo?name=${encodeURIComponent(PHOTO)}&w=640`);
-    expect(photoProxyUrl(PHOTO, 99999)).toMatch(/&w=1600$/);
+    expect(photoProxyUrl(PHOTO, 99999)).toMatch(/&w=2400$/);
+  });
+
+  it("gives a tile photo its short side, so a landscape photo fills a tall frame", () => {
+    expect(tilePhotoWidth({ widthPx: 4624, heightPx: 2608 })).toBe(1773);
+    expect(tilePhotoWidth({ widthPx: 3024, heightPx: 4032 })).toBe(1000);
+  });
+
+  it("gives a viewer photo its long side", () => {
+    expect(fullPhotoWidth({ widthPx: 4624, heightPx: 2608 })).toBe(2400);
+    expect(fullPhotoWidth({ widthPx: 3024, heightPx: 4032 })).toBe(1800);
+  });
+
+  it("never sizes a photo above its original, so both sizes can share one request", () => {
+    expect(tilePhotoWidth({ widthPx: 800, heightPx: 600 })).toBe(800);
+    expect(fullPhotoWidth({ widthPx: 800, heightPx: 600 })).toBe(800);
+  });
+
+  it("falls back to a fixed width when Google sends no size", () => {
+    expect(tilePhotoWidth({})).toBe(800);
+    expect(fullPhotoWidth({})).toBe(2400);
   });
 
   it("accepts only Google photo names", () => {
     expect(isPhotoName(PHOTO)).toBe(true);
     expect(isPhotoName("places/abc/../../secrets")).toBe(false);
     expect(isPhotoName("https://evil.test/x")).toBe(false);
+  });
+
+  it("reads the place a photo belongs to from a valid name only", () => {
+    expect(photoPlaceId(PHOTO)).toBe(PLACE_ID);
+    expect(photoPlaceId("places/abc/../../secrets")).toBeNull();
+    expect(photoPlaceId("")).toBeNull();
   });
 
   it("fetches the media endpoint and streams the bytes", async () => {
@@ -179,10 +207,10 @@ describe("photos", () => {
     expect((await new Response(photo.body).arrayBuffer()).byteLength).toBe(3);
   });
 
-  it("never asks Google for more than 1600 px", async () => {
+  it("never asks Google for more than 2400 px", async () => {
     const fetch = fakeFetch(() => new Response(new Uint8Array([1]), { headers: { "content-type": "image/jpeg" } }));
     await fetchPhoto(PHOTO, 4800, { fetch: fetch });
-    expect(String(fetch.mock.calls[0][0])).toMatch(/maxWidthPx=1600$/);
+    expect(String(fetch.mock.calls[0][0])).toMatch(/maxWidthPx=2400$/);
   });
 
   it("refuses a declared body over 4 MB before reading it", async () => {

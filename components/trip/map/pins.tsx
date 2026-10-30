@@ -4,7 +4,7 @@ import { BookmarkMark } from "@/components/ui/bookmark-mark";
 import { FilmImage } from "@/components/ui/film-image";
 import { MatchPill } from "@/components/ui/match-pill";
 import { ScoreDot } from "@/components/ui/score-dot";
-import type { PinLabel as PinLabelText } from "@/lib/map/label";
+import { isLongPinName, type PinLabel as PinLabelText } from "@/lib/map/label";
 import { HIGHLIGHT_SCALE, type PinModel } from "@/lib/map/pins";
 import { cn } from "@/lib/ui/cn";
 
@@ -160,10 +160,22 @@ export function PinView({ pin, label }: { pin: PinModel; label?: PinLabelText | 
  * A pin on the trip panel's map (G2): the place photo in a light ring with
  * its itinerary day as a small ink badge and the name in a pill under it.
  * The selected pin is larger, wears the amber halo, and its pill carries the
- * match score. The box is the disc, so the pin anchors at the disc center.
+ * match score. A long name drops to smaller type over up to two lines, so it
+ * does not bury the map. The box is the disc, so the pin anchors at the disc
+ * center.
+ *
+ * With a chat search on the map, its places are these pins with their match
+ * score in the pill (a small photo where they would overlap), and the rest
+ * of the itinerary shrinks to its day number. Hovering brings the name back.
  */
-export function ItineraryPinView({ pin }: { pin: PinModel }) {
+export function ItineraryPinView({ pin, landed = false }: { pin: PinModel; landed?: boolean }) {
+  if (!pin.selected && !pin.highlighted) {
+    if (pin.tone === "faded") return <ItineraryContextPin day={pin.day} />;
+    if (pin.tone === "ask" && pin.visual === "dot") return <SearchDotPin pin={pin} />;
+  }
   const size = pin.selected ? 76 : 54;
+  const long = isLongPinName(pin.name);
+  const showScore = (pin.selected || pin.tone === "ask") && typeof pin.score === "number";
   return (
     <span aria-hidden style={{ width: size, height: size }} className="relative block">
       <span
@@ -184,22 +196,58 @@ export function ItineraryPinView({ pin }: { pin: PinModel }) {
           </span>
         )}
       </span>
+      {landed ? <span className="pin-landed absolute inset-0 rounded-pill border-2 border-glow" /> : null}
       {pin.day !== undefined ? (
-        <span className="absolute -top-1.5 -right-2 flex size-[22px] items-center justify-center rounded-pill border-2 border-surface-raised bg-ink text-meta leading-3 font-bold text-white">
+        <span
+          className={cn(
+            "absolute -top-1.5 -right-2 flex size-[22px] items-center justify-center rounded-pill border-2 border-surface-raised bg-ink text-meta leading-3 font-bold text-white",
+            landed && "badge-pop",
+          )}
+        >
           {pin.day}
         </span>
       ) : null}
       <span
         className={cn(
-          "absolute top-full left-1/2 flex -translate-x-1/2 items-center gap-[5px] rounded-pill text-ui-sm leading-4 font-semibold whitespace-nowrap text-ink",
+          "absolute top-full left-1/2 flex -translate-x-1/2 items-center gap-[5px] font-semibold text-ink",
+          long
+            ? cn("w-max rounded-row text-center text-map-name text-balance", pin.selected ? "max-w-[200px]" : "max-w-[172px]")
+            : "rounded-pill text-ui-sm leading-4 whitespace-nowrap",
           pin.selected
             ? "mt-1.5 bg-why px-[11px] py-[5px] shadow-[0_4px_10px_rgb(22_19_15/0.15)]"
             : "mt-1 bg-surface-raised/97 px-2.5 py-1 shadow-[0_2px_6px_rgb(22_19_15/0.12)]",
         )}
       >
-        {pin.selected && typeof pin.score === "number" ? <span className="font-bold text-amber">{Math.round(pin.score)}</span> : null}
+        {showScore ? <span className="font-bold text-amber">{Math.round(pin.score ?? 0)}</span> : null}
         {pin.name}
       </span>
+    </span>
+  );
+}
+
+/** An itinerary place while a search has the map: just its day. */
+function ItineraryContextPin({ day }: { day?: number }) {
+  return (
+    <span
+      aria-hidden
+      className="flex size-6 items-center justify-center rounded-pill border-2 border-surface-raised bg-ink text-micro leading-3 font-bold text-white shadow-pin"
+    >
+      {day}
+    </span>
+  );
+}
+
+/** A search result with no room for its full pin. */
+function SearchDotPin({ pin }: { pin: PinModel }) {
+  return (
+    <span aria-hidden className="relative block size-9 overflow-hidden rounded-pill border-2 border-surface-raised bg-avatar shadow-pin-photo">
+      {pin.imageUrl ? (
+        <FilmImage src={pin.imageUrl} alt="" sizes="36px" unoptimized />
+      ) : (
+        <span className="flex size-full items-center justify-center font-display text-body-lg leading-none! text-text-2">
+          {pin.name.trim().charAt(0)}
+        </span>
+      )}
     </span>
   );
 }

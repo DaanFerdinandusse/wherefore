@@ -36,6 +36,10 @@ The upstream answers HTTP 200 with a generic, signal-free list when it does not 
 - `/v2/tags`: `filter.query`, `filter.parents.types`, `take`, `page`
 - `/entities`: `entity_ids`
 
+A search without signals (a client with no favorites) gets places ranked by the API itself and no `query.affinity`. `findPlaces` accepts that only in this one case (`unsignedPlacesResponseSchema`); `affinity` and `score` come back null and the API's order stays, so a place is never shown as a match nobody measured. With signals a missing affinity is still a `QlooSchemaError`.
+
+A mall or department store carries the tags of what is inside it, so a restaurant filter returns malls. `categoryOf` reads the place's main type first, so these are `other`, and `findPlaces` with `noShopping` leaves them out and asks for a few spare results. `find_places` sets it for every category except `see`. The tag lookup reads plurals differently ("shopping malls" finds tags for being near a mall), so `find_places` retries the singular when a plural finds no tag for what a place is.
+
 Not listed on purpose: `filter.location.query` (wrong city for ambiguous names), `filter.exclude.tags` (tested, silently ignored). Add a param only after testing it live.
 
 ## Cache and retries
@@ -45,6 +49,8 @@ Key: `qloo:` + sha256 of `JSON.stringify([endpoint, pairs])`, pairs sorted by ke
 ## The geocoder fix
 
 `filter.location.query=Copenhagen` returns Copenhagen, New York. So the destination picker uses `resolveLocality` (candidates with disambiguation, lat/lon, country code from the ancestors, and a radius from the boundary's bounding box, 2 to 25 km), and `findPlaces` always sends `POINT(lon lat)` plus radius. With a POINT the API returns no `query.localities`, so `findPlaces` checks every result itself: the distance is `query.distance`, or the haversine distance from the destination point when the API gives none, and a result farther than 1.5x the radius is dropped (another city in the same country no longer passes). `localityCheck.dropped` says how many. `ok` is false when fewer than half of the kept results are in the destination's country or fewer than 80% are within 1.25x the radius (a result with neither distance nor coordinates does not count as near). Results came back but none survived: `findPlaces` throws `QlooLocalityMismatchError`. `PlaceResult.distanceM` carries the computed distance too.
+
+The radius is a hard cut: a live test on 30 Oct 2026 returned nothing past `filter.location.radius` at 1.5, 2.5, 5 and 8 km. `signal.location` is not a substitute, it still returned a museum 17 km out. Taste ignores distance, so a search of a whole metro surfaces places nobody would travel to. `findPlaces` takes `widen`, wider circles around the same point tried before any filter is dropped, closest places first. A circle with `below` is a last resort, tried only while fewer places than that are found. `radiusM` in the result is the widest circle that ran.
 
 ## Fallbacks
 

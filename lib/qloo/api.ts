@@ -5,6 +5,8 @@ import "server-only";
 // logs is the caller's job (`upsertPlaces`, `logTripCall`). Bulk work here is
 // sequential on purpose: parallel requests run into upstream rate limits.
 
+import type { z } from "zod";
+
 import type { TasteTag } from "@/lib/contracts";
 
 import { getQlooClient } from "./client";
@@ -16,6 +18,7 @@ import type {
   FindTags,
   GetEntities,
   LoosenedFilter,
+  WiderCircle,
   NormalizedPlace,
   PlaceResult,
   QlooCall,
@@ -38,13 +41,15 @@ import {
   normalizeLocality,
   normalizePlace,
   signalScoresOf,
+  isShoppingPlace,
 } from "./normalize";
 import { type QlooParams, latLon, point } from "./params";
 import {
-  type InsightsPlacesResponse,
+  type UnsignedPlacesResponse,
   entitiesResponseSchema,
   insightsDestinationsResponseSchema,
   insightsPlacesResponseSchema,
+  unsignedPlacesResponseSchema,
   insightsTagsResponseSchema,
   localitySearchResponseSchema,
   searchResponseSchema,
@@ -58,7 +63,7 @@ const PORTRAIT_TAG_TYPES = ["urn:tag:ambience:qloo", "urn:tag:cuisine:qloo", "ur
 const ENTITY_CHUNK = 25;
 const SCORE_CHUNK = 50;
 
-type RawInsightsPlace = InsightsPlacesResponse["results"]["entities"][number];
+type RawInsightsPlace = UnsignedPlacesResponse["results"]["entities"][number];
 
 function clientOf(ctx: CallContext | undefined) {
   return ctx?.client ?? getQlooClient();
@@ -124,14 +129,17 @@ export const searchEntities: SearchEntities = async (query, options, ctx) => {
 
 // ---------------------------------------------------------------- findPlaces
 
+const SHOPPING_SPARES = 5;
+
 /**
  * Recommendations near the destination for the client's signals, with
  * per-result explainability. Location is always POINT(lon lat) plus radius (the
  * text geocoder picks the wrong city for ambiguous names), and every result
  * farther than 1.5x the radius is dropped (distance from the API, or computed
- * from the coordinates). With fewer than 5 kept results it drops filter.tags,
- * then the price cap, and says so in `loosened`. Strict results always come
- * first; looser steps only fill the slots that are left.
+ * from the coordinates). With fewer than 5 kept results it first tries the
+ * wider circles of `widen`, then drops filter.tags, then the price cap, and
+ * says so in `loosened`. Strict results always come first, and closer ones
+ * before farther ones; looser steps only fill the slots that are left.
  * @throws QlooLocalityMismatchError when results came back but none of them is
  *   near the destination.
  */
@@ -144,15 +152,16 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
   // so a cap on a see or stay ask is not applied at all, and the result says so.
   const priceNotApplicable = input.priceMax !== undefined && hasTags && isUnpricedTagFilter(input.tags ?? []);
   const hasPrice = input.priceMax !== undefined && !priceNotApplicable;
+  const schema: z.ZodType<UnsignedPlacesResponse> = hasSignals ? insightsPlacesResponseSchema : unsignedPlacesResponseSchema;
 
   const base: QlooParams = {
     "filter.type": PLACE,
     "filter.location": point(destination.lat, destination.lon),
-    "filter.location.radius": clampRadius(destination.radiusM),
     "signal.interests.entities": hasSignals ? signals : undefined,
     "feature.explainability": hasSignals ? true : undefined,
     "filter.exclude.entities": input.excludeIds?.length ? input.excludeIds : undefined,
-    take: input.take,
+    // A few spare, so dropped malls do not leave the list short.
+    take: input.noShopping ? input.take + SHOPPING_SPARES : input.take,
     page: input.page,
   };
   const tagParams: QlooParams = hasTags
@@ -160,13 +169,19 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
     : {};
   const priceParams: QlooParams = hasPrice ? { "filter.price_level.max": input.priceMax } : {};
 
-  // Strict first, then each loosening step in order. Each step keeps the
-  // previous ones dropped.
-  const steps: { drop: LoosenedFilter | null; params: QlooParams }[] = [
-    { drop: null, params: { ...base, ...tagParams, ...priceParams } },
-  ];
-  if (hasTags) steps.push({ drop: "tags", params: { ...base, ...priceParams } });
-  if (hasPrice) steps.push({ drop: "price", params: { ...base } });
+  // Strict first, in each circle from small to wide, then each loosening step
+  // in order, in the widest circle that is not a last resort. Each step keeps
+  // the previous ones dropped.
+  const inCircle = (radiusM: number): QlooParams => ({ ...base, "filter.location.radius": clampRadius(radiusM) });
+  const circles: WiderCircle[] = [{ radiusM: destination.radiusM }, ...(input.widen ?? [])];
+  const steps: (WiderCircle & { drop: LoosenedFilter | null; params: QlooParams })[] = circles.map((circle) => ({
+    ...circle,
+    drop: null,
+    params: { ...inCircle(circle.radiusM), ...tagParams, ...priceParams },
+  }));
+  const looseM = circles.filter((c) => c.below === undefined).at(-1)?.radiusM ?? destination.radiusM;
+  if (hasTags) steps.push({ drop: "tags", radiusM: looseM, params: { ...inCircle(looseM), ...priceParams } });
+  if (hasPrice) steps.push({ drop: "price", radiusM: looseM, params: inCircle(looseM) });
 
   const enough = Math.min(MIN_RESULTS, input.take);
   const calls: QlooCall[] = [];
@@ -175,14 +190,18 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
   // stricter one. Entity ids are unique across all of them.
   const stages: Candidate[][] = [];
   const seen = new Set<string>();
-  const far: PlaceResult[] = [];
+  // By entity id: a place too far for a small circle can be kept by a wider one.
+  const far = new Map<string, PlaceResult>();
   let kept = 0;
+  let reachedM = destination.radiusM;
   let localityLabel: string | undefined;
 
   for (const step of steps) {
+    if (step.below !== undefined && kept >= step.below) continue;
     if (step.drop) loosened.push(step.drop);
+    reachedM = Math.max(reachedM, step.radiusM);
     const { data, call } = await client.get("/v2/insights", step.params, {
-      schema: insightsPlacesResponseSchema,
+      schema,
       tripId: ctx?.tripId,
     });
     calls.push(call);
@@ -190,38 +209,46 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
     const stage: Candidate[] = [];
     for (const raw of data.results.entities) {
       if (seen.has(raw.entity_id)) continue;
-      seen.add(raw.entity_id);
       const place = normalizePlace(raw);
+      if (input.noShopping && isShoppingPlace(place)) continue;
       const distanceM = distanceFromDestination(destination, place, raw.query.distance);
-      if (isTooFar(destination, distanceM)) far.push(toResult({ raw, place, distanceM }, []));
-      else stage.push({ raw, place, distanceM });
+      if (isTooFar(step, distanceM)) {
+        far.set(raw.entity_id, toResult({ raw, place, distanceM }, []));
+        continue;
+      }
+      seen.add(raw.entity_id);
+      far.delete(raw.entity_id);
+      stage.push({ raw, place, distanceM });
     }
-    stage.sort((a, b) => b.raw.query.affinity - a.raw.query.affinity);
+    // Stable: without signals every place ties and the API's own order stays.
+    stage.sort((a, b) => (b.raw.query.affinity ?? 0) - (a.raw.query.affinity ?? 0));
     stages.push(stage);
     kept += stage.length;
     if (kept >= enough) break;
   }
 
-  if (kept === 0 && far.length > 0) {
+  if (kept === 0 && far.size > 0) {
     const requested = destination.disambiguation ?? destination.name;
-    throw new QlooLocalityMismatchError(requested, localityLabel ?? majorityLocalityLabel(far) ?? "unknown");
+    throw new QlooLocalityMismatchError(requested, localityLabel ?? majorityLocalityLabel([...far.values()]) ?? "unknown");
   }
 
   const picked = stages.flat().slice(0, input.take);
-  const affinities = picked.map((c) => c.raw.query.affinity);
+  const affinities = picked.flatMap((c) => c.raw.query.affinity ?? []);
   const results = picked.map((c) => toResult(c, affinities));
-  const localityCheck = checkLocality(destination, results, localityLabel, far.length);
-  return { results, loosened, localityCheck, calls };
+  const localityCheck = checkLocality({ ...destination, radiusM: reachedM }, results, localityLabel, far.size);
+  return { results, loosened, localityCheck, radiusM: reachedM, calls };
 };
 
 type Candidate = { raw: RawInsightsPlace; place: NormalizedPlace; distanceM: number | null };
 
 function toResult({ raw, place, distanceM }: Candidate, affinities: readonly number[]): PlaceResult {
+  const affinity = raw.query.affinity ?? null;
   return {
     place,
     category: categoryOf(place),
-    affinity: raw.query.affinity,
-    score: displayScore(raw.query.affinity, affinities),
+    affinity,
+    // No score at all rather than a number: nothing was matched to this client.
+    score: affinity === null ? null : displayScore(affinity, affinities),
     signalScores: signalScoresOf(raw),
     distanceM,
   };

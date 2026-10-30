@@ -2,13 +2,13 @@ import type { SharedTripView, TripSnapshot } from "@/lib/contracts";
 import { favoriteDrivers } from "@/lib/qloo/normalize";
 import { type SharedFavoriteRow, type SharedSlotRow, toSharedTripView } from "@/lib/trips/share";
 
-// The workspace's "Traveler view" tab renders before a share link exists, so
-// it cannot read the view by token. This projects the trip snapshot through
-// the same pure projection the public page uses (lib/trips/share.ts), so the
-// tab and /s/[token] can never show different things: no scores, no asks,
-// no removed places, no advisor place notes, slot notes only when marked for
-// the traveler. The snapshot carries one photo per place and no
-// descriptions, so the tab shows less than the link where the card has less.
+// The workspace's traveler view reads the full view from the server. This is
+// its fallback when that read fails: it projects the trip snapshot through
+// the same pure projection the public page uses (lib/trips/share.ts), so it
+// never shows what /s/[token] would hide: no scores, no asks, no removed
+// places, no advisor place notes, slot notes only when marked for the
+// traveler. The snapshot carries one photo per place and no descriptions, so
+// the fallback shows less than the link where the card has less.
 
 /** What the workspace may add that the snapshot does not hold. */
 export type TravelerViewExtras = {
@@ -56,6 +56,7 @@ export function travelerViewFromSnapshot(
     {
       title: snapshot.trip.title,
       destinationName: snapshot.trip.destination.name,
+      cover: snapshot.trip.cover ?? null,
       startDate: snapshot.trip.startDate ?? null,
       endDate: snapshot.trip.endDate ?? null,
       clientName: snapshot.trip.clientName,

@@ -1,10 +1,11 @@
 import { ArrowUp, MapMinus, Minus, Plus, Search } from "lucide-react";
+import type { CSSProperties } from "react";
 
 import type { OffscreenDirection } from "@/lib/map/geo";
 import { cn } from "@/lib/ui/cn";
 
 // Controls that float over the Discover map: our own zoom buttons, "Search
-// this area", the edge chip toward an off-screen place, and the notice shown
+// this region", the edge chip toward an off-screen place, and the notice shown
 // while the map cannot load. All frosted (`glass-control`) as in Paper 02b.
 
 export function ZoomControls({
@@ -29,18 +30,27 @@ export function ZoomControls({
   );
 }
 
-export function SearchAreaButton({ onClick, className }: { onClick: () => void; className?: string }) {
+export function SearchAreaButton({
+  onClick,
+  className,
+  style,
+}: {
+  onClick: () => void;
+  className?: string;
+  style?: CSSProperties;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      style={style}
       className={cn(
         "glass-control inline-flex items-center gap-2 rounded-pill border border-rule-strong px-4 py-2.5 text-ui font-medium text-ink transition-colors hover:bg-surface rise-in",
         className,
       )}
     >
       <Search size={14} strokeWidth={2} />
-      Search this area
+      Search this region
     </button>
   );
 }

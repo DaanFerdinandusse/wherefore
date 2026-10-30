@@ -6,7 +6,7 @@ import { MapLab } from "./map-lab";
 // for every state (highlight, select, ask tab, placeholder, plain background),
 // to compare with Paper 02b, F8 and F7b.
 export const metadata: Metadata = {
-  title: "Map lab · Tastebrief",
+  title: "Map lab · Wherefore",
   robots: { index: false, follow: false },
 };
 

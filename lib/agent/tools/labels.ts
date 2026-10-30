@@ -140,11 +140,12 @@ export function basedOnFavorites(names: readonly string[]): string | undefined {
 // ------------------------------------------------------- slots and search rows
 
 const SLOT_WORDS: Record<SlotName, string> = {
+  breakfast: "breakfast",
   morning: "morning",
   lunch: "lunch",
   afternoon: "afternoon",
   dinner: "dinner",
-  night: "late",
+  night: "night",
   stay: "stay",
 };
 
@@ -183,7 +184,7 @@ export function slotTarget(
 /** A slot inside a sentence: "Friday dinner", "day 2 lunch", "the stay". */
 export function slotPhrase(target: Pick<SlotTarget, "day" | "slot" | "date">): string {
   if (target.slot === "stay") return "the stay";
-  const word = target.slot === "night" ? "late" : SLOT_WORDS[target.slot];
+  const word = SLOT_WORDS[target.slot];
   if (target.date) return `${WEEKDAY_LONG[weekdayOf(target.date)]} ${word}`;
   return `day ${target.day} ${word}`;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { askConstraints, meetsAskConstraints } from "./find-places";
+import { askConstraints, isKindTag, meetsAskConstraints, singularOf } from "./find-places";
 import { cleanAgentNote, makesClaim } from "./notes";
 
 describe("cleanAgentNote", () => {
@@ -49,5 +49,19 @@ describe("ask constraints for advisor places", () => {
     const c = askConstraints({ tagIds: [wine], loosened: ["tags", "price"], priceMax: 1 });
     expect(c).toEqual({ tagIds: [] });
     expect(meetsAskConstraints({ ...place, tags: [], priceLevel: 4 }, c)).toBe(true);
+  });
+});
+
+describe("tag lookup", () => {
+  it("tells a tag for what a place is from one for what is near it", () => {
+    expect(isKindTag("urn:tag:genre:place:shopping_mall")).toBe(true);
+    expect(isKindTag("urn:tag:category:place:shopping_mall")).toBe(true);
+    expect(isKindTag("urn:tag:nearby_attraction:qloo:shopping_malls")).toBe(false);
+  });
+
+  it("finds the singular of a plural only", () => {
+    expect(singularOf("shopping malls")).toBe("shopping mall");
+    expect(singularOf("seafood")).toBeNull();
+    expect(singularOf("business class")).toBeNull();
   });
 });

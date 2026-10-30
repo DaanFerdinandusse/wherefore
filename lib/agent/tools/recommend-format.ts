@@ -1,11 +1,11 @@
 import type { PlaceKeyword, SlotName } from "@/lib/contracts";
+import { SLOT_ORDER as SLOTS } from "@/lib/trips/day-parts";
 
 // Pure pieces of recommend_place: which sentence of the advisor's notes on
 // the client names something the place is known for, and reading the slot
 // target an ask stored in its query. No I/O; tested in recommend.test.ts.
 
 const MAX_NOTE_CHARS = 120;
-const SLOTS: readonly SlotName[] = ["morning", "lunch", "afternoon", "dinner", "night", "stay"];
 
 const fold = (text: string) =>
   text
