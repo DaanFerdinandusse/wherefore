@@ -120,7 +120,7 @@ export function Thread({
             <li key={message.id} className="flex justify-end">
               <p
                 data-testid="user-message"
-                className="max-w-[min(480px,85%)] rounded-t-[20px] rounded-br-md rounded-bl-[20px] bg-ink px-4 py-2.5 text-[15px] leading-5.25 whitespace-pre-wrap text-white"
+                className="max-w-[min(480px,85%)] rounded-t-[20px] rounded-br-md rounded-bl-[20px] bg-ink px-4 py-2.5 text-body leading-5.25 whitespace-pre-wrap text-white"
               >
                 {text}
               </p>

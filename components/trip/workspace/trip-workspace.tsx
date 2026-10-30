@@ -160,7 +160,7 @@ function WorkspaceShell({
       {wide ? nav : null}
 
       {/* The chat stays mounted while the panel is wide, so a running turn keeps streaming. */}
-      <div className={cn("relative flex min-h-0 min-w-0 basis-[51.5%] flex-col", wide && "hidden")}>
+      <div className={cn("relative flex min-h-0 min-w-0 basis-[min(720px,51.576%)] flex-col", wide && "hidden")}>
         {wide ? null : nav}
         <div className="flex min-h-0 flex-1 flex-col">
           <ChatColumn
@@ -168,6 +168,7 @@ function WorkspaceShell({
             chatId={chat.chat.id}
             tripId={trip.id}
             initial={chat}
+            actions={actions}
             onPlaces={applyPlaces}
             onPlacesHover={setHighlight}
             onPlaceClick={select}

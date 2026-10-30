@@ -97,10 +97,12 @@ export function Calendar({
   }
 
   return (
-    <div className={cn("flex w-full flex-col items-center gap-5", className)}>
+    <div className={cn("flex w-full flex-col items-center gap-6", className)}>
       <SegmentedToggle
         label="Dates"
         size="sm"
+        variant="panel"
+        className="bg-surface [&_button]:h-9"
         value={mode}
         onValueChange={onModeChange}
         options={[
@@ -110,11 +112,11 @@ export function Calendar({
       />
 
       {mode === "exact" ? (
-        <div ref={gridRef} className="relative flex w-full items-start justify-center gap-10">
+        <div ref={gridRef} className="relative flex w-full items-start justify-center gap-12">
           <IconButton
             label="Previous month"
-            variant="ghost"
-            size={32}
+            variant="outline"
+            size={36}
             icon={<ChevronLeft size={16} strokeWidth={2} aria-hidden />}
             onClick={() => onMonthChange(addMonths(month, -1))}
             disabled={minDate ? compareMonth(month, yearMonthOf(minDate)) <= 0 : false}
@@ -122,8 +124,8 @@ export function Calendar({
           />
           <IconButton
             label="Next month"
-            variant="ghost"
-            size={32}
+            variant="outline"
+            size={36}
             icon={<ChevronRight size={16} strokeWidth={2} aria-hidden />}
             onClick={() => onMonthChange(addMonths(month, 1))}
             className="absolute top-0 right-0"
@@ -149,7 +151,7 @@ export function Calendar({
         </p>
       )}
 
-      <div className="flex w-full items-center justify-between gap-4 border-t border-rule pt-4">
+      <div className="flex w-full items-center justify-between gap-4 border-t border-rule pt-5">
         <p aria-live="polite" className="text-action font-medium text-ink">
           {mode === "exact" ? rangeLabel(value) : "Dates not set yet"}
         </p>
@@ -187,12 +189,12 @@ function MonthGrid({
 }) {
   const title = monthLabel(month);
   return (
-    <table className="-mb-1.5 w-[308px] shrink-0 border-separate border-spacing-y-1.5" aria-label={title}>
-      <caption className="pb-2 text-body-lg leading-5 font-semibold text-ink">{title}</caption>
+    <table className="-mb-1 w-[308px] shrink-0 border-separate border-spacing-y-1" aria-label={title}>
+      <caption className="pb-2 text-body-lg leading-6 font-semibold text-ink">{title}</caption>
       <thead>
         <tr>
           {WEEKDAY_INITIALS.map((initial, i) => (
-            <th key={i} scope="col" abbr={WEEKDAY_NAMES[i]} className="h-3.5 w-11 p-0 text-micro font-medium tracking-[0.1em] text-text-2">
+            <th key={i} scope="col" abbr={WEEKDAY_NAMES[i]} className="h-5 w-11 p-0 text-micro font-semibold tracking-[0.1em] text-text-2">
               {initial}
             </th>
           ))}
@@ -213,7 +215,7 @@ function MonthGrid({
                   onKeyDown={onDayKeyDown}
                 />
               ) : (
-                <td key={`empty-${d}`} className="h-[42px] w-11 p-0" />
+                <td key={`empty-${d}`} className="h-11 w-11 p-0" />
               ),
             )}
           </tr>
@@ -247,7 +249,7 @@ function DayCell({
   return (
     <td
       className={cn(
-        "h-[42px] w-11 p-0",
+        "h-11 w-11 p-0",
         inside && "bg-avatar",
         hasRange && isStart && "bg-linear-to-r from-transparent from-50% to-avatar to-50%",
         hasRange && isEnd && "bg-linear-to-r from-avatar from-50% to-transparent to-50%",
@@ -263,7 +265,7 @@ function DayCell({
         onClick={() => onPick(iso)}
         onKeyDown={(event) => onKeyDown(event, iso)}
         className={cn(
-          "mx-auto flex size-10 items-center justify-center rounded-pill text-ui transition-colors disabled:cursor-not-allowed disabled:text-ink/30",
+          "mx-auto flex size-11 items-center justify-center rounded-pill text-ui transition-colors disabled:cursor-not-allowed disabled:text-ink/30",
           endpoint ? "bg-ink font-semibold text-surface" : "font-medium text-ink enabled:hover:bg-ink/8",
         )}
       >

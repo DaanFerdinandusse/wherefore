@@ -83,7 +83,7 @@ export function VisitPanel({
   const title = date ? `For ${shortDateLabel(date)}` : "Visit facts";
 
   return (
-    <div className="flex gap-3" data-testid="place-card-visit">
+    <div className="flex gap-3 @max-[600px]:flex-col" data-testid="place-card-visit">
       <section className={cn(BOX, "grow-5 basis-0 gap-0.5")}>
         <div className="flex items-center justify-between gap-2 pb-1.5">
           <h4 className="flex items-center gap-2 text-ui leading-4.5 font-semibold text-text-3">
@@ -226,7 +226,7 @@ export function ReviewsPanel({
   const stars = Math.round(details.rating ?? 0);
 
   return (
-    <div className="flex gap-3" data-testid="place-card-reviews">
+    <div className="flex gap-3 @max-[600px]:flex-col" data-testid="place-card-reviews">
       {details.rating !== undefined ? (
         <section className={cn(BOX, "w-59 shrink-0 gap-3")}>
           <GoogleMark text={details.ratingCount !== undefined ? `${formatCount(details.ratingCount)} reviews on Google` : "On Google"} />

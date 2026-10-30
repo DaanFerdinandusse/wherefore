@@ -101,7 +101,7 @@ export function PlaceCard({
   const { profile } = useTripPlaceProfile(true, card.tripPlaceId);
   const place = profile?.place ?? null;
   const wantFull = tab !== "for" || gallery;
-  const { details, full } = useGoogleDetails(card.placeId, Boolean(place?.googlePlaceId), true, wantFull);
+  const { details, full, fullLoading } = useGoogleDetails(card.placeId, Boolean(place?.googlePlaceId), true, wantFull);
 
   const photos = useMemo<CardPhoto[]>(() => {
     const provider = (place?.images.length ? place.images : card.imageUrl ? [{ url: card.imageUrl }] : []).map((image, i) => ({
@@ -129,7 +129,7 @@ export function PlaceCard({
       data-variant={variant}
       onMouseEnter={() => onHover?.(card.tripPlaceId)}
       onMouseLeave={() => onHover?.(null)}
-      className={cn("rise-in flex flex-col gap-3.5", removed && "opacity-60")}
+      className={cn("@container rise-in flex flex-col gap-3.5", removed && "opacity-60")}
     >
       <PhotoStrip
         photos={photos}
@@ -153,7 +153,7 @@ export function PlaceCard({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
-        <h3 className="min-w-0 text-[22px] leading-7 font-semibold text-ink">{card.name}</h3>
+        <h3 className="min-w-0 text-card-xs font-semibold text-ink">{card.name}</h3>
         <div className="flex items-center gap-2">
           {gallery ? null : <CardTabs value={tab} onChange={setTab} client={client} />}
           {onClose ? (
@@ -180,7 +180,7 @@ export function PlaceCard({
           card={card}
           place={place}
           details={full}
-          loading={!full && Boolean(place?.googlePlaceId)}
+          loading={fullLoading}
           target={target}
           trip={trip}
           client={client}
@@ -188,7 +188,7 @@ export function PlaceCard({
       ) : (
         <ReviewsPanel
           details={full}
-          loading={!full && Boolean(place?.googlePlaceId)}
+          loading={fullLoading}
           terms={[...(card.keywords ?? []).map((k) => k.name), ...(card.dishes ?? [])]}
         />
       )}
@@ -373,7 +373,7 @@ function ForPanel({
   }
 
   return (
-    <div className="flex gap-2.5" data-testid="place-card-for">
+    <div className="flex gap-2.5 @max-[600px]:flex-col" data-testid="place-card-for">
       {bars.length > 0 ? (
         <section className="flex grow-5 basis-0 flex-col gap-1 rounded-card bg-surface-raised px-4.5 py-4 shadow-soft">
           <h4 className="flex items-center gap-2 pb-1.5 text-ui leading-4.5 font-semibold text-text-3">
@@ -429,7 +429,7 @@ function ForPanel({
             </h4>
             {card.score !== undefined ? (
               <p className="flex items-baseline gap-1.25" data-testid="place-card-score">
-                <span className="font-display text-[40px] leading-10.5 tracking-[-0.03em] text-ink">{card.score}</span>
+                <span className="font-display text-match-score tracking-[-0.03em] text-ink">{card.score}</span>
                 <span className="text-meta font-medium tracking-[0.14em] text-amber uppercase">match</span>
               </p>
             ) : null}
@@ -468,7 +468,7 @@ function ForPanel({
             <figure className="flex flex-col gap-0.5 border-t border-amber/15 pt-2.25">
               <blockquote className="flex items-start gap-2">
                 <Quote aria-hidden className="mt-1 size-3.5 shrink-0 fill-amber text-amber" strokeWidth={0} />
-                <p className="font-display text-[17px] leading-5.5 text-ink italic">{quote.text}</p>
+                <p className="font-display text-note-quote text-ink italic">{quote.text}</p>
               </blockquote>
               <figcaption className="pl-5.5 text-meta text-amber">{quote.caption}</figcaption>
             </figure>

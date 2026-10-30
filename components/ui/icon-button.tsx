@@ -30,8 +30,8 @@ export function IconButton({
   label: string;
   icon: ReactNode;
   variant?: IconButtonVariant;
-  /** Diameter in px: 32, 38, 40 or 44 in the designs. */
-  size?: 32 | 38 | 40 | 44;
+  /** Diameter in px: 32, 36, 38, 40 or 44 in the designs. */
+  size?: 32 | 36 | 38 | 40 | 44;
 }) {
   return (
     <button

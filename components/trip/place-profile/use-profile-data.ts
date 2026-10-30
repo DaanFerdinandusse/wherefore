@@ -45,6 +45,7 @@ export function useTripPlaceProfile(open: boolean, tripPlaceId: string, initial?
 
 export function useGoogleDetails(placeId: string | null, hasGoogle: boolean, open: boolean, wantFull: boolean) {
   const [basic, setBasic] = useState<Keyed<GooglePlaceDetails> | null>(null);
+  const [fullSettled, setFullSettled] = useState<string | null>(null);
   const [full, setFull] = useState<Keyed<GooglePlaceDetails> | null>(null);
 
   useEffect(() => {
@@ -54,15 +55,15 @@ export function useGoogleDetails(placeId: string | null, hasGoogle: boolean, ope
 
   useEffect(() => {
     if (!open || !placeId || !hasGoogle || !wantFull) return;
-    return load(placeId, "full", (value) => setFull({ key: placeId, value }));
+    return load(placeId, "full", (value) => setFull({ key: placeId, value }), () => setFullSettled(placeId));
   }, [open, placeId, hasGoogle, wantFull]);
 
   const fullValue = full?.key === placeId ? full.value : null;
   const basicValue = basic?.key === placeId ? basic.value : null;
-  return { details: fullValue ?? basicValue, full: fullValue };
+  return { details: fullValue ?? basicValue, full: fullValue, fullLoading: Boolean(open && wantFull && hasGoogle && placeId && !fullValue && fullSettled !== placeId) };
 }
 
-function load(placeId: string, tier: DetailsTier, done: (value: GooglePlaceDetails) => void): () => void {
+function load(placeId: string, tier: DetailsTier, done: (value: GooglePlaceDetails) => void, settled?: () => void): () => void {
   const controller = new AbortController();
   fetch(`/api/places/${encodeURIComponent(placeId)}/google?tier=${tier}`, { signal: controller.signal })
     .then(async (response) => {
@@ -70,6 +71,7 @@ function load(placeId: string, tier: DetailsTier, done: (value: GooglePlaceDetai
       if (!response.ok) return;
       done((await response.json()) as GooglePlaceDetails);
     })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => { if (!controller.signal.aborted) settled?.(); });
   return () => controller.abort();
 }

@@ -236,7 +236,7 @@ export function ChatColumn({
         onKeyDown={markUserScroll}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
-        <div ref={contentRef} className="flex min-h-full flex-col justify-end pt-9 pb-32">
+        <div ref={contentRef} className="flex min-h-full flex-col justify-end pt-9 pb-28">
           <Thread
             messages={messages}
             streaming={busy}

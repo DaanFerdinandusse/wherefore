@@ -23,12 +23,12 @@ export function Stepper({
   const canDecrease = value > min;
   const canIncrease = value < max;
   const round =
-    "inline-flex size-8 shrink-0 items-center justify-center rounded-pill border transition-colors disabled:cursor-not-allowed";
+    "inline-flex size-9 shrink-0 items-center justify-center rounded-pill border transition-colors disabled:cursor-not-allowed";
 
   return (
     <div role="group" aria-label={label} className={cn("flex items-center justify-between py-1.5", className)}>
-      <span className="text-body leading-5 font-medium text-ink">{label}</span>
-      <div className="flex items-center gap-3.5">
+      <span className="text-body-lg leading-5.5 font-semibold text-ink">{label}</span>
+      <div className="flex items-center gap-1">
         <button
           type="button"
           aria-label={`Fewer ${label.toLowerCase()}`}
@@ -36,12 +36,12 @@ export function Stepper({
           onClick={() => onValueChange(Math.max(min, value - 1))}
           className={cn(
             round,
-            canDecrease ? "border-pill-outline text-ink hover:border-ink hover:bg-ink/5" : "border-ink/20 text-ink/35",
+            canDecrease ? "border-ink text-ink hover:border-ink hover:bg-ink/5" : "border-ink/20 text-ink/35",
           )}
         >
-          <Minus size={12} strokeWidth={2} aria-hidden />
+          <Minus size={16} strokeWidth={2} aria-hidden />
         </button>
-        <output aria-live="polite" className="w-4 text-center text-body-lg leading-5 font-semibold text-ink">
+        <output aria-live="polite" className="w-10 text-center text-body-lg leading-5 font-semibold text-ink">
           {value}
         </output>
         <button
@@ -51,10 +51,10 @@ export function Stepper({
           onClick={() => onValueChange(Math.min(max, value + 1))}
           className={cn(
             round,
-            canIncrease ? "border-pill-outline text-ink hover:border-ink hover:bg-ink/5" : "border-ink/20 text-ink/35",
+            canIncrease ? "border-ink text-ink hover:border-ink hover:bg-ink/5" : "border-ink/20 text-ink/35",
           )}
         >
-          <Plus size={12} strokeWidth={2} aria-hidden />
+          <Plus size={16} strokeWidth={2} aria-hidden />
         </button>
       </div>
     </div>
