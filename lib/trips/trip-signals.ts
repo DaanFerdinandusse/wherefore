@@ -30,6 +30,8 @@ export type TripSignalFacts = {
   clientIds: string[];
   clients: Client[];
   signals: TripSignals;
+  /** Favorites saved on those clients (places, artists, films), matched or not. */
+  savedFavorites: number;
   /** The advisor's saved places in the destination (by city name or distance). */
   advisorPlaces: AdvisorPlaceRow[];
   blendMyTaste: boolean;
@@ -88,6 +90,7 @@ export async function loadTripSignals(trip: TripSignalSource): Promise<TripSigna
     match: f.match,
   }));
 
+  const savedFavorites = favorites.length + clientRows.reduce((sum, c) => sum + c.mediaFavorites.length, 0);
   const advisorPlaces = saved.filter((p) => inDestination(p, trip.destination));
   const blendMyTaste = advisor?.blendMyTaste ?? false;
   const tripPickEntityIds = itineraryRows.map((r) => r.entityId);
@@ -105,6 +108,7 @@ export async function loadTripSignals(trip: TripSignalSource): Promise<TripSigna
     clientIds,
     clients: clientRows,
     signals,
+    savedFavorites,
     advisorPlaces,
     blendMyTaste,
     excludeIds: searchExclusions(tripPickEntityIds, removedRows.map((r) => r.entityId)),

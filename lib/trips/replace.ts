@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, eq, ne } from "drizzle-orm";
 
 import { replacementNote } from "@/lib/agent/tools/labels";
-import { driversFor } from "@/lib/agent/tools/signals";
+import { driversFor, searchExclusions } from "@/lib/agent/tools/signals";
 import { NotFoundError } from "@/lib/auth/errors";
 import type { ScopeInput } from "@/lib/auth/scope";
 import type { Category, TripPlaceCard } from "@/lib/contracts";
@@ -14,8 +14,8 @@ import { findPlaces as defaultFindPlaces, type QlooClient } from "@/lib/qloo";
 import type { FindPlaces, PlaceResult } from "@/lib/qloo/contracts";
 import { CATEGORY_FILTER_TAGS, categoryOf, displayScore, sharedTagsFor } from "@/lib/qloo/normalize";
 
-import { signalSetHash } from "./evidence";
-import { askFiltersOfQuery, asCategory, type AskFilters } from "./map";
+import { sameSignalSet, signalSetHash } from "./evidence";
+import { askRerunOfQuery, asCategory, type AskRerun } from "./map";
 import { logTripCall, saveReplacement, setTripPlaceStatus } from "./mutations";
 import { getTrip, listTripPlaceCards } from "./queries";
 import { loadTripSignals } from "./trip-signals";
@@ -34,9 +34,7 @@ import type { TurnGuard } from "./turn-guard";
 
 const TAKE = 10;
 
-export type ReplacementQuery = AskFilters & {
-  tags: string[];
-  priceMax?: number;
+export type ReplacementQuery = AskRerun & {
   /** The ask whose tab the replacement joins, when the removed place came from one. */
   askId?: string;
   /** The rank the removed place had in that tab. */
@@ -45,14 +43,11 @@ export type ReplacementQuery = AskFilters & {
 
 type AskMembership = { askId: string; rank: number; query: Record<string, unknown> };
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.length > 0) : [];
-}
-
 /**
  * What to ask again: the most recent ask the removed place belongs to when it
  * stored tags, otherwise the board category's filter tags, otherwise the
- * place's own category tag.
+ * place's own category tag. Either way the ask's price cap, area and search
+ * options stay (askRerunOfQuery).
  */
 export function replacementQuery(input: {
   category: Category;
@@ -60,20 +55,28 @@ export function replacementQuery(input: {
   asks: readonly AskMembership[];
 }): ReplacementQuery {
   for (const ask of input.asks) {
-    const tags = stringList(ask.query.tags);
-    if (tags.length === 0) continue;
-    const price = ask.query.priceMax ?? ask.query.price;
-    return {
-      tags,
-      ...(typeof price === "number" && price >= 1 && price <= 4 ? { priceMax: price } : {}),
-      ...askFiltersOfQuery(ask.query),
-      askId: ask.askId,
-      rank: ask.rank,
-    };
+    const rerun = askRerunOfQuery(ask.query);
+    if (rerun.tags.length > 0) return { ...rerun, askId: ask.askId, rank: ask.rank };
   }
   const tags = input.category !== "other" ? CATEGORY_FILTER_TAGS[input.category] : input.placeTypes.slice(0, 1);
   const ask = input.asks[0];
-  return { tags: [...tags], ...(ask ? { ...askFiltersOfQuery(ask.query), askId: ask.askId, rank: ask.rank } : {}) };
+  return { ...(ask ? { ...askRerunOfQuery(ask.query), askId: ask.askId, rank: ask.rank } : {}), tags: [...tags] };
+}
+
+/**
+ * The replacement's display score, on the scale of the cards around it: only
+ * rows still on the board that were scored on the same signals compare (see
+ * evidence.ts). Without any the search's own score stands.
+ */
+export function replacementScore(
+  best: Pick<PlaceResult, "affinity" | "score">,
+  board: readonly { affinity: number | null; signalHash: string | null; onBoard: boolean }[],
+  hash: string | undefined,
+): number {
+  const scale = board.flatMap((row) =>
+    row.onBoard && typeof row.affinity === "number" && sameSignalSet(row.signalHash, hash) ? [row.affinity] : [],
+  );
+  return scale.length > 0 ? displayScore(best.affinity, [...scale, best.affinity]) : best.score;
 }
 
 /**
@@ -100,14 +103,14 @@ export type ReplaceDeps = {
   key?: string;
   /** An agent turn: every write lands only while it holds the chat (turn-guard.ts). */
   turn?: TurnGuard;
-  /** Told what the search had to loosen, in the advisor's words, when a replacement came back. */
+  /** Told what the replacement needed, in the advisor's words, or that the search failed. */
   onNote?: (note: string) => void;
 };
 
 /**
  * Marks the trip place removed and adds the next best place in its stead.
- * Returns the new card, or null when nothing new came back (the removal
- * stands either way).
+ * Returns the new card, or null when nothing new came back or the search
+ * failed (the removal stands either way).
  * @throws NotFoundError when the trip or the trip place is out of scope.
  */
 export async function replaceTripPlace(
@@ -133,7 +136,13 @@ export async function replaceTripPlace(
       .where(and(eq(tripPlaces.id, tripPlaceId), eq(tripPlaces.tripId, tripId)))
       .limit(1),
     db
-      .select({ entityId: places.entityId, affinity: tripPlaces.bestAffinity })
+      .select({
+        id: tripPlaces.id,
+        entityId: places.entityId,
+        affinity: tripPlaces.bestAffinity,
+        signalHash: tripPlaces.signalHash,
+        status: tripPlaces.status,
+      })
       .from(tripPlaces)
       .innerJoin(places, eq(places.id, tripPlaces.placeId))
       .where(eq(tripPlaces.tripId, tripId)),
@@ -157,7 +166,7 @@ export async function replaceTripPlace(
 
   // Same signals as the board, read after the removal: a place just dropped
   // from the itinerary is no longer a pick.
-  const { signals, clients } = await loadTripSignals(trip);
+  const { signals, clients, excludeIds: leftOut } = await loadTripSignals(trip);
   const tasteTags = clients.find((c) => c.id === trip.clientId)?.tasteTags ?? [];
 
   const category = asCategory(removed.category);
@@ -166,24 +175,34 @@ export async function replaceTripPlace(
     placeTypes: removed.types,
     asks: askRows.map((row) => ({ askId: row.askId, rank: row.rank, query: row.query })),
   });
-  const excludeIds = [...new Set(tripRows.map((row) => row.entityId))];
+  const onTrip = tripRows.map((row) => row.entityId);
 
   const find = deps.findPlaces ?? defaultFindPlaces;
-  const found = await find(
-    {
-      destination: trip.destination,
-      signals: signals.signals,
-      tags: query.tags,
-      tagsOperator: query.tags.length > 1 ? "union" : undefined,
-      excludeIds,
-      priceMax: query.priceMax,
-      popularityMax: query.popularityMax,
-      michelin: query.michelin,
-      openDay: query.openDay,
-      take: TAKE,
-    },
-    { tripId, client: deps.client },
-  );
+  let found: Awaited<ReturnType<FindPlaces>>;
+  try {
+    found = await find(
+      {
+        destination: query.area ? { ...trip.destination, ...query.area } : trip.destination,
+        signals: signals.signals,
+        tags: query.tags,
+        tagsOperator: query.tags.length > 1 ? "union" : undefined,
+        // The itinerary and the removed places first: the request has a cap, the
+        // pick below checks every place on the trip.
+        excludeIds: searchExclusions(leftOut, onTrip),
+        priceMax: query.priceMax,
+        popularityMax: query.popularityMax,
+        michelin: query.michelin,
+        openDay: query.openDay,
+        take: TAKE,
+      },
+      { tripId, client: deps.client },
+    );
+  } catch (error) {
+    // The removal is saved, so this is not a failed removal.
+    console.error(`[replace ${tripPlaceId}] the search for a replacement failed`, error);
+    deps.onNote?.("The search for a replacement did not answer, so ask for one in the chat.");
+    return null;
+  }
 
   const source = query.askId ? `ask:${query.askId}` : "profile";
   for (const [index, call] of found.calls.entries()) {
@@ -203,7 +222,7 @@ export async function replaceTripPlace(
     );
   }
 
-  const best = pickReplacement(found.results, excludeIds, category);
+  const best = pickReplacement(found.results, onTrip, category);
   if (!best) return null;
 
   const placeIds = await upsertPlaces([best.place]);
@@ -212,8 +231,12 @@ export async function replaceTripPlace(
 
   // Score against the trip's own set, so the replacement reads in line with
   // the cards around it rather than as the top of a one-off query.
-  const tripAffinities = tripRows.flatMap((row) => (typeof row.affinity === "number" ? [row.affinity] : []));
-  const score = tripAffinities.length > 0 ? displayScore(best.affinity, [...tripAffinities, best.affinity]) : best.score;
+  const hash = signalSetHash(signals.signals);
+  const score = replacementScore(
+    best,
+    tripRows.map((row) => ({ ...row, onBoard: row.status !== "removed" && row.id !== tripPlaceId })),
+    hash,
+  );
   const explainability = driversFor(best.signalScores, signals);
 
   const newTripPlaceId = await saveReplacement(
@@ -227,7 +250,7 @@ export async function replaceTripPlace(
         category: categoryOf(best.place) === "other" ? category : categoryOf(best.place),
         bestAffinity: best.affinity,
         bestScore: score,
-        signalHash: signalSetHash(signals.signals) ?? null,
+        signalHash: hash ?? null,
         explainability,
         sharedTags: sharedTagsFor(best.place, tasteTags),
       },
@@ -240,7 +263,8 @@ export async function replaceTripPlace(
   );
   if (!newTripPlaceId) return null;
 
-  const note = replacementNote(found.loosened, query.openDay);
+  const otherKind = category !== "other" && categoryOf(best.place) !== category;
+  const note = replacementNote(best.loosened ?? [], query.openDay, { otherKind });
   if (note) deps.onNote?.(note);
   const [card] = await listTripPlaceCards(tripId, scope, { tripPlaceIds: [newTripPlaceId] });
   return card ?? null;

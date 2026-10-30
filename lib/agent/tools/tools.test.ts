@@ -31,11 +31,13 @@ import {
   buildSignals,
   driversFor,
   MAX_EXCLUDED,
+  MAX_FAVORITE_SIGNALS,
   MAX_SIGNALS,
   MAX_TRIP_PICK_SIGNALS,
   searchExclusions,
   signalsForScoring,
   TRIP_PICKS_DRIVER_ID,
+  tripPickRoom,
 } from "./signals";
 
 describe("ask labels", () => {
@@ -72,11 +74,11 @@ describe("ask labels", () => {
       "Too few less known places, so check which of these carry the Less known chip.",
       "Too few Michelin places, so check which of these carry the Michelin chip.",
     ]);
-    expect(loosenedCopy(["hours"])).toEqual(["Too few places are open that day, so check the hours on these."]);
+    expect(loosenedCopy(["hours"])).toEqual(["Too few places are listed as open that day, so check the hours on these."]);
   });
 
   it("names the day in the hours line when it is known", () => {
-    expect(loosenedCopy(["hours"], "monday")).toEqual(["Too few places are open on Monday, so check the hours on these."]);
+    expect(loosenedCopy(["hours"], "monday")).toEqual(["Too few places are listed as open on Monday, so check the hours on these."]);
   });
 
   it("still reports the search's drops next to the widened category", () => {
@@ -84,15 +86,22 @@ describe("ask labels", () => {
     expect(loosenedCopy(merged, "sunday")).toEqual([
       "Few exact matches, so the rest are other places of the same kind",
       "Too few less known places, so check which of these carry the Less known chip.",
-      "Too few places are open on Sunday, so check the hours on these.",
+      "Too few places are listed as open on Sunday, so check the hours on these.",
     ]);
   });
 
-  it("says what a replacement loosened as one line, without the category", () => {
+  it("says what the one replacement needed, in the singular, as one line", () => {
     expect(replacementNote([])).toBeUndefined();
-    expect(replacementNote(["tags"])).toBeUndefined();
     expect(replacementNote(["tags", "price", "hours"], "monday")).toBe(
-      "Price cap dropped to find enough places. Too few places are open on Monday, so check the hours on these.",
+      "Price cap dropped to find this one. Too few places are listed as open on Monday, so check the hours of this one.",
+    );
+    expect(replacementNote(["popularity"])).toBe("Too few less known places, so check if this one carries the Less known chip.");
+  });
+
+  it("names a replacement of another kind, and stays quiet about tags otherwise", () => {
+    expect(replacementNote(["tags"])).toBeUndefined();
+    expect(replacementNote(["tags"], undefined, { otherKind: true })).toBe(
+      "Nothing of the same kind was left, so this one is a different kind of place.",
     );
   });
 });
@@ -112,11 +121,17 @@ describe("openDayOf", () => {
     expect(openDayOf({ target: { day: 4, slot: "night" }, trip: exact })).toBe("monday");
   });
 
-  it("has no day for a target without a real date, whatever the hint says", () => {
+  it("has no day for a target without a real date or a weekday in the hint", () => {
     const unset = { startDate: null, datesMode: "unset" };
     expect(openDayOf({ target: { day: 1, slot: "dinner" }, trip: unset })).toBeUndefined();
-    expect(openDayOf({ target: { day: 1, slot: "dinner" }, dayHint: "Friday", trip: unset })).toBeUndefined();
+    expect(openDayOf({ target: { day: 1, slot: "dinner" }, dayHint: "day 2", trip: unset })).toBeUndefined();
     expect(openDayOf({ target: { day: 1, slot: "dinner" }, trip: { startDate: "2027-05-14", datesMode: "unset" } })).toBeUndefined();
+  });
+
+  it("falls back to the hint for a target on a trip without dates", () => {
+    const unset = { startDate: null, datesMode: "unset" };
+    expect(openDayOf({ target: { day: 1, slot: "dinner" }, dayHint: "Friday", trip: unset })).toBe("friday");
+    expect(openDayOf({ target: { day: 1, slot: "dinner" }, dayHint: "Friday", trip: { startDate: "2027-05-14", datesMode: "unset" } })).toBe("friday");
   });
 
   it("never applies to a stay, by slot or by category", () => {
@@ -222,7 +237,24 @@ describe("buildSignals", () => {
       name: `Place ${i}`,
       match: "resolved",
     }));
-    expect(buildSignals({ travelers, favorites: many }).signals).toHaveLength(MAX_SIGNALS);
+    expect(buildSignals({ travelers, favorites: many }).signals).toHaveLength(MAX_FAVORITE_SIGNALS);
+  });
+
+  it("shares the favorites' room between travelers, so a long list crowds out nobody", () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      clientId: "c-ana",
+      entityId: `e-${i}`,
+      name: `Place ${i}`,
+      match: "resolved",
+    }));
+    const signals = buildSignals({
+      travelers,
+      favorites: [...many, { clientId: "c-marcus", entityId: "e-pasquale", name: "Pasquale", match: "resolved" }],
+    });
+    expect(signals.signals).toHaveLength(MAX_FAVORITE_SIGNALS);
+    expect(signals.signals).toContain("e-pasquale");
+    expect(signals.favoritesUsed.map((f) => f.clientName)).toEqual(["Ana Ruiz", "Marcus"]);
+    expect(signals.companionsWithoutFavorites).toEqual(["Clara"]);
   });
 
   describe("artists and films", () => {
@@ -274,17 +306,16 @@ describe("buildSignals", () => {
       ]);
     });
 
-    it("respects the signal cap, places first", () => {
-      const many = Array.from({ length: MAX_SIGNALS - 1 }, (_, i) => ({
+    it("keeps their room when the places alone would fill the list, and still lists them after the places", () => {
+      const many = Array.from({ length: MAX_SIGNALS }, (_, i) => ({
         clientId: "c-ana",
         entityId: `e-${i}`,
         name: `Place ${i}`,
         match: "resolved",
       }));
       const signals = buildSignals({ travelers, favorites: many, media });
-      expect(signals.signals).toHaveLength(MAX_SIGNALS);
-      expect(signals.signals.at(-1)).toBe("e-khruangbin");
-      expect(signals.signals).not.toContain("e-mood");
+      expect(signals.signals).toHaveLength(MAX_FAVORITE_SIGNALS);
+      expect(signals.signals.slice(-2)).toEqual(["e-khruangbin", "e-mood"]);
     });
   });
 
@@ -306,24 +337,34 @@ describe("buildSignals", () => {
       expect(signals.companionsWithoutFavorites).toEqual(["Clara", "Marcus"]);
     });
 
-    it("caps the picks, and favorites always keep their room", () => {
-      const lots = Array.from({ length: 20 }, (_, i) => `e-pick-${i}`);
-      expect(buildSignals({ travelers, favorites, tripPickEntityIds: lots }).tripPickSignals).toHaveLength(MAX_TRIP_PICK_SIGNALS);
+    const places = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ clientId: "c-ana", entityId: `e-${i}`, name: `Place ${i}`, match: "resolved" }));
+    const lots = Array.from({ length: 20 }, (_, i) => `e-pick-${i}`);
 
-      const full = Array.from({ length: MAX_SIGNALS - 3 }, (_, i) => ({
-        clientId: "c-ana",
-        entityId: `e-${i}`,
-        name: `Place ${i}`,
-        match: "resolved",
-      }));
-      const signals = buildSignals({ travelers, favorites: full, tripPickEntityIds: lots });
+    it("never lets the picks outvote the favorites", () => {
+      // Two to three days of planning for a client with four favorites.
+      const signals = buildSignals({ travelers, favorites: places(4), tripPickEntityIds: lots.slice(0, 8) });
+      expect(signals.tripPickSignals).toEqual(["e-pick-0", "e-pick-1"]);
+      expect(signals.signals).toHaveLength(6);
+      for (const count of [1, 2, 3, 4, 7, 12, 15]) {
+        expect(buildSignals({ travelers, favorites: places(count), tripPickEntityIds: lots }).tripPickSignals.length).toBeLessThanOrEqual(count);
+      }
+    });
+
+    it("grows the room with the favorites up to the cap, and has nothing to outvote without any", () => {
+      expect([1, 2, 3, 4, 5, 16, 40].map(tripPickRoom)).toEqual([1, 1, 2, 2, 3, MAX_TRIP_PICK_SIGNALS, MAX_TRIP_PICK_SIGNALS]);
+      expect(buildSignals({ travelers, favorites: [], tripPickEntityIds: lots }).tripPickSignals).toHaveLength(MAX_TRIP_PICK_SIGNALS);
+    });
+
+    it("fits picks next to a full list of favorites", () => {
+      const signals = buildSignals({ travelers, favorites: places(40), tripPickEntityIds: lots });
       expect(signals.signals).toHaveLength(MAX_SIGNALS);
-      expect(signals.favorites).toHaveLength(MAX_SIGNALS - 3);
-      expect(signals.tripPickSignals).toHaveLength(3);
+      expect(signals.favorites).toHaveLength(MAX_FAVORITE_SIGNALS);
+      expect(signals.tripPickSignals).toHaveLength(MAX_SIGNALS - MAX_FAVORITE_SIGNALS);
     });
 
     it("collapses their share into one plain entry and keeps the client's share true", () => {
-      const signals = buildSignals({ travelers, favorites, tripPickEntityIds: picks });
+      const signals = buildSignals({ travelers, favorites: [...favorites, ...places(2)], tripPickEntityIds: picks });
       const drivers = driversFor(
         [
           { entityId: "e-tasca", score: 0.2 },
@@ -380,8 +421,8 @@ describe("buildSignals", () => {
     });
 
     it("never scores a pick against itself", () => {
-      const signals = buildSignals({ travelers, favorites, tripPickEntityIds: picks });
-      expect(signalsForScoring(signals, ["e-tasca", "e-new"])).toEqual(["e-via", "e-lilia", "e-uva"]);
+      const signals = buildSignals({ travelers, favorites, tripPickEntityIds: ["e-tasca"] });
+      expect(signalsForScoring(signals, ["e-tasca", "e-new"])).toEqual(["e-via", "e-lilia"]);
       // A favorite stays a signal, as it always did.
       expect(signalsForScoring(signals, ["e-via"])).toEqual(signals.signals);
     });

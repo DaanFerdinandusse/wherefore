@@ -367,7 +367,7 @@ export function headline(card: Pick<TripPlaceCard, "dishes" | "keywords" | "beca
   const like = likeLine(card.because, HEADLINE_LIKE_MAX);
   if (like) return like;
   const top = [...favoriteDrivers(card.because)].sort((a, b) => b.share - a.share)[0];
-  if (top?.name) return `${top.name} fans come here`;
+  if (top?.name && !top.media) return `${top.name} fans come here`;
   return null;
 }
 
@@ -416,7 +416,7 @@ export function whyBox(
     lines.push({
       kind: "favorite",
       entityId: d.entityId,
-      text: i === 0 ? `${d.name} fans go here, ${d.share}%` : `${d.name} fans too, ${d.share}%`,
+      text: d.media ? `Taste match with ${d.name}, ${d.share}%` : i === 0 ? `${d.name} fans go here, ${d.share}%` : `${d.name} fans too, ${d.share}%`,
       ...(imageUrl ? { imageUrl } : {}),
     });
   });

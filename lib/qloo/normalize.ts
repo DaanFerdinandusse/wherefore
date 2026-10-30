@@ -28,6 +28,13 @@ export const WEEKDAY_NAMES: readonly Weekday[] = [
   "sunday",
 ];
 
+/** Does a place's own hours block say closed on this day? No hours for the day is not closed. */
+export function closedOn(hours: unknown, day: Weekday): boolean {
+  if (!hours || typeof hours !== "object") return false;
+  const spans = (hours as Record<string, unknown>)[day];
+  return Array.isArray(spans) && spans.length > 0 && spans.every((span) => (span as { closed?: unknown } | null)?.closed === true);
+}
+
 // ---------------------------------------------------------------- places row
 
 /** Keys of the raw properties block the place profile reads. Everything else
@@ -295,6 +302,12 @@ export const CATEGORY_FILTER_TAGS: Record<Exclude<Category, "other">, string[]> 
   see: ["urn:tag:category:place:museum", "urn:tag:category:place:tourist_attraction"],
   stay: ["urn:tag:category:place:hotel"],
 };
+
+/** True when every tag is a category filter: the ask names a kind of place and nothing more specific. */
+export function isCategoryTagFilter(tags: readonly string[]): boolean {
+  const known = new Set(Object.values(CATEGORY_FILTER_TAGS).flat());
+  return tags.length > 0 && tags.every((tag) => known.has(tag));
+}
 
 // --------------------------------------------------------------------- score
 

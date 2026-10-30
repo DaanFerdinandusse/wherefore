@@ -115,7 +115,7 @@ export const LOOSENED_COPY: Record<string, string> = {
   popularity: "Too few less known places, so check which of these carry the Less known chip.",
   michelin: "Too few Michelin places, so check which of these carry the Michelin chip.",
   price: "Price cap dropped to find enough places",
-  hours: "Too few places are open that day, so check the hours on these.",
+  hours: "Too few places are listed as open that day, so check the hours on these.",
   price_not_applicable: "Price cap not applied to museums and hotels",
   [WIDENED_IN_CATEGORY]: "Few exact matches, so the rest are other places of the same kind",
 };
@@ -129,13 +129,34 @@ export function loosenedCopy(loosened: readonly string[], openDay?: Weekday): st
   });
 }
 
+/** The same codes for the one place a replacement brings back. */
+const REPLACEMENT_COPY: Record<string, string> = {
+  popularity: "Too few less known places, so check if this one carries the Less known chip.",
+  michelin: "Too few Michelin places, so check if this one carries the Michelin chip.",
+  price: "Price cap dropped to find this one.",
+  hours: "Too few places are listed as open that day, so check the hours of this one.",
+  price_not_applicable: "Price cap not applied to museums and hotels.",
+};
+
 /**
- * What a replacement search tells the advisor, as one line. "tags" stays out:
- * the replacement is checked against the place's category anyway.
+ * What a replacement search tells the advisor about the place it found, as one
+ * line: `loosened` is what was dropped to reach that place (PlaceResult), not
+ * what the search tried for the rest of its list. "tags" alone says nothing:
+ * what counts is `otherKind`, a replacement of another category than the
+ * removed place.
  */
-export function replacementNote(loosened: readonly string[], openDay?: Weekday): string | undefined {
-  const notes = loosenedCopy(loosened.filter((code) => code !== "tags"), openDay);
-  return notes.length > 0 ? notes.map((note) => note.replace(/\.?$/, ".")).join(" ") : undefined;
+export function replacementNote(
+  loosened: readonly string[],
+  openDay?: Weekday,
+  options: { otherKind?: boolean } = {},
+): string | undefined {
+  const notes = loosened.flatMap((code) => {
+    const text = REPLACEMENT_COPY[code];
+    if (!text) return [];
+    return [code === "hours" && openDay ? text.replace("that day", `on ${capitalize(openDay)}`) : text];
+  });
+  if (options.otherKind) notes.unshift("Nothing of the same kind was left, so this one is a different kind of place.");
+  return notes.length > 0 ? notes.join(" ") : undefined;
 }
 
 /** "Lisbon · near Príncipe Real · based on Ana's favorites". */
@@ -213,10 +234,8 @@ export function openDayOf(input: {
   trip: { startDate?: string | null; datesMode: string };
 }): Weekday | undefined {
   if (input.category === "stay" || input.target?.slot === "stay") return undefined;
-  if (!input.target) return weekdayInHint(input.dayHint);
-  if (input.trip.datesMode !== "exact") return undefined;
-  const date = dateOfDay(input.trip.startDate ?? undefined, input.target.day);
-  return date ? weekdayName(date) : undefined;
+  const date = input.target && input.trip.datesMode === "exact" ? dateOfDay(input.trip.startDate ?? undefined, input.target.day) : undefined;
+  return date ? weekdayName(date) : weekdayInHint(input.dayHint);
 }
 
 /**

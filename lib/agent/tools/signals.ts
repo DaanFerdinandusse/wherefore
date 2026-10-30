@@ -15,7 +15,8 @@ import {
 // - Every traveler with a client profile contributes the favorites that
 //   resolved to an entity, in favorite order: their places first, then their
 //   artists and films. Their names feed the explainability shares ("because
-//   Ana loves Khruangbin").
+//   Ana loves Khruangbin"). A long list shares the favorites' room with the
+//   other travelers, and artists and films keep a part of it.
 // - A traveler without a profile, or with no resolved favorite of either kind,
 //   is listed as a companion without favorites (the "Built from" box says so).
 // - The advisor's own places are extra signals only when the advisor turned
@@ -24,17 +25,26 @@ import {
 //   says the client loves a place she has not named, and the client's own
 //   shares keep their true size.
 // - Places already in the itinerary are extra signals too, after everything
-//   else and capped, so later searches sharpen as the trip takes shape. The
-//   advisor picked them, the client never named them: their share is one
-//   "This trip's picks" entry, built the same way. An empty itinerary changes
-//   nothing, in the signals or in their hash.
+//   else and capped against the favorites, so later searches sharpen as the
+//   trip takes shape and still answer to the client. The advisor picked them,
+//   the client never named them: their share is one "This trip's picks" entry,
+//   built the same way. An empty itinerary changes nothing, in the signals or
+//   in their hash.
 
 /** More signals than this only add noise and length to the request. */
 export const MAX_SIGNALS = 24;
-/** Itinerary places among the signals: enough to lean on, never enough to outvote the favorites. */
+/** Favorites stop here, so blended places and itinerary picks always have room. */
+export const MAX_FAVORITE_SIGNALS = 20;
+/** Most places in a row before a traveler's next artist or film, when their favorites run past the room. */
+const PLACES_PER_MEDIA = 3;
+/** Itinerary places among the signals, however many favorites there are. */
 export const MAX_TRIP_PICK_SIGNALS = 8;
-/** Excluded ids go in the request URL, so their number is capped. */
-export const MAX_EXCLUDED = 200;
+/**
+ * Excluded ids go in the request URL, at 39 characters each, and the upstream
+ * answers 414 from about 8.2k characters. This leaves room for MAX_SIGNALS,
+ * the tags and every filter next to them.
+ */
+export const MAX_EXCLUDED = 150;
 
 export type SignalTraveler = {
   name: string;
@@ -65,6 +75,42 @@ export type TripSignals = {
   tripPickSignals: string[];
 };
 
+/**
+ * Room for itinerary places: about half the favorites, so picks can lean on
+ * the trip and never outvote the client. Without a favorite there is nothing
+ * to outvote.
+ */
+export function tripPickRoom(favoriteCount: number): number {
+  return favoriteCount === 0 ? MAX_TRIP_PICK_SIGNALS : Math.min(MAX_TRIP_PICK_SIGNALS, Math.ceil(favoriteCount / 2));
+}
+
+type Favorite = TripSignals["favorites"][number];
+
+/** One traveler's favorites in the order they claim room: artists and films among the places, not after them all. */
+function claimOrder(own: readonly Favorite[]): Favorite[] {
+  const placesLeft = own.filter((f) => !f.media);
+  const mediaLeft = own.filter((f) => f.media);
+  const out: Favorite[] = [];
+  while (placesLeft.length > 0 || mediaLeft.length > 0) {
+    out.push(...placesLeft.splice(0, PLACES_PER_MEDIA), ...mediaLeft.splice(0, 1));
+  }
+  return out;
+}
+
+/** The entities that fit: one traveler at a time takes the next in line, so no list crowds out another. */
+function shareRoom(lists: readonly (readonly Favorite[])[], room: number): Set<string> {
+  const queues = lists.map(claimOrder);
+  const longest = Math.max(0, ...queues.map((queue) => queue.length));
+  const kept = new Set<string>();
+  for (let turn = 0; turn < longest; turn++) {
+    for (const queue of queues) {
+      const next = queue[turn];
+      if (next && kept.size < room) kept.add(next.entityId);
+    }
+  }
+  return kept;
+}
+
 export function buildSignals(input: {
   travelers: SignalTraveler[];
   favorites: SignalFavorite[];
@@ -74,21 +120,22 @@ export function buildSignals(input: {
   /** Entity ids of the places in the itinerary, in trip order. */
   tripPickEntityIds?: string[];
 }): TripSignals {
-  const seen = new Set<string>();
   const signals: string[] = [];
   const favorites: TripSignals["favorites"] = [];
   const favoritesUsed: BuiltFrom["favorites"] = [];
   const companionsWithoutFavorites: string[] = [];
   const doneClients = new Set<string>();
+  const claimed = new Set<string>();
+  const rows: { traveler: SignalTraveler; own: Favorite[] }[] = [];
 
   for (const traveler of input.travelers) {
     if (!traveler.clientId) {
-      companionsWithoutFavorites.push(traveler.name);
+      rows.push({ traveler, own: [] });
       continue;
     }
     if (doneClients.has(traveler.clientId)) continue;
     doneClients.add(traveler.clientId);
-    const own: TripSignals["favorites"] = [
+    const own: Favorite[] = [
       ...input.favorites.flatMap((f) =>
         f.clientId === traveler.clientId && f.entityId && f.match !== "unmatched" ? [{ entityId: f.entityId, name: f.name }] : [],
       ),
@@ -98,18 +145,23 @@ export function buildSignals(input: {
           : [],
       ),
     ];
-    const names: string[] = [];
-    for (const favorite of own) {
-      if (seen.has(favorite.entityId) || signals.length >= MAX_SIGNALS) continue;
-      seen.add(favorite.entityId);
-      signals.push(favorite.entityId);
-      favorites.push(favorite);
-      names.push(favorite.name);
-    }
-    if (names.length === 0) companionsWithoutFavorites.push(traveler.name);
-    else favoritesUsed.push({ clientName: traveler.name, names });
+    const fresh = own.filter((favorite) => !claimed.has(favorite.entityId) && claimed.add(favorite.entityId));
+    rows.push({ traveler, own: fresh });
   }
 
+  const kept = shareRoom(rows.map((row) => row.own), MAX_FAVORITE_SIGNALS);
+  for (const { traveler, own } of rows) {
+    const used = own.filter((favorite) => kept.has(favorite.entityId));
+    if (used.length === 0) {
+      companionsWithoutFavorites.push(traveler.name);
+      continue;
+    }
+    signals.push(...used.map((favorite) => favorite.entityId));
+    favorites.push(...used);
+    favoritesUsed.push({ clientName: traveler.name, names: used.map((favorite) => favorite.name) });
+  }
+
+  const seen = new Set(signals);
   const advisorSignals: string[] = [];
   if (input.blendMyTaste) {
     for (const entityId of input.advisorPlaceEntityIds ?? []) {
@@ -121,8 +173,9 @@ export function buildSignals(input: {
   }
 
   const tripPickSignals: string[] = [];
+  const pickRoom = tripPickRoom(favorites.length);
   for (const entityId of input.tripPickEntityIds ?? []) {
-    if (seen.has(entityId) || signals.length >= MAX_SIGNALS || tripPickSignals.length >= MAX_TRIP_PICK_SIGNALS) continue;
+    if (seen.has(entityId) || signals.length >= MAX_SIGNALS || tripPickSignals.length >= pickRoom) continue;
     seen.add(entityId);
     signals.push(entityId);
     tripPickSignals.push(entityId);

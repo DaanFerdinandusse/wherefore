@@ -100,27 +100,36 @@ The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives i
 - **Every search runs on one signal set.** `lib/trips/trip-signals.ts` reads it
   for find_places, score_places, remove_place and the UI's replace: favorites
   of every profiled traveler (places, then artists and films), blended advisor
-  places, then the itinerary's places (at most 8, favorites keep `MAX_SIGNALS`).
+  places, then the itinerary's places (`tripPickRoom`: about half the favorites,
+  at most 8). Favorites stop at `MAX_FAVORITE_SIGNALS` and share that room:
+  travelers take turns, and artists and films keep a part of each list.
   Advisor places and itinerary places are plain drivers ("Your places", "This
   trip's picks"): they keep their share of the match and never read as
   something the client loves. An itinerary change moves the signal hash, so
   newer evidence wins on the next search (`lib/trips/evidence.ts`).
 - **Searches do not repeat.** find_places excludes the itinerary and the removed
-  places (capped at `MAX_EXCLUDED`), upstream and again in code. A place that was
-  only shown stays available for another slot, which also lets a retried
-  search find its own results.
+  places (capped at `MAX_EXCLUDED`, the request URL has a limit), upstream and
+  again in code. A rerun (remove_place, the UI's replace) excludes those first,
+  then the rest of the trip, and `pickReplacement` checks every place on the trip.
+  A place that was only shown stays available for another slot, which also lets
+  a retried search find its own results.
 - **Search options stay on the ask.** `discovery: "less_known"` (popularity below
   `LESS_KNOWN_POPULARITY_MAX`), `michelin` and the open day are stored in the ask
-  query (`popularityMax`, `michelin`, `openDay`), sent on the main and the fill
-  call, and read back by remove_place and the UI's replace (`askFiltersOfQuery`),
-  so a rerun stays the same search. `openDayOf` (`tools/labels.ts`) derives the
-  day: a target's real date with exact trip dates, else a day hint that names one
+  query (`popularityMax`, `michelin`, `openDay`, with `resolvedTags`, `priceMax`
+  and `resolvedArea`), sent on the main and the fill call, and read back by
+  remove_place and the UI's replace through one reader (`askRerunOfQuery`), so a
+  rerun stays the same search. `openDayOf` (`tools/labels.ts`) derives the day: a
+  target's real date with exact trip dates, else a day hint that names one
   weekday, never for a stay. Advisor places admitted into the ask meet the same
   filters; unknown hours or popularity do not count against them, and stored
-  hours that say closed keep them out even when the search dropped the open day.
+  hours that say closed keep them out even when the search dropped the open day,
+  as they do for search results (`findPlaces`). A card with no hours for that day
+  reaches the model as `hours_unknown`.
 - **Loosening is never silent.** Every filter findPlaces drops is a `loosened`
-  code with copy in `LOOSENED_COPY`: the search row, the model and, for a
-  replacement, the tool card or the toast say what changed and what to check.
+  code with copy in `LOOSENED_COPY`: the search row and the model say what changed
+  and what to check. A replacement is one place, so its note (`replacementNote`)
+  says only what that place needed (`PlaceResult.loosened`), and a different kind
+  of place than the one removed.
 - **The model chooses on facts.** Top candidates score within about 0.01, so
   `factsForModel` (`tools/model-output.ts`) gives find_places, score_places and
   every card the provider's review keywords, dishes, price level, rating, known,
@@ -141,9 +150,10 @@ The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives i
   the `explainability` jsonb of `trip_places` and `ask_places` and in the
   checkpoint; at least 2 tags, at most 3, else no line and the "Because Ana
   loves ..." sentence stays. A plain driver, an artist or film (`media` on the
-  row) and the place itself are never the favorite. Cards found again by a later
-  search get their tags back here, since their drivers were replaced. A
-  replacement (remove_place, the UI's replace) has no explain step: no line.
+  row) and the place itself are never the favorite. Newer evidence for a place
+  replaces its drivers and clears its reason (`upsertTripPlaces`), so tags and
+  reason are written again together here and never disagree. A replacement
+  (remove_place, the UI's replace) has no explain step: no line.
 - **Agent slot notes are for the advisor only** (`note_source = 'agent'`,
   `note_for_traveler` false), with hours, prices and reservation claims
   stripped unless they quote a stored fact (`tools/notes.ts`).

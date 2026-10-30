@@ -303,6 +303,8 @@ export type FindPlacesOutput = {
   openDay?: Weekday;
   /** The trip's ground rules, so the model chooses with them beside the candidates. */
   groundRules?: string[];
+  /** Cards with no hours on record for `openDay`: nothing says they are open that day. */
+  hoursUnknown?: string[];
 };
 
 /** An itinerary slot a search or a recommendation is for. */

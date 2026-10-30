@@ -33,6 +33,8 @@ export type ToolTrip = {
   rules: string[];
   travelerNames: string[];
   signals: TripSignals;
+  /** Favorites saved on the trip's clients, matched or not. */
+  savedFavorites: number;
   /** The advisor's saved places in the destination (by city name or distance). */
   advisorPlaces: AdvisorPlaceRow[];
   blendMyTaste: boolean;
@@ -51,7 +53,8 @@ export async function loadToolTrip(tripId: string): Promise<ToolTrip> {
   const [trip] = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
   if (!trip) throw new TripGoneError();
   const scope = tripScope(trip);
-  const { travelers, clientIds, clients: clientRows, signals, advisorPlaces, blendMyTaste, excludeIds } = await loadTripSignals(trip);
+  const { travelers, clientIds, clients: clientRows, signals, savedFavorites, advisorPlaces, blendMyTaste, excludeIds } =
+    await loadTripSignals(trip);
 
   const byId = new Map(clientRows.map((c) => [c.id, c]));
   const ordered = clientIds.map((id) => byId.get(id)).filter((c): c is Client => !!c);
@@ -77,6 +80,7 @@ export async function loadToolTrip(tripId: string): Promise<ToolTrip> {
     rules: [...new Set(ordered.flatMap((c) => c.groundRules))],
     travelerNames: travelers.map((t) => t.name),
     signals,
+    savedFavorites,
     advisorPlaces,
     blendMyTaste,
     excludeIds,

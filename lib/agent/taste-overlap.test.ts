@@ -215,6 +215,12 @@ describe("carryTags", () => {
 describe("tagPhrase", () => {
   it("keeps the capitals of peoples and places", () => {
     expect(tagPhrase("Modern portuguese")).toBe("modern Portuguese");
+    expect(tagPhrase("Iberian chic")).toBe("Iberian chic");
+    expect(tagPhrase("Tex-Mex")).toBe("Tex-Mex");
+    expect(tagPhrase("Pan-Asian")).toBe("Pan-Asian");
+    expect(tagPhrase("BBQ")).toBe("BBQ");
+    expect(tagPhrase("Japanese-inspired")).toBe("Japanese-inspired");
+    expect(tagPhrase("Family-friendly")).toBe("family-friendly");
     expect(tagPhrase("Farm to table")).toBe("farm to table");
   });
 });

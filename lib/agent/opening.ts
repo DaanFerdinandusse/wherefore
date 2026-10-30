@@ -15,6 +15,8 @@ export type OpeningFacts = {
   endDate?: string;
   /** The favorites that drive the searches: resolved places, artists and films. */
   favoritesCount: number;
+  /** Favorites saved on the profiles, matched or not. */
+  savedFavorites?: number;
   /** Whose favorites those are, the client first; the client when missing. */
   favoriteOwners?: string[];
   /** The advisor's own saved places in the destination. */
@@ -121,7 +123,9 @@ export function composeOpening(facts: OpeningFacts): ChatOpening {
         ? ` I will match every pick to ${owners} ${favorites} and check your ${numberWord(facts.advisorPlacesInCity)} saved ${facts.destination} ${facts.advisorPlacesInCity === 1 ? "place" : "places"} along the way.`
         : ` I will match every pick to ${owners} ${favorites}.`;
   } else {
-    match = ` ${client} has no favorites saved yet, so the matches stay broad until you add some to ${client}'s profile.`;
+    match = facts.savedFavorites
+      ? ` None of ${client}'s favorites matched yet, so the matches stay broad until you check them on ${client}'s profile.`
+      : ` ${client} has no favorites saved yet, so the matches stay broad until you add some to ${client}'s profile.`;
     if (facts.advisorPlacesInCity > 0) {
       match += ` I will check your ${numberWord(facts.advisorPlacesInCity)} saved ${facts.destination} ${facts.advisorPlacesInCity === 1 ? "place" : "places"} along the way.`;
     }

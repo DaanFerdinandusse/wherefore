@@ -81,7 +81,7 @@ function realTools(turn: TurnRef) {
     }),
     find_places: tool({
       description:
-        "Look at a few places for one slot or one kind of place, for example seafood restaurants for Friday dinner. Small on purpose: about 5 candidates, scored for the client, the advisor's own places included when they fit. Shows a row of places in the chat. Follow it with recommend_place for the best one.",
+        "Look at a few places for one slot or one kind of place, for example seafood restaurants for Friday dinner. Small on purpose: about 5 candidates, scored for the client, the advisor's own places included when they fit. Shows a row of places in the chat. Follow it with recommend_place for the best one, unless every candidate conflicts with a ground rule.",
       inputSchema: z.object({
         intent: z.string().min(2).max(120).describe("The ask in the advisor's words, without the day, e.g. 'seafood restaurants'"),
         category: categorySchema.optional().describe("The board category when it is clear"),
@@ -92,7 +92,7 @@ function realTools(turn: TurnRef) {
           .describe("The advisor's own words as short phrases, e.g. 'seafood', 'lively'"),
         price_max: z.number().int().min(1).max(4).optional().describe("Highest price level, 1 to 4"),
         area: z.string().max(60).optional().describe("A neighborhood inside the destination"),
-        day_hint: z.string().max(30).optional().describe("The day or time when it is not a slot, e.g. 'Saturday'"),
+        day_hint: z.string().max(30).optional().describe("The day or time when it is not a slot, e.g. 'Saturday'. On a trip without dates, the weekday of the target too"),
         target: targetSchema.optional(),
         discovery: z
           .literal("less_known")
@@ -106,7 +106,7 @@ function realTools(turn: TurnRef) {
     }),
     recommend_place: tool({
       description:
-        "Recommend one place from a search result as the pick for the client. The chat shows it as a full place card with photos, the match and visit facts, and buttons to add it or drop it. Call once per search, right after find_places, with the best fit for the brief, the ground rules and the facts on each candidate. Does not change the itinerary.",
+        "Recommend one place from a search result as the pick for the client. The chat shows it as a full place card with photos, the match and visit facts, and buttons to add it or drop it. Call once per search, right after find_places, with the best fit for the brief, the ground rules and the facts on each candidate. Skip it when every candidate conflicts with a ground rule. Does not change the itinerary.",
       inputSchema: z.object({
         place_id: z.string().describe("The id of a place from the search result"),
         ask_id: z.string().optional().describe("The ask_id of that search"),

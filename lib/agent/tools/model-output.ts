@@ -118,7 +118,10 @@ export function findPlacesForModel(output: FindPlacesOutput): ModelText {
     ...(output.groundRules?.length
       ? { ground_rules: output.groundRules.map((rule) => (rule.length > MAX_RULE_CHARS ? `${rule.slice(0, MAX_RULE_CHARS - 1)}…` : rule)) }
       : {}),
-    places: output.places.map(cardForModel),
+    places: output.places.map((card) => ({
+      ...cardForModel(card),
+      ...(output.hoursUnknown?.includes(card.tripPlaceId) ? { hours_unknown: true } : {}),
+    })),
   });
 }
 

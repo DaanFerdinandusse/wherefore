@@ -1,15 +1,16 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { FatalError } from "workflow";
 import { z } from "zod";
 
 import type { Category, FindPlacesOutput, SlotName, SlotTarget, ToolStep, TripPlaceCard, Weekday } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { tripAsks } from "@/lib/db/schema";
+import { places, tripAsks } from "@/lib/db/schema";
 import { createAsk, updateAsk } from "@/lib/trips";
 import {
   CATEGORY_FILTER_TAGS,
+  closedOn,
   displayScore,
   findPlaces,
   findTags,
@@ -228,7 +229,7 @@ export function meetsAskConstraints(
   const { popularity, michelin } = placeFactsFromProperties(place.properties);
   if (constraints.popularityMax !== undefined && popularity !== undefined && popularity >= constraints.popularityMax) return false;
   if (constraints.michelin && !michelin) return false;
-  if (constraints.openDay && hoursOf(place.properties?.hours)?.[constraints.openDay] === "closed") return false;
+  if (constraints.openDay && closedOn(place.properties?.hours, constraints.openDay)) return false;
   const area = constraints.area;
   if (area && place.lat != null && place.lon != null && haversineM(place.lat, place.lon, area.lat, area.lon) > area.radiusM) {
     return false;
@@ -292,6 +293,17 @@ export type AskCheckpoint = z.infer<typeof checkpointSchema>;
 export function parseCheckpoint(value: unknown): AskCheckpoint {
   const parsed = checkpointSchema.safeParse(value ?? {});
   return parsed.success ? parsed.data : {};
+}
+
+/** The cards with no hours on record for `day`: nothing says they are open, whatever got them into the search. */
+async function hoursUnknownOn(cards: TripPlaceCard[], day: Weekday): Promise<string[]> {
+  if (cards.length === 0) return [];
+  const rows = await db
+    .select({ id: places.id, properties: places.properties })
+    .from(places)
+    .where(inArray(places.id, cards.map((c) => c.placeId)));
+  const known = new Set(rows.filter((row) => hoursOf(row.properties.hours)?.[day]).map((row) => row.id));
+  return cards.filter((c) => !known.has(c.placeId)).map((c) => c.tripPlaceId);
 }
 
 async function readCheckpoint(askId: string): Promise<AskCheckpoint> {
@@ -429,9 +441,10 @@ export async function* findPlacesTool(
       const wanted = [...(input.tags ?? []), ...(input.tags?.length ? [] : split.text ? [split.text] : [])];
       const resolved = await resolveTags(wanted, ctx, calls);
       const tags = resolved.ids.length > 0 ? resolved.ids : askCategory ? CATEGORY_FILTER_TAGS[askCategory] : [];
-      // Kept on the ask so remove_place can rerun the same search.
+      // Kept on the ask so remove_place and the UI's replace can rerun the same search.
+      const resolvedArea = area ? { resolvedArea: area } : {};
       await guarded(turn, (guard) =>
-        updateAsk(ask.id, { query: { ...askQuery, resolvedTags: tags } }, ctx.scope, { turn: guard }),
+        updateAsk(ask.id, { query: { ...askQuery, resolvedTags: tags, ...resolvedArea } }, ctx.scope, { turn: guard }),
       );
 
       let results: PlaceResult[];
@@ -493,13 +506,8 @@ export async function* findPlacesTool(
               const merged = [...exact, ...fillers];
               const affinities = merged.map((r) => r.affinity);
               results = merged.map((r) => ({ ...r, score: displayScore(r.affinity, affinities) }));
-              loosened = [
-                ...new Set([
-                  ...loosened.filter((l) => l !== "tags"),
-                  ...fill.loosened.filter((l) => l !== "tags"),
-                  WIDENED_IN_CATEGORY,
-                ]),
-              ];
+              // Only what the kept places needed: a fill can try more than its best places did.
+              loosened = [...new Set([...merged.flatMap((r) => r.loosened ?? []).filter((l) => l !== "tags"), WIDENED_IN_CATEGORY])];
             }
           } catch (error) {
             if (abortSignal?.aborted) throw error;
@@ -629,9 +637,11 @@ export async function* findPlacesTool(
       try {
         const { reasons, drivers } = await explainCards(turn, ctx, cards, abortSignal);
         explained = reasons.size;
-        // The tags reach the ask's rows and the checkpoint too, so a retried step keeps them.
+        // The tags reach the ask's rows and the checkpoint too, so a retried step
+        // keeps them. Not a whole result set: the cards are on screen, and a place
+        // replaced while the model ran stays in the tab.
         ranked = ranked.map((r) => ({ ...r, explainability: carryTags(r.explainability, drivers.get(r.tripPlaceId)) }));
-        await persistAskPlaces(turn, ctx, ask.id, ranked);
+        await persistAskPlaces(turn, ctx, ask.id, ranked, { replace: false });
         if (checkpoint.score) checkpoint.score = { ...checkpoint.score, ranked };
         else if (checkpoint.search) checkpoint.search = { ...checkpoint.search, ranked };
         checkpoint.explain = { done: explained, total: toExplain };
@@ -651,12 +661,14 @@ export async function* findPlacesTool(
       note: `${explained} of ${toExplain}`,
     };
 
+    const hoursUnknown = openDay ? await hoursUnknownOn(cards, openDay) : [];
     await assertTurn(turn);
     await finishAsk(turn, ask.id, { status: "done", elapsedMs: elapsed(), loosened, resultCount: cards.length });
     return output("done", {
       done: explained,
       total: cards.length,
       ...(areaNote ? { progress: areaNote } : {}),
+      ...(hoursUnknown.length ? { hoursUnknown } : {}),
     });
   } catch (error) {
     // The lock is gone (stopped or replaced): the release finishes the ask.

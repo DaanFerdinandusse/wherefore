@@ -29,9 +29,11 @@ import { QlooLocalityMismatchError } from "./errors";
 import {
   categoryOf,
   checkLocality,
+  closedOn,
   displayScore,
   distanceFromDestination,
   explainabilityFor,
+  isCategoryTagFilter,
   isTooFar,
   isUnpricedTagFilter,
   majorityLocalityLabel,
@@ -130,10 +132,14 @@ export const searchEntities: SearchEntities = async (query, options, ctx) => {
  * text geocoder picks the wrong city for ambiguous names), and every result
  * farther than 1.5x the radius is dropped (distance from the API, or computed
  * from the coordinates). With fewer than 5 kept results it drops one filter at
- * a time, in this order: tags, popularity, Michelin, price, the open day. The
- * open day goes last because a closed restaurant is the worst outcome. Every
- * drop is named in `loosened`. Strict results always come first; looser steps
- * only fill the slots that are left.
+ * a time, in this order: tags, popularity, Michelin, price, the open day. An
+ * ask for a bare category keeps it longer: popularity, Michelin, price, the
+ * category, the open day, because a bar for a dinner ask is worse than a
+ * restaurant that misses one option. The open day goes last because a closed
+ * restaurant is the worst outcome, and a place whose own hours say closed that
+ * day never comes back on any step. Every drop is named in `loosened`, the
+ * whole search's and each result's own. Strict results always come first;
+ * looser steps only fill the slots that are left.
  * @throws QlooLocalityMismatchError when results came back but none of them is
  *   near the destination.
  */
@@ -160,14 +166,15 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
 
   // In the order they are dropped.
   const filters: { drop: LoosenedFilter; params: QlooParams }[] = [];
-  if (hasTags) {
-    filters.push({ drop: "tags", params: { "filter.tags": input.tags, "operator.filter.tags": input.tagsOperator } });
-  }
+  const tagFilter = { drop: "tags" as const, params: { "filter.tags": input.tags, "operator.filter.tags": input.tagsOperator } };
+  const bareCategory = hasTags && isCategoryTagFilter(input.tags ?? []);
+  if (hasTags && !bareCategory) filters.push(tagFilter);
   if (input.popularityMax !== undefined) {
     filters.push({ drop: "popularity", params: { "filter.popularity.max": input.popularityMax } });
   }
   if (input.michelin) filters.push({ drop: "michelin", params: { "filter.external.exists": "michelin" } });
   if (hasPrice) filters.push({ drop: "price", params: { "filter.price_level.max": input.priceMax } });
+  if (bareCategory) filters.push(tagFilter);
   if (input.openDay) filters.push({ drop: "hours", params: { "filter.hours": input.openDay } });
 
   // Strict first, then each loosening step in order. Each step keeps the
@@ -192,6 +199,7 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
 
   for (const step of steps) {
     if (step.drop) loosened.push(step.drop);
+    const dropped = [...loosened];
     const { data, call } = await client.get("/v2/insights", step.params, {
       schema: insightsPlacesResponseSchema,
       tripId: ctx?.tripId,
@@ -203,9 +211,10 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
       if (seen.has(raw.entity_id)) continue;
       seen.add(raw.entity_id);
       const place = normalizePlace(raw);
+      if (input.openDay && closedOn(place.properties.hours, input.openDay)) continue;
       const distanceM = distanceFromDestination(destination, place, raw.query.distance);
-      if (isTooFar(destination, distanceM)) far.push(toResult({ raw, place, distanceM }, []));
-      else stage.push({ raw, place, distanceM });
+      if (isTooFar(destination, distanceM)) far.push(toResult({ raw, place, distanceM, dropped }, []));
+      else stage.push({ raw, place, distanceM, dropped });
     }
     stage.sort((a, b) => b.raw.query.affinity - a.raw.query.affinity);
     stages.push(stage);
@@ -225,9 +234,9 @@ export const findPlaces: FindPlaces = async (input, ctx) => {
   return { results, loosened, localityCheck, calls };
 };
 
-type Candidate = { raw: RawInsightsPlace; place: NormalizedPlace; distanceM: number | null };
+type Candidate = { raw: RawInsightsPlace; place: NormalizedPlace; distanceM: number | null; dropped: LoosenedFilter[] };
 
-function toResult({ raw, place, distanceM }: Candidate, affinities: readonly number[]): PlaceResult {
+function toResult({ raw, place, distanceM, dropped }: Candidate, affinities: readonly number[]): PlaceResult {
   return {
     place,
     category: categoryOf(place),
@@ -235,6 +244,7 @@ function toResult({ raw, place, distanceM }: Candidate, affinities: readonly num
     score: displayScore(raw.query.affinity, affinities),
     signalScores: signalScoresOf(raw),
     distanceM,
+    ...(dropped.length > 0 ? { loosened: dropped } : {}),
   };
 }
 

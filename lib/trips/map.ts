@@ -326,3 +326,33 @@ export function askFiltersOfQuery(query: Record<string, unknown>): AskFilters {
     ...(openDay ? { openDay } : {}),
   };
 }
+
+/** The point and radius of an ask's area, once it resolved inside the destination. */
+export type AskArea = { lat: number; lon: number; radiusM: number };
+
+/** What a rerun of an ask keeps. `tags` is empty when the ask has none: the caller uses the category. */
+export type AskRerun = AskFilters & { tags: string[]; priceMax?: number; area?: AskArea };
+
+const AskAreaSchema = z.object({ lat: z.number(), lon: z.number(), radiusM: z.number().positive() });
+
+/** Tag ids only: the tags the advisor typed are words, and the upstream filter takes ids. */
+function tagIdsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((tag): tag is string => typeof tag === "string" && tag.startsWith("urn:tag:")) : [];
+}
+
+/**
+ * The one reader of an ask's stored search, so remove_place and the UI's
+ * replace rerun the same thing: the tag ids it searched on, its price cap, its
+ * area and its search options.
+ */
+export function askRerunOfQuery(query: Record<string, unknown>): AskRerun {
+  const resolved = tagIdsOf(query.resolvedTags);
+  const price = query.priceMax ?? query.price;
+  const area = AskAreaSchema.safeParse(query.resolvedArea);
+  return {
+    tags: resolved.length > 0 ? resolved : tagIdsOf(query.tags),
+    ...(typeof price === "number" && price >= 1 && price <= 4 ? { priceMax: price } : {}),
+    ...(area.success ? { area: area.data } : {}),
+    ...askFiltersOfQuery(query),
+  };
+}

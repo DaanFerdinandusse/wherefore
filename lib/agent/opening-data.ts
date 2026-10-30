@@ -49,6 +49,7 @@ export async function loadChatOpening(chatId: string, user: AuthUser): Promise<C
     startDate: trip.datesMode === "exact" ? trip.startDate : undefined,
     endDate: trip.datesMode === "exact" ? trip.endDate : undefined,
     favoritesCount: ctx.signals.favorites.length,
+    savedFavorites: ctx.savedFavorites,
     favoriteOwners: ctx.signals.favoritesUsed.map((f) => f.clientName),
     advisorPlacesInCity: ctx.advisorPlaces.length,
     filled,

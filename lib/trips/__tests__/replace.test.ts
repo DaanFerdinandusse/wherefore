@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { MAX_EXCLUDED } from "@/lib/agent/tools/signals";
 import { addFavorite, createClient, setMediaFavorites } from "@/lib/clients";
 import { db } from "@/lib/db";
 import { cleanup, hasDatabase, LISBON, testRun } from "@/lib/db/__tests__/fixtures";
@@ -12,7 +13,7 @@ import { createQlooClient } from "@/lib/qloo/client";
 import type { PlaceResult } from "@/lib/qloo/contracts";
 import { addAskPlaces, createAsk, createTrip, listTripPlaceCards, setSlots, upsertTripPlaces } from "@/lib/trips";
 import { signalSetHash } from "@/lib/trips/evidence";
-import { pickReplacement, replaceTripPlace, replacementQuery } from "@/lib/trips/replace";
+import { pickReplacement, replaceTripPlace, replacementQuery, replacementScore } from "@/lib/trips/replace";
 
 const template = insightsFixture.results.entities[0]!;
 function rawPlace(entityId: string, name: string, affinity: number, favorites: [string, string]) {
@@ -82,6 +83,36 @@ describe("replacementQuery", () => {
     expect(q.tags.length).toBeGreaterThan(0);
   });
 
+  it("reruns the ids the search used and its price cap when the advisor passed no tags", () => {
+    const q = replacementQuery({
+      category: "drink",
+      placeTypes: [],
+      asks: [{ askId: "a", rank: 2, query: { intent: "natural wine bars", resolvedTags: ["urn:tag:wine:natural"], priceMax: 2 } }],
+    });
+    expect(q).toEqual({ tags: ["urn:tag:wine:natural"], priceMax: 2, askId: "a", rank: 2 });
+  });
+
+  it("never sends the advisor's own words as tag ids", () => {
+    const q = replacementQuery({
+      category: "eat",
+      placeTypes: [],
+      asks: [{ askId: "a", rank: 1, query: { tags: ["seafood"], resolvedTags: ["urn:tag:seafood"] } }],
+    });
+    expect(q.tags).toEqual(["urn:tag:seafood"]);
+    const words = replacementQuery({ category: "eat", placeTypes: [], asks: [{ askId: "a", rank: 1, query: { tags: ["seafood"] } }] });
+    expect(words.tags).toEqual(["urn:tag:category:place:restaurant"]);
+  });
+
+  it("keeps the price cap and the area when the category answers instead of the ask's tags", () => {
+    const area = { lat: 38.71, lon: -9.13, radiusM: 1_500 };
+    const q = replacementQuery({
+      category: "eat",
+      placeTypes: [],
+      asks: [{ askId: "a", rank: 1, query: { intent: "dinner", priceMax: 2, resolvedTags: [], resolvedArea: area } }],
+    });
+    expect(q).toEqual({ tags: ["urn:tag:category:place:restaurant"], priceMax: 2, area, askId: "a", rank: 1 });
+  });
+
   it("asks the ask again when the removed place came from one with tags", () => {
     const q = replacementQuery({
       category: "drink",
@@ -118,6 +149,23 @@ describe("pickReplacement", () => {
     expect(pickReplacement([bar, restaurant], [], "eat")?.place.entityId).toBe("restaurant");
     expect(pickReplacement([bar], [], "eat")?.place.entityId).toBe("bar");
     expect(pickReplacement([bar], ["bar"], "eat")).toBeNull();
+  });
+});
+
+describe("replacementScore", () => {
+  const best = { affinity: 0.9, score: 80 };
+  const row = (affinity: number | null, signalHash: string | null, onBoard = true) => ({ affinity, signalHash, onBoard });
+
+  it("ranks only against rows of the same signal set that are still on the board", () => {
+    const board = [row(0.95, "now"), row(0.85, "now"), row(0.99, "before"), row(0.99, "now", false)];
+    // In the middle of 0.95, 0.90 and 0.85, not on top of the old affinities.
+    expect(replacementScore(best, board, "now")).toBe(77);
+  });
+
+  it("keeps the search's own score when no row compares", () => {
+    // Every itinerary change moves the hash: picks lift the affinities, so the old rows say nothing.
+    expect(replacementScore(best, [row(0.8, "before"), row(0.8, "before")], "now")).toBe(80);
+    expect(replacementScore(best, [], "now")).toBe(80);
   });
 });
 
@@ -195,8 +243,8 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
       { entityId: FAV_A, name: "Via Carota", share: 60 },
       { entityId: FAV_B, name: "Lilia", share: 40 },
     ]);
-    // Scored against the trip's own affinities (0.81, 0.80, 0.79): the middle.
-    expect(card?.score).toBe(77);
+    // Scored against what is left on the board (0.79): the removed place no longer counts.
+    expect(card?.score).toBe(94);
     expect(card?.askIds).toEqual([askId]);
 
     const [removed] = await db.select().from(tripPlaces).where(eq(tripPlaces.id, removedId));
@@ -225,7 +273,7 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
       tripId,
       {
         label: "Dinner",
-        query: { tags: ["urn:tag:category:place:restaurant"], popularityMax: 0.6, michelin: true, openDay: "monday" },
+        query: { tags: ["urn:tag:category:place:restaurant"], popularityMax: 0.6, michelin: true, openDay: "tuesday" },
       },
       run.owner,
     );
@@ -243,16 +291,83 @@ describe.skipIf(!hasDatabase)("replaceTripPlace", () => {
     const params = urls[0]!.searchParams;
     expect(params.get("filter.popularity.max")).toBe("0.6");
     expect(params.get("filter.external.exists")).toBe("michelin");
-    expect(params.get("filter.hours")).toBe("monday");
-    // One place back on every step, so every filter went, the open day last.
+    expect(params.get("filter.hours")).toBe("tuesday");
+    // One place back from the first step, so the search tried to drop every
+    // filter, the open day last. That one place needed none of it.
     expect(urls.at(-1)!.searchParams.has("filter.hours")).toBe(false);
-    expect(notes).toEqual([
-      "Too few less known places, so check which of these carry the Less known chip. " +
-        "Too few Michelin places, so check which of these carry the Michelin chip. " +
-        "Too few places are open on Monday, so check the hours on these.",
-    ]);
+    expect(notes).toEqual([]);
     // The facts reach the card from places.properties.
     expect(card).toMatchObject({ name: "Hidden gem", popularity: 0.02, michelin: true });
+  });
+
+  it("says what the place it brought back needed", async () => {
+    const placeIds = await upsertPlaces([
+      { entityId: entity("needs-filter"), name: "Needs filter", primaryType: "urn:tag:genre:place:restaurant" },
+    ]);
+    const placeId = placeIds[entity("needs-filter")]!;
+    const written = await upsertTripPlaces(tripId, [{ placeId, source: "ask", category: "eat", bestAffinity: 0.7, bestScore: 50 }], run.owner);
+    const ask = await createAsk(tripId, { label: "Lunch", query: { openDay: "tuesday" } }, run.owner);
+    await addAskPlaces(ask.id, [{ tripPlaceId: written[placeId]!, rank: 1, score: 50 }], run.owner);
+    const client = createQlooClient({
+      apiKey: "k",
+      baseUrl: "https://api.example.test",
+      fetch: vi.fn<typeof globalThis.fetch>(async (input) => {
+        const open = new URL(String(input)).searchParams.has("filter.hours");
+        const entities = open ? [] : [rawPlace(entity("no-hours-known"), "Check its hours", 0.8, favs)];
+        return new Response(JSON.stringify({ success: true, results: { entities } }), { status: 200 });
+      }),
+      store: memoryCacheStore(),
+      sleep: async () => {},
+    });
+    const notes: string[] = [];
+    const card = await replaceTripPlace(tripId, written[placeId]!, run.owner, { client, onNote: (note) => notes.push(note) });
+    expect(card?.name).toBe("Check its hours");
+    expect(notes).toEqual(["Too few places are listed as open on Tuesday, so check the hours of this one."]);
+  });
+
+  it("keeps the removal and says so when the search fails", async () => {
+    const placeIds = await upsertPlaces([
+      { entityId: entity("search-fails"), name: "Search fails", primaryType: "urn:tag:genre:place:restaurant" },
+    ]);
+    const placeId = placeIds[entity("search-fails")]!;
+    const written = await upsertTripPlaces(tripId, [{ placeId, source: "ask", category: "eat", bestAffinity: 0.7, bestScore: 50 }], run.owner);
+    const notes: string[] = [];
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const card = await replaceTripPlace(tripId, written[placeId]!, run.owner, {
+      findPlaces: async () => {
+        throw new Error("414");
+      },
+      onNote: (note) => notes.push(note),
+    });
+    error.mockRestore();
+    expect(card).toBeNull();
+    expect(notes).toEqual(["The search for a replacement did not answer, so ask for one in the chat."]);
+    const [row] = await db.select().from(tripPlaces).where(eq(tripPlaces.id, written[placeId]!));
+    expect(row?.status).toBe("removed");
+  });
+
+  it("caps the exclusions for the request, the removed place included, and still checks the whole trip", async () => {
+    const extra = Array.from({ length: MAX_EXCLUDED + 5 }, (_, i) => ({ entityId: entity(`many-${i}`), name: `Many ${i}` }));
+    const placeIds = await upsertPlaces([
+      ...extra,
+      { entityId: entity("capped-off"), name: "Capped off", primaryType: "urn:tag:genre:place:restaurant" },
+    ]);
+    const written = await upsertTripPlaces(
+      tripId,
+      [...extra, { entityId: entity("capped-off") }].map((p) => ({ placeId: placeIds[p.entityId]!, source: "ask" as const, category: "eat" as const })),
+      run.owner,
+    );
+    const removedPlaceId = written[placeIds[entity("capped-off")]!]!;
+    const { client, urls } = fakeClient([
+      rawPlace(entity("many-0"), "Many 0", 0.85, favs),
+      rawPlace(entity("past-the-cap"), "Past the cap", 0.8, favs),
+    ]);
+    const card = await replaceTripPlace(tripId, removedPlaceId, run.owner, { client });
+    const sent = urls[0]!.searchParams.get("filter.exclude.entities")!.split(",");
+    expect(sent).toHaveLength(MAX_EXCLUDED);
+    expect(sent).toContain(entity("capped-off"));
+    // A place on the trip past the cap can come back from the search: it is never the pick.
+    expect(card?.name).toBe("Past the cap");
   });
 
   it("returns null when nothing new comes back, and the removal stands", async () => {

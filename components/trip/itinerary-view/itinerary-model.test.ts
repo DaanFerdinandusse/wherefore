@@ -196,6 +196,8 @@ describe("a place card", () => {
     expect(headline({ dishes: ["Oysters"], because: [via, lilia] })).toBe("For the oysters");
     expect(headline({ keywords: [{ name: "Tinned fish", count: 132 }], because: [via, lilia] })).toBe("Known for tinned fish");
     expect(headline({ because: [via, { ...lilia, tags: ["Warm"] }] })).toBe("Via Carota fans come here");
+    // A band's fans are not known to eat here: taste affinity says less than that.
+    expect(headline({ because: [{ entityId: "E9", name: "Khruangbin", share: 40, media: true }] })).toBeNull();
     expect(headline({ because: [{ entityId: "trip-picks", name: "This trip's picks", share: 90, tags: ["Warm", "Cozy"] }, via] })).toBe(
       "Via Carota fans come here",
     );
@@ -234,6 +236,20 @@ describe("a place card", () => {
     expect(subLine({ category: "drink" }, "MX")).toBe("Bar");
     expect(priceLabel(2, "GB")).toBe("££");
     expect(priceLabel(undefined, "PT")).toBeNull();
+  });
+
+  it("says a taste match for an artist or film, never that their fans go here", () => {
+    const box = whyBox(
+      {
+        because: [
+          { entityId: "E1", name: "Khruangbin", share: 27, media: true },
+          { entityId: "E2", name: "Via Carota", share: 25 },
+        ],
+        sharedTags: [],
+      },
+      "Ana Ruiz",
+    );
+    expect(box?.lines.map((line) => line.text)).toEqual(["Taste match with Khruangbin, 27%", "Via Carota fans too, 25%"]);
   });
 
   it("builds the Why box from the note, favorites, keywords and shared tags", () => {

@@ -48,9 +48,9 @@ Key: `qloo:` + sha256 of `JSON.stringify([endpoint, pairs])`, pairs sorted by ke
 
 ## Fallbacks
 
-Fewer than 5 kept results (or `take` if smaller): drop `filter.tags`, then the popularity cap, then Michelin, then the price cap, and last the open day, because a closed restaurant is the worst outcome. Strict results always come first, sorted by affinity; each looser step only fills the slots that are left, so a loosened result never displaces a strict one even with a higher affinity. Scores stay affinity-based over the final set.
+Fewer than 5 kept results (or `take` if smaller): drop `filter.tags`, then the popularity cap, then Michelin, then the price cap, and last the open day, because a closed restaurant is the worst outcome. An ask for a bare category (`isCategoryTagFilter`) keeps it longer: popularity, Michelin, price, the category, the open day. A place whose own hours say closed on the open day never comes back on any step (`closedOn`); unknown hours stay. Strict results always come first, sorted by affinity; each looser step only fills the slots that are left, so a loosened result never displaces a strict one even with a higher affinity. Scores stay affinity-based over the final set.
 
-`loosened` lists what was not applied as asked:
+`loosened` lists what was not applied as asked, for the whole search; each result carries its own `loosened` when it needed a drop, so one place can be told apart from the list:
 
 | Value | Meaning | UI copy |
 |---|---|---|
@@ -58,7 +58,7 @@ Fewer than 5 kept results (or `take` if smaller): drop `filter.tags`, then the p
 | `"popularity"` | too few less known places, `filter.popularity.max` dropped | "Too few less known places, so check which of these carry the Less known chip." |
 | `"michelin"` | too few Michelin places, `filter.external.exists` dropped | "Too few Michelin places, so check which of these carry the Michelin chip." |
 | `"price"` | too few results, price cap dropped | "Price cap dropped to find enough places" |
-| `"hours"` | too few places open that day, `filter.hours` dropped | "Too few places are open on Monday, so check the hours on these." |
+| `"hours"` | too few places listed as open that day (closed, or no hours block), `filter.hours` dropped | "Too few places are listed as open on Monday, so check the hours on these." |
 | `"price_not_applicable"` | `priceMax` asked on a see or stay ask; never sent | "Price cap not applied to museums and hotels" |
 
 The price filter drops places without a `price_level` (museums, hotels), so when every tag is a see or stay category (`isUnpricedTagFilter`), `findPlaces` does not send `priceMax` and returns `"price_not_applicable"` first in `loosened`, whether or not the tags were dropped later.

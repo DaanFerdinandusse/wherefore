@@ -227,7 +227,7 @@ export function useWorkspaceActions() {
         dispatch({ type: "upsertPlace", card: replacement });
         toast(note ? `Replaced with ${replacement.name}. ${note}` : `Replaced with ${replacement.name}`);
       } else {
-        toast(`${name} is off the list for ${firstName(state.trip.clientName)}. Nothing new came up to replace it.`);
+        toast(`${name} is off the list for ${firstName(state.trip.clientName)}. ${note ?? "Nothing new came up to replace it."}`);
       }
     }
 

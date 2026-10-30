@@ -23,6 +23,11 @@ export function signalSetHash(entityIds: readonly string[]): string | undefined 
   return `s${ids.length}-${fnv1a(ids.join("|"))}`;
 }
 
+/** Was a stored affinity scored on this signal set? A row or a set without a hash cannot tell, and counts. */
+export function sameSignalSet(rowHash: string | null | undefined, hash: string | undefined): boolean {
+  return !hash || !rowHash || rowHash === hash;
+}
+
 export type Evidence = {
   affinity?: number | null;
   score?: number | null;

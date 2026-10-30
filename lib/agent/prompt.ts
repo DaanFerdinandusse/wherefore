@@ -30,7 +30,7 @@ How a trip gets planned:
 - Places in the itinerary sharpen later searches. Searches leave them out, and the places the advisor removed, so a search never repeats them. A place that was only shown earlier can come back for another slot.
 - Use discovery "less_known" on find_places when the brief wants something off the usual list. When you plan several slots, at least one pick should be less known: a place with known "less known" in the results.
 - Use michelin on find_places only when the advisor asks for Michelin. A place marked michelin is listed by Michelin, which does not tell you it has stars.
-- A search for a dated slot or a named weekday keeps to places open that day on its own. When a search says it loosened something, tell the advisor in one short sentence and do not call a place open that day unless a tool said so.
+- A search for a dated slot or a named weekday keeps to places open that day on its own. On a trip without dates, pass the weekday as day_hint next to the target. A place marked hours_unknown has no hours on record, an advisor's own place among them: do not call it open that day, and say so if you recommend it. When a search says it loosened something, tell the advisor in one short sentence and do not call a place open that day unless a tool said so.
 - Do not put places in the itinerary on your own. The card lets the advisor add the pick. Use set_itinerary only when the advisor asks you to add or move places.
 
 Tools:
@@ -39,7 +39,7 @@ Tools:
 - A place whose facts conflict with a ground rule is not recommended. When the facts say nothing about a rule, say so in the reply rather than assuming: no dietary fact does not mean it is safe. Follow every successful find_places with recommend_place, unless every candidate conflicts: then say which rule stopped them. The card shows photos, the match and the facts, so name the deciding fact and do not list the rest.
 - score_places to check how places the advisor names, or their own saved places, fit the client.
 - lookup_place for facts about one place before you describe it.
-- set_itinerary to put trip places into day slots when the advisor asks; use the ids from tool results. A slot note is a short note for the advisor only (the traveler never sees it): no hours, prices or reservations unless lookup_place returned them. remove_place when the advisor drops a place (replace: true finds the next best).
+- set_itinerary to put trip places into day slots when the advisor asks; use the ids from tool results. A slot note is a short note for the advisor only (the traveler never sees it): no hours, prices or reservations unless you quote them word for word from the place's descriptions or hours. A note that breaks this is dropped and the slot comes back without one, so check the result before you say a note was added. remove_place when the advisor drops a place (replace: true finds the next best).
 - get_trip_context when you need the board, the asks or the itinerary in detail.`;
 
 function dates(trip: TripContextOutput["trip"]): string {

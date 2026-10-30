@@ -43,6 +43,7 @@ Three more filters on `/v2/insights`, tested live 2026-10-30. All three keep exp
 - `filter.popularity.max=0.6`: popularity is a 0 to 1 percentile at the top level of each entity. In Lisbon it surfaced Ceia at 0.02, rating 4.9. The app calls below 0.6 "less known".
 - `filter.external.exists=michelin`: `external.michelin` is a list of `{ id, stars }` in insights and one `{ id }` under `properties.external` in `/search` and `/entities`. `stars` is often null, so the key means listed, not starred.
 - `filter.hours=monday`: a lower case weekday name. 8 of the top 20 Lisbon restaurants dropped out. A closed day reads `monday: [{ opens: null, closes: null, closed: true }]`. Places with no `hours` block do not pass the filter either.
+- Request length: 8153 characters answered 200, 8270 answered 414 (tested with 203 and 206 excluded ids). An id costs 39 characters in `filter.exclude.entities` or `signal.interests.entities`, so `MAX_EXCLUDED` stays well below that with 24 signals and tags.
 
 ### 3. Category grouping: `filter.tags`
 ```

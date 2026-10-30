@@ -74,6 +74,17 @@ describe("tripDayList", () => {
 describe("choosing on facts in the instructions", () => {
   const text = buildInstructions(undefined, { today: new Date("2027-01-01") });
 
+  it("matches the note rule to what the code keeps", () => {
+    const text = buildInstructions(undefined);
+    expect(text).toContain("unless you quote them word for word from the place's descriptions or hours");
+    expect(text).toContain("the slot comes back without one");
+    expect(text).not.toContain("unless lookup_place returned them");
+  });
+
+  it("says a place may have no hours on record", () => {
+    expect(buildInstructions(undefined)).toContain("A place marked hours_unknown has no hours on record");
+  });
+
   it("does not let the score decide on its own", () => {
     expect(text).toContain("the best fit for the brief, the ground_rules and the facts on each candidate");
     expect(text).toContain("the highest score does not decide on its own");

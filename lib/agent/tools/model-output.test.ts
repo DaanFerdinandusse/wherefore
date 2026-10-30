@@ -83,6 +83,12 @@ describe("findPlacesForModel", () => {
   };
   const read = (o: FindPlacesOutput) => JSON.parse(findPlacesForModel(o).value.split("\n")[1]!) as Record<string, unknown>;
 
+  it("marks only the cards with no hours for that day", () => {
+    const other = { ...card, tripPlaceId: "t2", name: "Ramiro" };
+    const places = read({ ...output, places: [card, other], hoursUnknown: ["t2"] }).places as Record<string, unknown>[];
+    expect(places.map((p) => p.hours_unknown)).toEqual([undefined, true]);
+  });
+
   it("puts the ground rules beside the candidates", () => {
     const out = read({ ...output, groundRules: ["No shellfish", "Walkable evenings"] });
     expect(out.ground_rules).toEqual(["No shellfish", "Walkable evenings"]);

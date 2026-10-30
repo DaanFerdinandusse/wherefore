@@ -333,7 +333,8 @@ function tripPlacesUpsert(tripId: string, rows: TripPlaceUpsert[], scope: ScopeI
         explainability: pick("explainability", sql`${tripPlaces.explainability}`),
         sharedTags: pick("shared_tags", sql`${tripPlaces.sharedTags}`),
         advisorPlaceId: sql`coalesce(${ex("advisor_place_id")}, ${tripPlaces.advisorPlaceId})`,
-        reason: sql`coalesce(${ex("reason")}, ${tripPlaces.reason})`,
+        // A reason names the drivers it was written on, so it goes with them.
+        reason: sql`case when ${BETTER} then ${ex("reason")} else coalesce(${ex("reason")}, ${tripPlaces.reason}) end`,
         updatedAt: sql`now()`,
       },
     })

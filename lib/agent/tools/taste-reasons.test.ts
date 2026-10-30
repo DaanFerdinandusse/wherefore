@@ -45,17 +45,19 @@ const DA_NOI = [tag("Italian", CUISINE), tag("Warm", AMBIENCE), tag("Stylish", A
 let turn: TurnRef;
 let call = 0;
 
-function found(affinity: number): FindPlacesResult {
+const DRIVERS = () => [
+  { entityId: entity("lilia"), score: 0.4 },
+  { entityId: entity("via"), score: 0.3 },
+  { entityId: entity("band"), score: 0.3 },
+];
+
+function found(affinity: number, drivers: { entityId: string; score: number }[] = DRIVERS()): FindPlacesResult {
   const candidate = (name: string, tags: PlaceTag[], score: number) => ({
     place: { ...normalizePlace({ ...template, entity_id: entity(name), name }), tags },
     category: "eat" as const,
     affinity: affinity - (90 - score) * 0.01,
     score,
-    signalScores: [
-      { entityId: entity("lilia"), score: 0.4 },
-      { entityId: entity("via"), score: 0.3 },
-      { entityId: entity("band"), score: 0.3 },
-    ],
+    signalScores: drivers,
     distanceM: null,
   });
   return {
@@ -138,13 +140,25 @@ describe.skipIf(!hasDatabase)("specific reasons through find_places", () => {
     expect(ranked?.explainability.find((d) => d.media)?.name).toBe("Khruangbin");
   });
 
-  it("gives a place found again its tags back, and leaves its reason", async () => {
+  it("keeps the reason and the tags of a place found again on weaker evidence", async () => {
+    mocks.findPlaces.mockResolvedValue(found(0.7));
+    const again = await drain(findPlacesTool({ intent: "a third dinner" }, turn, `${run.entityPrefix}call-${++call}`));
+    expect(daNoi(again).reason).toBe("Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.");
+    expect(daNoi(again).because.find((d) => d.tags)).toEqual(LIKE);
+  });
+
+  it("writes tags and reason again on the new drivers when newer evidence replaces them", async () => {
     mocks.findPlaces.mockResolvedValue(found(0.9));
     const again = await drain(findPlacesTool({ intent: "another dinner" }, turn, `${run.entityPrefix}call-${++call}`));
-    const card = daNoi(again);
-    expect(card.score).toBe(90);
-    expect(card.reason).toBe("Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.");
-    expect(card.because.find((d) => d.tags)).toEqual(LIKE);
+    expect(daNoi(again).score).toBe(90);
+    expect(daNoi(again).reason).toBe("Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.");
+    expect(daNoi(again).because.find((d) => d.tags)).toEqual(LIKE);
+
+    // Via Carota is no driver any more: its reason must not outlive it.
+    mocks.findPlaces.mockResolvedValue(found(0.95, [{ entityId: entity("lilia"), score: 1 }]));
+    const moved = await drain(findPlacesTool({ intent: "one more dinner" }, turn, `${run.entityPrefix}call-${++call}`));
+    expect(daNoi(moved).reason).toBe("Because Ana loves Lilia.");
+    expect(daNoi(moved).because.some((d) => d.tags)).toBe(false);
   });
 });
 

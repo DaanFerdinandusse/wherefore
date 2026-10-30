@@ -197,7 +197,8 @@ const PROPER_ADJECTIVES = new Set(
     "persian israeli georgian basque catalan sicilian neapolitan tuscan roman venetian parisian provencal " +
     "cajun creole hawaiian australian latin cantonese szechuan sichuan taiwanese nepalese pakistani polish " +
     "russian ukrainian hungarian czech balkan levantine colombian venezuelan chilean egyptian senegalese " +
-    "nigerian jamaican singaporean burmese tibetan mongolian uzbek armenian syrian iranian afghan"
+    "nigerian jamaican singaporean burmese tibetan mongolian uzbek armenian syrian iranian afghan iberian " +
+    "tex-mex pan-asian pan-latin"
   ).split(" "),
 );
 
@@ -205,10 +206,19 @@ export function isProperAdjective(word: string): boolean {
   return PROPER_ADJECTIVES.has(word.toLowerCase());
 }
 
+const capitalized = (word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+
+/** One word of a tag: "BBQ" stays, "Tex-Mex" stays, "Japanese-inspired" keeps only its adjective. */
+function wordPhrase(word: string): string {
+  if (word.length > 1 && /\p{Lu}/u.test(word) && word === word.toUpperCase()) return word;
+  const whole = isProperAdjective(word);
+  return word
+    .split("-")
+    .map((part) => (whole || isProperAdjective(part) ? capitalized(part) : part.toLowerCase()))
+    .join("-");
+}
+
 /** A tag as it reads mid-sentence: "Cozy" -> "cozy", "Italian" stays. */
 export function tagPhrase(tag: string): string {
-  return tag
-    .split(/\s+/)
-    .map((word) => (isProperAdjective(word) ? word.charAt(0).toUpperCase() + word.slice(1) : word.toLowerCase()))
-    .join(" ");
+  return tag.split(/\s+/).map(wordPhrase).join(" ");
 }

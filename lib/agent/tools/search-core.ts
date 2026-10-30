@@ -128,12 +128,14 @@ export function rankedOf(ctx: Pick<ToolTrip, "signals">, tripPlaceId: string, it
  * The ask tab's whole result set, ranked in the given order (1 = best).
  * Authoritative: ask_places rows of this ask that are not in `ranked` go,
  * so a retried tool call never leaves the first attempt's extra places.
+ * `replace: false` only updates these rows and leaves the others.
  */
 export async function persistAskPlaces(
   turn: TurnRef,
   ctx: ToolTrip,
   askId: string,
   ranked: RankedPlace[],
+  { replace = true }: { replace?: boolean } = {},
 ): Promise<void> {
   await guarded(turn, (guard) =>
     addAskPlaces(
@@ -146,7 +148,7 @@ export async function persistAskPlaces(
         explainability: r.explainability,
       })),
       ctx.scope,
-      { turn: guard, replace: true },
+      { turn: guard, replace },
     ),
   );
 }
@@ -201,8 +203,9 @@ export type ExplainedCards = { reasons: Map<string, string>; drivers: Map<string
  * explainStep: which favorite each card is like, from the tags of `cards` (one
  * search's candidates) and of their favorites, read here once. Then one model
  * call over the cards without a reason, and grounded reasons and tags written
- * to trip_places (conditional on the turn). A place found again by a later
- * search keeps its reason but has new drivers, so tags are for every card.
+ * to trip_places (conditional on the turn). Newer evidence for a place clears
+ * its tags and its reason together (upsertTripPlaces), so both are written
+ * again here on the same drivers; a card whose evidence held keeps both.
  */
 export async function explainCards(
   turn: TurnRef,
@@ -230,7 +233,6 @@ export async function explainCards(
 
   const drivers = new Map<string, Explainability>();
   for (const card of cards) {
-    // Tags from an earlier search stay: they are what its reason says.
     const candidate = { entityId: card.entityId, tags: byId.get(card.placeId)?.tags ?? [] };
     const tagged = likeDriver(card.because) ? card.because : withOverlap(candidate, card.because, favoriteTags, search);
     if (likeDriver(tagged)) drivers.set(card.tripPlaceId, tagged);

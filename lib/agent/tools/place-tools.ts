@@ -21,7 +21,8 @@ import {
 } from "@/lib/qloo";
 import { upsertPlaces } from "@/lib/places";
 import { saveReplacement, setSlots, setTripPlaceStatus, type SlotInput } from "@/lib/trips";
-import { askFiltersOfQuery, DESCRIPTION_KEYS, descriptionTexts } from "@/lib/trips/map";
+import { askRerunOfQuery, DESCRIPTION_KEYS, descriptionTexts } from "@/lib/trips/map";
+import { pickReplacement } from "@/lib/trips/replace";
 
 import { cacheWrite, guarded, type TurnRef } from "../writes";
 
@@ -228,29 +229,24 @@ export async function removePlaceTool(
     .where(eq(askPlaces.tripPlaceId, found.id))
     .orderBy(askPlaces.rank)
     .limit(1);
-  const query = origin?.query ?? {};
-  const tags =
-    Array.isArray(query.resolvedTags) && query.resolvedTags.every((t) => typeof t === "string")
-      ? (query.resolvedTags as string[])
-      : removed.category !== "other"
-        ? CATEGORY_FILTER_TAGS[removed.category]
-        : [];
-  const priceMax = typeof query.priceMax === "number" ? query.priceMax : undefined;
-  const filters = askFiltersOfQuery(query);
+  const { tags: askTags, priceMax, area, ...filters } = askRerunOfQuery(origin?.query ?? {});
+  const tags = askTags.length > 0 ? askTags : removed.category !== "other" ? CATEGORY_FILTER_TAGS[removed.category] : [];
 
   const onTrip = await db
     .select({ entityId: places.entityId })
     .from(places)
     .innerJoin(tripPlaces, eq(tripPlaces.placeId, places.id))
     .where(eq(tripPlaces.tripId, turn.tripId));
-  const excludeIds = searchExclusions(onTrip.map((r) => r.entityId));
+  const onTripIds = onTrip.map((r) => r.entityId);
+  // The itinerary and the removed places first: the request has a cap, the pick
+  // below checks every place on the trip.
+  const excludeIds = searchExclusions(ctx.excludeIds, onTripIds);
 
   let results: PlaceResult[];
-  let note: string | undefined;
   try {
     const result = await findPlaces(
       {
-        destination: ctx.destination,
+        destination: area ? { ...ctx.destination, ...area } : ctx.destination,
         signals: ctx.signals.signals,
         ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
         ...(priceMax ? { priceMax } : {}),
@@ -262,14 +258,15 @@ export async function removePlaceTool(
     );
     await logCalls(turn, ctx, result.calls, origin ? `ask:${origin.askId}` : "manual", { toolCallId, step: "replace" }, result.loosened);
     results = result.results;
-    note = replacementNote(result.loosened, filters.openDay);
   } catch (error) {
     if (error instanceof QlooLocalityMismatchError) return { removed, note: "No replacement: the search came back from another city." };
     throw new FatalError(`Removed ${removed.name}, but the search for a replacement did not answer. Ask again for one.`);
   }
-  const pick =
-    results.find((r) => removed.category === "other" || r.category === removed.category) ?? results[0];
+  const pick = pickReplacement(results, onTripIds, removed.category);
   if (!pick) return { removed, note: "No other place matched, so nothing replaced it." };
+  const note = replacementNote(pick.loosened ?? [], filters.openDay, {
+    otherKind: removed.category !== "other" && pick.category !== removed.category,
+  });
 
   const item: BoardItem = {
     place: pick.place,

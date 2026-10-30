@@ -51,6 +51,8 @@ export type PlaceResult = {
   /** Meters from the destination point: the API's distance, or computed from
    *  the coordinates when it gives none. Null without either. */
   distanceM: number | null;
+  /** What was dropped to reach this result. Left out for a strict result. */
+  loosened?: LoosenedFilter[];
 };
 
 /** One request to the upstream, for the "How we got this" panel and trip_calls. */
@@ -100,7 +102,7 @@ export type EntityCandidate = FavoriteCandidate & {
  * - "popularity": too few less known places, so the popularity cap was dropped.
  * - "michelin": too few Michelin places, so that filter was dropped.
  * - "price": too few results, so the price cap was dropped.
- * - "hours": too few places open that day, so the open day was dropped. Always
+ * - "hours": too few places listed as open that day, so the open day was dropped. Always
  *   the last to go: a closed restaurant is the worst outcome.
  * - "price_not_applicable": a price cap was asked for a see or stay ask
  *   (museums, hotels carry no price level), so it was never applied. The UI

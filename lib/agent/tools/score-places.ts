@@ -10,6 +10,7 @@ import { nameMatches } from "@/lib/demo/rules";
 import { upsertPlaces } from "@/lib/places";
 import { displayScore, haversineM, MAX_DISTANCE_FACTOR, scoreEntities, searchEntities, type QlooCall } from "@/lib/qloo";
 import { listTripPlaceCards } from "@/lib/trips";
+import { sameSignalSet } from "@/lib/trips/evidence";
 import { placeFactsOf } from "@/lib/trips/map";
 
 import { cacheWrite, type TurnRef } from "../writes";
@@ -101,9 +102,10 @@ export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef, to
 
   // The board's scale: this trip's current best affinities, scored against
   // the same signals as these (lib/trips/evidence.ts); others do not compare.
-  // Every itinerary change moves the signal set, so the board can hold none:
-  // then its best places are scored in the same call, for the scale only,
-  // instead of ranking a lone place against itself.
+  // Every itinerary change moves the signal set, so the board can hold none,
+  // and scoring a pick leaves its own signal out, so these can run on fewer
+  // signals than the board: then its best places are scored in the same call,
+  // for the scale only, instead of ranking a lone place against itself.
   const hash = signalHashOf(ctx);
   const boardRows = await db
     .select({
@@ -116,7 +118,8 @@ export async function scorePlacesTool(input: ScorePlacesInput, turn: TurnRef, to
     .innerJoin(places, eq(places.id, tripPlaces.placeId))
     .where(and(eq(tripPlaces.tripId, turn.tripId), isNotNull(tripPlaces.bestAffinity)))
     .orderBy(desc(tripPlaces.bestAffinity));
-  const sameSet = boardRows.filter((r) => !hash || !r.signalHash || r.signalHash === hash);
+  const fullSet = signals.length === ctx.signals.signals.length;
+  const sameSet = fullSet ? boardRows.filter((r) => sameSignalSet(r.signalHash, hash)) : [];
   const picks = new Set(ctx.signals.tripPickSignals);
   const scaleIds =
     sameSet.length > 0

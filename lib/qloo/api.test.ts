@@ -8,10 +8,12 @@ import tagsFixture from "./__fixtures__/tags.json";
 import { findPlaces, findTags, scoreEntities, tastePortrait } from "./api";
 import { memoryCacheStore } from "./cache";
 import { createQlooClient } from "./client";
+import { MAX_EXCLUDED, MAX_SIGNALS } from "../agent/tools/signals";
 import { QlooLocalityMismatchError } from "./errors";
-import { CATEGORY_FILTER_TAGS, isUnpricedTagFilter } from "./normalize";
+import { CATEGORY_FILTER_TAGS, closedOn, isCategoryTagFilter, isUnpricedTagFilter } from "./normalize";
 
 const template = insightsFixture.results.entities[0];
+const SEAFOOD = "urn:tag:genre:place:restaurant:seafood";
 
 /** n insights results cloned from the Feitoria fixture, affinities descending. */
 function entities(n: number, prefix: string) {
@@ -71,7 +73,7 @@ describe("findPlaces", () => {
       return { results: { entities: entities(8, "loose") } };
     });
     const out = await findPlaces(
-      { destination: lisbon, signals, tags: ["urn:tag:category:place:wine_bar"], priceMax: 2, take: 8 },
+      { destination: lisbon, signals, tags: [SEAFOOD], priceMax: 2, take: 8 },
       { client },
     );
     expect(out.loosened).toEqual(["tags", "price"]);
@@ -92,7 +94,7 @@ describe("findPlaces", () => {
         : { results: { entities: entities(6, "loose") } },
     );
     const out = await findPlaces(
-      { destination: lisbon, signals, tags: ["urn:tag:category:place:cafe"], priceMax: 2, take: 8 },
+      { destination: lisbon, signals, tags: [SEAFOOD], priceMax: 2, take: 8 },
       { client },
     );
     expect(out.loosened).toEqual(["tags"]);
@@ -130,13 +132,13 @@ describe("findPlaces", () => {
   it("sends the less known, Michelin and open day filters", async () => {
     const { client, urls } = clientFor(() => ({ results: { entities: entities(6, "strict") } }));
     const out = await findPlaces(
-      { destination: lisbon, signals, popularityMax: 0.6, michelin: true, openDay: "monday", take: 6 },
+      { destination: lisbon, signals, popularityMax: 0.6, michelin: true, openDay: "friday", take: 6 },
       { client },
     );
     const q = urls[0].searchParams;
     expect(q.get("filter.popularity.max")).toBe("0.6");
     expect(q.get("filter.external.exists")).toBe("michelin");
-    expect(q.get("filter.hours")).toBe("monday");
+    expect(q.get("filter.hours")).toBe("friday");
     expect(urls).toHaveLength(1);
     expect(out.loosened).toEqual([]);
   });
@@ -154,7 +156,7 @@ describe("findPlaces", () => {
       {
         destination: lisbon,
         signals,
-        tags: ["urn:tag:category:place:wine_bar"],
+        tags: [SEAFOOD],
         popularityMax: 0.6,
         michelin: true,
         priceMax: 2,
@@ -175,6 +177,92 @@ describe("findPlaces", () => {
     expect(out.loosened).toEqual(["tags", "popularity", "michelin", "price", "hours"]);
   });
 
+  it("keeps a bare category past the options and the price, and still drops the open day last", async () => {
+    const { client, urls } = clientFor(() => ({ results: { entities: [] } }));
+    const out = await findPlaces(
+      {
+        destination: lisbon,
+        signals,
+        tags: CATEGORY_FILTER_TAGS.eat,
+        popularityMax: 0.6,
+        michelin: true,
+        priceMax: 2,
+        openDay: "monday",
+        take: 5,
+      },
+      { client },
+    );
+    expect(out.loosened).toEqual(["popularity", "michelin", "price", "tags", "hours"]);
+    expect(urls[3].searchParams.get("filter.tags")).toBe(CATEGORY_FILTER_TAGS.eat[0]);
+    expect(urls[3].searchParams.has("filter.price_level.max")).toBe(false);
+    expect(urls[4].searchParams.has("filter.tags")).toBe(false);
+    expect(urls[4].searchParams.get("filter.hours")).toBe("monday");
+  });
+
+  it("finds restaurants without the Michelin filter before it gives up on restaurants", async () => {
+    const { client, urls } = clientFor((url) =>
+      url.searchParams.has("filter.external.exists") || !url.searchParams.has("filter.tags")
+        ? { results: { entities: [] } }
+        : { results: { entities: entities(6, "restaurant") } },
+    );
+    const out = await findPlaces(
+      { destination: lisbon, signals, tags: CATEGORY_FILTER_TAGS.eat, michelin: true, take: 5 },
+      { client },
+    );
+    expect(out.loosened).toEqual(["michelin"]);
+    expect(urls).toHaveLength(2);
+    expect(out.results).toHaveLength(5);
+  });
+
+  it("says on each result what it took to reach it", async () => {
+    const { client } = clientFor((url) =>
+      url.searchParams.has("filter.popularity.max")
+        ? { results: { entities: entities(2, "strict") } }
+        : { results: { entities: entities(5, "loose") } },
+    );
+    const out = await findPlaces({ destination: lisbon, signals, popularityMax: 0.6, take: 5 }, { client });
+    expect(out.loosened).toEqual(["popularity"]);
+    expect(out.results.map((r) => r.loosened)).toEqual([undefined, undefined, ["popularity"], ["popularity"], ["popularity"]]);
+  });
+
+  it("never returns a place whose own hours say closed that day, and keeps unknown hours", async () => {
+    const { properties } = template;
+    const noHours = { ...properties, hours: undefined };
+    const { client, urls } = clientFor(() => ({
+      results: {
+        entities: [
+          ...entities(2, "closed"),
+          ...entities(1, "unknown").map((e) => ({ ...e, properties: noHours })),
+          ...entities(1, "open").map((e) => ({ ...e, properties: { ...properties, hours: { monday: [{ opens: "T18:00:00", closes: "T23:00:00" }] } } })),
+        ],
+      },
+    }));
+    const out = await findPlaces({ destination: lisbon, signals, openDay: "monday", take: 5 }, { client });
+    expect(urls.at(-1)!.searchParams.has("filter.hours")).toBe(false);
+    expect(out.results.map((r) => r.place.entityId)).toEqual(["unknown0", "open0"]);
+  });
+
+  it("stays under the upstream's URL limit with every signal, tag and filter and a full exclusion list", async () => {
+    const id = (i: number) => `3F659C60-D199-4E55-9B72-${String(i).padStart(12, "0")}`;
+    const { client, urls } = clientFor(() => ({ results: { entities: entities(6, "strict") } }));
+    await findPlaces(
+      {
+        destination: lisbon,
+        signals: Array.from({ length: MAX_SIGNALS }, (_, i) => id(i)),
+        tags: ["urn:tag:genre:place:restaurant:seafood", "urn:tag:genre:place:restaurant:portuguese", "urn:tag:cuisine:qloo:mediterranean", "urn:tag:ambience:qloo:romantic"],
+        tagsOperator: "union",
+        excludeIds: Array.from({ length: MAX_EXCLUDED }, (_, i) => id(i + 100)),
+        popularityMax: 0.6,
+        michelin: true,
+        priceMax: 2,
+        openDay: "friday",
+        take: 8,
+      },
+      { client },
+    );
+    expect(urls[0].href.length).toBeLessThan(8_000);
+  });
+
   it("keeps the open day while another drop finds enough, and fills from it first", async () => {
     const { client, urls } = clientFor((url) => {
       const q = url.searchParams;
@@ -192,7 +280,7 @@ describe("findPlaces", () => {
     const { client } = clientFor((url) =>
       url.searchParams.has("filter.hours") ? { results: { entities: [] } } : { results: { entities: entities(5, "loose") } },
     );
-    const out = await findPlaces({ destination: lisbon, signals, openDay: "monday", take: 5 }, { client });
+    const out = await findPlaces({ destination: lisbon, signals, openDay: "friday", take: 5 }, { client });
     expect(out.loosened).toEqual(["hours"]);
     expect(out.results).toHaveLength(5);
   });
@@ -326,5 +414,28 @@ describe("isUnpricedTagFilter", () => {
     expect(isUnpricedTagFilter(["urn:tag:genre:place:restaurant:natural_wine"])).toBe(false);
     expect(isUnpricedTagFilter(["urn:tag:ambience:qloo:cozy"])).toBe(false);
     expect(isUnpricedTagFilter([])).toBe(false);
+  });
+});
+
+describe("closedOn", () => {
+  it("reads closed only from the place's own hours for that day", () => {
+    const hours = {
+      monday: [{ opens: null, closes: null, closed: true }],
+      tuesday: [{ opens: "T18:00:00", closes: "T23:00:00", closed: false }],
+      friday: [],
+    };
+    expect(closedOn(hours, "monday")).toBe(true);
+    expect(closedOn(hours, "tuesday")).toBe(false);
+    expect(closedOn(hours, "friday")).toBe(false);
+    expect(closedOn(hours, "sunday")).toBe(false);
+    expect(closedOn(undefined, "monday")).toBe(false);
+  });
+});
+
+describe("isCategoryTagFilter", () => {
+  it("is true only when every tag is a category filter", () => {
+    expect(isCategoryTagFilter(CATEGORY_FILTER_TAGS.drink)).toBe(true);
+    expect(isCategoryTagFilter([...CATEGORY_FILTER_TAGS.eat, SEAFOOD])).toBe(false);
+    expect(isCategoryTagFilter([])).toBe(false);
   });
 });
