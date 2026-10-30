@@ -20,9 +20,11 @@ import {
 } from "@/lib/qloo";
 import { addAskPlaces, listTripPlaceCards, upsertTripPlaces, type TripPlaceUpsert } from "@/lib/trips";
 import { signalSetHash } from "@/lib/trips/evidence";
+import { descriptionTexts } from "@/lib/trips/map";
 import { agentModelRef, agentProviderOptions } from "@/lib/codex/provider";
 
 import { explainPlaces, factSnippets, type ExplainInput } from "../explain";
+import { likeDriver, mediaNotes, searchTags, withOverlap } from "../taste-overlap";
 import { cacheWrite, guarded, writeReasons, type TurnRef } from "../writes";
 
 import { findNamedPlace, type NamedPlace } from "./place-name";
@@ -132,12 +134,14 @@ export function rankedOf(ctx: Pick<ToolTrip, "signals">, tripPlaceId: string, it
  * The ask tab's whole result set, ranked in the given order (1 = best).
  * Authoritative: ask_places rows of this ask that are not in `ranked` go,
  * so a retried tool call never leaves the first attempt's extra places.
+ * `replace: false` only updates these rows and leaves the others.
  */
 export async function persistAskPlaces(
   turn: TurnRef,
   ctx: ToolTrip,
   askId: string,
   ranked: RankedPlace[],
+  { replace = true }: { replace?: boolean } = {},
 ): Promise<void> {
   await guarded(turn, (guard) =>
     addAskPlaces(
@@ -150,7 +154,7 @@ export async function persistAskPlaces(
         explainability: r.explainability,
       })),
       ctx.scope,
-      { turn: guard, replace: true },
+      { turn: guard, replace },
     ),
   );
 }
@@ -198,56 +202,73 @@ export async function scoreAdvisorPlaces(
   };
 }
 
-/** The provider's description fields of a place, in the order they are worth reading. */
-export const DESCRIPTION_KEYS = [
-  "short_description",
-  "description",
-  "overall_description",
-  "ambience_description",
-  "cuisine_description",
-  "unique_selling_points",
-  "neighborhood_description",
-  "physical_setting_description",
-] as const;
-
-/** Every description text of a places row, the short ones first. Verbatim, nothing added. */
-export function descriptionTexts(row: { description: string | null; properties: Record<string, unknown> }): string[] {
-  const texts = [
-    ...DESCRIPTION_KEYS.map((key) => row.properties[key]),
-    row.description,
-  ].flatMap((value) => (typeof value === "string" && value.trim() ? [value.trim()] : []));
-  return [...new Set(texts)];
-}
+/** What explainStep wrote, by trip place id. `drivers`: the cards that have a favorite to be "Like", tags included. */
+export type ExplainedCards = { reasons: Map<string, string>; drivers: Map<string, Explainability> };
 
 /**
- * explainStep: one model call over the cards, grounded reasons written to
- * trip_places.reason (conditional on the turn). Returns the reasons written.
+ * explainStep: which favorite each card is like, from the tags of `cards` (one
+ * search's candidates) and of their favorites, read here once. Then one model
+ * call over the cards without a reason, and grounded reasons and tags written
+ * to trip_places (conditional on the turn). Newer evidence for a place clears
+ * its tags and its reason together (upsertTripPlaces), so both are written
+ * again here on the same drivers; a card whose evidence held keeps both.
  */
 export async function explainCards(
   turn: TurnRef,
   ctx: ToolTrip,
   cards: TripPlaceCard[],
   abortSignal?: AbortSignal,
-): Promise<Map<string, string>> {
-  const todo = cards.filter((c) => !c.reason);
-  if (todo.length === 0) return new Map();
-  const factRows = await db
-    .select({ id: places.id, description: places.description, properties: places.properties })
+): Promise<ExplainedCards> {
+  if (cards.length === 0) return { reasons: new Map(), drivers: new Map() };
+  // All of the client's favorite places, not just this search's drivers: what
+  // sets one favorite apart from the others must not change with the search.
+  const favoriteIds = ctx.signals.favorites.filter((f) => !f.media).map((f) => f.entityId);
+  const rows = await db
+    .select({
+      id: places.id,
+      entityId: places.entityId,
+      tags: places.tags,
+      primaryType: places.primaryType,
+      types: places.types,
+      description: places.description,
+      properties: places.properties,
+    })
     .from(places)
-    .where(inArray(places.id, [...new Set(todo.map((c) => c.placeId))]));
-  const factsByPlace = new Map(factRows.map((r) => [r.id, factSnippets(descriptionTexts(r))]));
-  const inputs: ExplainInput[] = todo.map((card) => ({
-    tripPlaceId: card.tripPlaceId,
-    name: card.name,
-    category: card.category,
-    neighborhood: card.neighborhood,
-    because: card.because
-      .filter((b) => !isPlainDriver(b.entityId))
-      .map((b) => ({ name: b.name, share: b.share, entityId: b.entityId })),
-    sharedTags: card.sharedTags.map((t) => t.name),
-    facts: factsByPlace.get(card.placeId) ?? [],
-    yourPlace: Boolean(card.yourPlace),
-  }));
+    .where(or(inArray(places.id, [...new Set(cards.map((c) => c.placeId))]), inArray(places.entityId, favoriteIds)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const favoriteRows = new Set(favoriteIds);
+  const favorites = new Map(
+    rows.filter((r) => favoriteRows.has(r.entityId)).map((r) => [r.entityId, { tags: r.tags, category: categoryOf(r) }]),
+  );
+  const search = searchTags(cards.map((c) => byId.get(c.placeId)?.tags ?? []));
+
+  const drivers = new Map<string, Explainability>();
+  for (const card of cards) {
+    const candidate = { entityId: card.entityId, tags: byId.get(card.placeId)?.tags ?? [], category: card.category };
+    const tagged = likeDriver(card.because) ? card.because : withOverlap(candidate, card.because, favorites, search);
+    if (likeDriver(tagged)) drivers.set(card.tripPlaceId, tagged);
+  }
+  const notes = mediaNotes(
+    cards.map((card) => ({ id: card.tripPlaceId, category: card.category, because: card.because, keywords: card.keywords })),
+    new Set(ctx.signals.favorites.filter((f) => f.artist).map((f) => f.entityId)),
+  );
+
+  const inputs: ExplainInput[] = cards
+    .filter((card) => !card.reason)
+    .map((card) => {
+      const row = byId.get(card.placeId);
+      return {
+        tripPlaceId: card.tripPlaceId,
+        name: card.name,
+        category: card.category,
+        neighborhood: card.neighborhood,
+        because: (drivers.get(card.tripPlaceId) ?? card.because).filter((b) => !isPlainDriver(b.entityId)),
+        sharedTags: card.sharedTags.map((t) => t.name),
+        facts: row ? factSnippets(descriptionTexts(row)) : [],
+        yourPlace: Boolean(card.yourPlace),
+        ...(notes.get(card.tripPlaceId) ? { mediaNote: notes.get(card.tripPlaceId) } : {}),
+      };
+    });
   const ownerOf: Record<string, string> = {};
   for (const used of ctx.signals.favoritesUsed) {
     for (const name of used.names) ownerOf[name] ??= used.clientName;
@@ -263,9 +284,13 @@ export async function explainCards(
   );
   await writeReasons(
     turn,
-    [...reasons.entries()].map(([tripPlaceId, reason]) => ({ tripPlaceId, reason })),
+    [...new Set([...reasons.keys(), ...drivers.keys()])].map((tripPlaceId) => ({
+      tripPlaceId,
+      reason: reasons.get(tripPlaceId),
+      explainability: drivers.get(tripPlaceId),
+    })),
   );
-  return reasons;
+  return { reasons, drivers };
 }
 
 /** A trip place the model pointed at: the row, or every name it could mean. */

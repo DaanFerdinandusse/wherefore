@@ -139,6 +139,10 @@ describe("categoryOf", () => {
     expect(categoryOf({ primaryType: "urn:tag:genre:place:restaurant:food_court", types })).toBe("eat");
   });
 
+  it("keeps sweets out of the meals", () => {
+    expect(categoryOf({ primaryType: "urn:tag:genre:place:restaurant:ice_cream_shop", types: [] })).toBe("coffee");
+  });
+
   const byName = (name: string) => {
     const raw = cocktail.results.entities.find((e) => e.name === name);
     if (!raw) throw new Error(`fixture has no ${name}`);

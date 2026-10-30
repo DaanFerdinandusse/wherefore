@@ -2,10 +2,84 @@
 // category, the card score and the "because they loved" shares. No I/O, so the
 // UI can import it too (it never names the provider).
 
-import type { Category, Destination, Explainability, PlaceTag, TasteTag } from "@/lib/contracts";
+import type { Category, Destination, Explainability, PlaceTag, SlotName, TasteTag, Weekday } from "@/lib/contracts";
 
 import type { LocalityCandidate, LocalityCheck, NormalizedPlace, PlaceResult, SignalScore } from "./contracts";
 import type { RawLocality, RawPlace } from "./types";
+
+// --------------------------------------------------------- less known, open day
+
+/** "Less known" means a popularity percentile (0 to 1) below this. The search filter and the card chip share it. */
+export const LESS_KNOWN_POPULARITY_MAX = 0.6;
+
+/** An unknown popularity is not less known. */
+export function isLessKnown(popularity: number | undefined): boolean {
+  return popularity !== undefined && popularity < LESS_KNOWN_POPULARITY_MAX;
+}
+
+/** The hours block's keys. */
+export const WEEKDAY_NAMES: readonly Weekday[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+/** Does a place's own hours block say closed on this day? No hours for the day is not closed. */
+export function closedOn(hours: unknown, day: Weekday): boolean {
+  if (!hours || typeof hours !== "object") return false;
+  const spans = (hours as Record<string, unknown>)[day];
+  return Array.isArray(spans) && spans.length > 0 && spans.every((span) => (span as { closed?: unknown } | null)?.closed === true);
+}
+
+/** Does a place's hours block say anything about this day? */
+export function hasHoursOn(hours: unknown, day: Weekday): boolean {
+  if (!hours || typeof hours !== "object") return false;
+  const spans = (hours as Record<string, unknown>)[day];
+  return Array.isArray(spans) && spans.length > 0;
+}
+
+// The hours a slot covers, in minutes from midnight. A guide for "open for
+// the slot", not a booking time: the place only has to be open for part of it.
+export const SLOT_WINDOWS: Record<SlotName, [number, number] | null> = {
+  breakfast: [7 * 60, 11 * 60],
+  morning: [9 * 60, 12 * 60],
+  lunch: [12 * 60, 15 * 60],
+  afternoon: [14 * 60, 18 * 60],
+  dinner: [19 * 60, 22 * 60],
+  night: [21 * 60, 25 * 60],
+  stay: null,
+};
+
+/** "T19:30:00" in minutes from midnight. */
+function spanMinutes(time: unknown): number | null {
+  const match = typeof time === "string" ? /^T?(\d{2}):(\d{2})/.exec(time) : null;
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+/**
+ * Does a place's own hours block have it open for part of this slot? Reads
+ * every span of the day, so it needs hours from /entities: /v2/insights lists
+ * only the first one. Unknown hours, or a time that does not read, do not count
+ * against a place.
+ */
+export function openDuring(hours: unknown, day: Weekday, slot: SlotName): boolean {
+  const window = SLOT_WINDOWS[slot];
+  if (!window || !hours || typeof hours !== "object") return true;
+  const spans = (hours as Record<string, unknown>)[day];
+  if (!Array.isArray(spans) || spans.length === 0) return true;
+  return spans.some((span) => {
+    const { closed, opens, closes } = (span ?? {}) as { closed?: unknown; opens?: unknown; closes?: unknown };
+    if (closed === true) return false;
+    const from = spanMinutes(opens);
+    const to = spanMinutes(closes);
+    if (from === null || to === null) return true;
+    return from < window[1] && (to <= from ? to + 24 * 60 : to) > window[0];
+  });
+}
 
 // ---------------------------------------------------------------- places row
 
@@ -170,6 +244,10 @@ const COFFEE_LEAVES = new Set([
   "coffee_bar",
   "espresso_bar",
   "bakery",
+  // Sweets are a stop between meals, not a lunch or a dinner.
+  "ice_cream_shop",
+  "gelateria",
+  "dessert_shop",
   "patisserie",
   "pastry_shop",
   "cake_shop",
@@ -284,6 +362,12 @@ export const CATEGORY_FILTER_TAGS: Record<Exclude<Category, "other">, string[]> 
   stay: ["urn:tag:category:place:hotel"],
 };
 
+/** True when every tag is a category filter: the ask names a kind of place and nothing more specific. */
+export function isCategoryTagFilter(tags: readonly string[]): boolean {
+  const known = new Set(Object.values(CATEGORY_FILTER_TAGS).flat());
+  return tags.length > 0 && tags.every((tag) => known.has(tag));
+}
+
 // --------------------------------------------------------------------- score
 
 export const SCORE_TOP = 94;
@@ -312,16 +396,19 @@ export const OTHER_FAVORITES_NAME = "Other favorites";
 /** The one driver entry that holds every blended advisor place: a plain bar, never a favorite. */
 export const ADVISOR_DRIVER_ID = "advisor";
 export const ADVISOR_DRIVER_NAME = "Your places";
+/** The one driver entry that holds every place already in the itinerary: a plain bar, never a favorite. */
+export const TRIP_PICKS_DRIVER_ID = "trip-picks";
+export const TRIP_PICKS_DRIVER_NAME = "This trip's picks";
 
-/** True for a driver entry that is not one of the client's favorites ("Your places", "Other favorites"). */
+/** True for a driver entry that is not one of the client's favorites ("Your places", "This trip's picks", "Other favorites"). */
 export function isPlainDriver(entityId: string): boolean {
-  return entityId === ADVISOR_DRIVER_ID || entityId === OTHER_FAVORITES_ID;
+  return entityId === ADVISOR_DRIVER_ID || entityId === TRIP_PICKS_DRIVER_ID || entityId === OTHER_FAVORITES_ID;
 }
 
 /**
  * The favorites a place is credited to by name, for every "Because Ana
- * loves ..." sentence: never "Your places" or "Other favorites", never a
- * driver without a name.
+ * loves ..." sentence: never "Your places", "This trip's picks" or "Other
+ * favorites", never a driver without a name.
  */
 export function favoriteDrivers<T extends { entityId: string; name: string }>(because: readonly T[]): T[] {
   return because.filter((d) => !isPlainDriver(d.entityId) && d.name.trim().length > 0);
@@ -332,9 +419,10 @@ export function favoriteDrivers<T extends { entityId: string; name: string }>(be
  * percentages that sum to exactly 100 (largest remainder rounding), biggest
  * first. Inputs that are not in `favorites` (no name to show) are never
  * rescaled away: together they become one "Other favorites" entry, listed
- * last, so a named share is never inflated. Empty when no driver has a name,
- * or when the API returned no explainability (for example with tag signals
- * only).
+ * last. From about 10 signals the API lists only the strongest (their scores
+ * sum to about 0.92), so there a share runs about 8% high and the weakest
+ * favorites have no row. Empty when no driver has a name, or when the API
+ * returned no explainability (for example with tag signals only).
  */
 export function explainabilityFor(
   result: { signalScores: readonly SignalScore[] },

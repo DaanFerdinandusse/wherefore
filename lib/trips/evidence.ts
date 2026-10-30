@@ -1,5 +1,6 @@
 // Scores are evidence from one result set scored against one set of signals
-// (the travelers' favorites, plus the advisor's places when blended). A
+// (the travelers' favorites, plus the advisor's places when blended, plus the
+// places in the itinerary at that moment). A
 // display score is a rank inside its result set, so two scores from
 // different sets do not compare; affinities do, but only when they were
 // scored against the same signals. The signal set travels as a short hash
@@ -22,6 +23,11 @@ export function signalSetHash(entityIds: readonly string[]): string | undefined 
   return `s${ids.length}-${fnv1a(ids.join("|"))}`;
 }
 
+/** Was a stored affinity scored on this signal set? A row or a set without a hash cannot tell, and counts. */
+export function sameSignalSet(rowHash: string | null | undefined, hash: string | undefined): boolean {
+  return !hash || !rowHash || rowHash === hash;
+}
+
 export type Evidence = {
   affinity?: number | null;
   score?: number | null;
@@ -32,7 +38,8 @@ export type Evidence = {
  * Does `next` replace `current` as a place's best evidence?
  *  - an affinity beats no affinity;
  *  - scored against a different (newer) signal set, the newer one wins: the
- *    advisor changed the favorites, so old affinities no longer apply;
+ *    advisor changed the favorites or the itinerary, so old affinities no
+ *    longer apply;
  *  - same signal set: the higher affinity wins, never the higher rank;
  *  - neither has an affinity: the higher display score wins (legacy rows).
  * Mirrored in SQL by upsertTripPlaces.

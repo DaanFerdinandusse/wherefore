@@ -1,6 +1,7 @@
 import type {
   FindPlacesOutput,
   LookupPlaceOutput,
+  PlaceFacts,
   RecommendPlaceOutput,
   RemovePlaceOutput,
   ScorePlacesOutput,
@@ -8,6 +9,8 @@ import type {
   TripContextOutput,
   TripPlaceCard,
 } from "@/lib/contracts";
+
+import { favoriteDrivers, isLessKnown } from "@/lib/qloo/normalize";
 
 import { CATEGORY_NAME, loosenedCopy } from "./labels";
 
@@ -37,6 +40,31 @@ export function modelText(value: unknown): ModelText {
   return { type: "text", value: asTripData(value) };
 }
 
+/** How many review keywords and dishes one place shows the model. */
+export const MODEL_KEYWORDS = 6;
+export const MODEL_DISHES = 4;
+/** Ground rules are typed by people: as long as the trip header keeps them. */
+const MAX_RULE_CHARS = 140;
+
+/**
+ * What a choice between places can rest on: scores sit within about 0.01 of
+ * each other, so these facts decide, next to the ground rules. Verbatim from
+ * the provider; an unknown fact stays out, so the model can see the gap.
+ */
+export function factsForModel(place: PlaceFacts) {
+  const known = place.popularity === undefined ? undefined : isLessKnown(place.popularity) ? "less known" : "well known";
+  return {
+    ...(place.keywords?.length ? { review_keywords: place.keywords.slice(0, MODEL_KEYWORDS).map((k) => k.name) } : {}),
+    ...(place.dishes?.length ? { dishes: place.dishes.slice(0, MODEL_DISHES) } : {}),
+    ...(place.priceLevel ? { price_level: place.priceLevel } : {}),
+    ...(place.rating !== undefined ? { rating: place.rating } : {}),
+    ...(known ? { known } : {}),
+    ...(place.michelin ? { michelin: true } : {}),
+    ...(place.about ? { about: place.about } : {}),
+    ...(place.practical ? { practical: place.practical } : {}),
+  };
+}
+
 /** A card as the model needs it: what it may say, nothing only the UI uses. */
 export function cardForModel(card: TripPlaceCard) {
   return {
@@ -45,10 +73,11 @@ export function cardForModel(card: TripPlaceCard) {
     category: card.category,
     ...(card.neighborhood ? { neighborhood: card.neighborhood } : {}),
     ...(card.score !== undefined ? { score: card.score } : {}),
-    because: card.because.map((b) => `${b.name} ${b.share}%`),
+    because: favoriteDrivers(card.because).map((b) => `${b.name} ${b.share}%`),
     shared_tags: card.sharedTags.map((t) => t.name),
     ...(card.yourPlace ? { your_place: true, advisor_note: card.yourPlace.note } : {}),
     ...(card.reason ? { reason: card.reason } : {}),
+    ...factsForModel(card),
   };
 }
 
@@ -84,10 +113,16 @@ export function findPlacesForModel(output: FindPlacesOutput): ModelText {
     ...(output.searchedArea ? { searched_area: output.searchedArea } : {}),
     count: output.count,
     elapsed_ms: output.elapsedMs,
-    ...(output.loosened.length ? { loosened: loosenedCopy(output.loosened) } : {}),
+    ...(output.loosened.length ? { loosened: loosenedCopy(output.loosened, output.openDay) } : {}),
     ...(output.error ? { problem: output.error } : {}),
     ...(output.progress ? { note: output.progress } : {}),
-    places: output.places.map(cardForModel),
+    ...(output.groundRules?.length
+      ? { ground_rules: output.groundRules.map((rule) => (rule.length > MAX_RULE_CHARS ? `${rule.slice(0, MAX_RULE_CHARS - 1)}…` : rule)) }
+      : {}),
+    places: output.places.map((card) => ({
+      ...cardForModel(card),
+      ...(output.hoursUnknown?.includes(card.tripPlaceId) ? { hours_unknown: true } : {}),
+    })),
   });
 }
 
@@ -97,7 +132,7 @@ export function recommendPlaceForModel(output: RecommendPlaceOutput): ModelText 
     recommended: cardForModel(output.card),
     ...(output.target ? { for_slot: output.target.label, in_itinerary: false } : {}),
     shown_to_advisor:
-      "The card in the chat shows the photos, the match, the favorites behind it, what reviews mention and the visit facts. Do not repeat them.",
+      "The card in the chat shows the photos, the match, the favorites behind it, what reviews mention and the visit facts. Do not list them: say which fact decided the pick.",
   });
 }
 
@@ -107,8 +142,9 @@ export function scorePlacesForModel(output: ScorePlacesOutput): ModelText {
       ...(p.tripPlaceId ? { id: p.tripPlaceId } : {}),
       name: p.name,
       ...(p.score !== undefined ? { score: p.score } : {}),
-      because: p.because.map((b) => `${b.name} ${b.share}%`),
+      because: favoriteDrivers(p.because).map((b) => `${b.name} ${b.share}%`),
       ...(p.yourPlace ? { your_place: true, advisor_note: p.yourPlace.note } : {}),
+      ...factsForModel(p),
       on_board: Boolean(p.tripPlaceId),
     })),
     ...(output.unresolved?.length ? { not_found: output.unresolved } : {}),

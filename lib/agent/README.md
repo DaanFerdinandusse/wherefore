@@ -24,6 +24,7 @@ the Workflow run, its stream and a conditional UPDATE.
 | `prompt.ts`, `trip-context.ts` | System prompt with the trip header (as a `<trip_data>` block) and the seed-turn brief; `TripContextOutput`, capped under about 3k tokens. |
 | `writes.ts` | Every tool write: the turn guard inside the write statement (`lib/trips/turn-guard.ts`), keyed upserts. |
 | `explain.ts` | explainStep: one model call per ask that only picks favorites, shared tags and one snippet index from the input; the sentence is a template rendered in code. |
+| `taste-overlap.ts` | Which favorite a place is most like and on which tags: `withOverlap`, `likeLine` ("Like Via Carota: Italian, warm, stylish"), `mediaDriver`, `tagPhrase`. Pure and client safe: the cards render the same line. |
 | `tools/index.ts` | The tool set for a turn (`toModelOutput` per tool), `activeToolsFor` (seed turn). |
 | `tools/steps.ts` | Every `"use step"` function, and nothing else (keeps server code out of the workflow bundle). |
 | `tools/*.ts` | The tool bodies: `seed-trip`, `find-places`, `score-places`, `place-tools` (lookup, itinerary, remove), shared `search-core`, `trip-data`, pure `signals`, `category-loop`, `labels`, `model-output`, `notes` (agent slot notes). |
@@ -35,7 +36,7 @@ the Workflow run, its stream and a conditional UPDATE.
 | --- | --- | --- |
 | `seed_trip` | `{}`, forced on step 0 of the seed turn only | `FindPlacesOutput` with `kind: "seed"`, `steps`, `summary: SeedSummary` |
 | `get_trip_context` | `{}` | `TripContextOutput` |
-| `find_places` | `{ intent, category?, tags?, price_max?, area?, near?, around_place_id?, around_day?, radius_m?, day_hint?, take? }` | `FindPlacesOutput` (phases searching, scoring, explaining, done). `near` is the exact circle from the map's Search this region (`lib/map/region-prompt.ts`); it wins over `area` and may lie outside the destination. Everything else searches a circle from `tools/search-area.ts`: a named spot, that day's places, the hotel, the middle of the itinerary, or the city center, widening only when too few places match. The agent chooses the anchor, the code does the geometry |
+| `find_places` | `{ intent, category?, tags?, price_max?, area?, near?, around_place_id?, around_day?, radius_m?, day_hint?, target?, discovery?: "less_known", michelin?, take? }` | `FindPlacesOutput` (phases searching, scoring, explaining, done). `near` is the exact circle from the map's Search this region (`lib/map/region-prompt.ts`); it wins over `area` and may lie outside the destination. Everything else searches a circle from `tools/search-area.ts`: a named spot, that day's places, the hotel, the middle of the itinerary, or the city center, widening only when too few places match. The agent chooses the anchor, the code does the geometry |
 | `score_places` | `{ place_ids?, names?, scope?: "advisor_places" }` | `ScorePlacesOutput` |
 | `lookup_place` | `{ place_id }` | `LookupPlaceOutput` |
 | `set_itinerary` | `{ days: [{ day, slots: [{ slot, place_id, note? }] }], mode }` | `SetItineraryOutput` (notes stored as agent notes) |
@@ -96,9 +97,63 @@ The model never reads `details`: `toModelOutput` (tools/model-output.ts) gives i
   result set is authoritative (`addAskPlaces(..., { replace: true })`), call
   logs are upserted on (tool call, step, index), and a replacement is saved
   with its link on the removed place (`replaced_by`, `replacement_key`).
+- **Every search runs on one signal set.** `lib/trips/trip-signals.ts` reads it
+  for find_places, score_places, remove_place and the UI's replace: favorites
+  of every profiled traveler (places, then artists and films), blended advisor
+  places, then the itinerary's places (`tripPickRoom`: about half the favorites,
+  at most 8). Favorites stop at `MAX_FAVORITE_SIGNALS` and share that room:
+  travelers take turns, and artists and films keep a part of each list.
+  Advisor places and itinerary places are plain drivers ("Your places", "This
+  trip's picks"): they keep their share of the match and never read as
+  something the client loves. An itinerary change moves the signal hash, so
+  newer evidence wins on the next search (`lib/trips/evidence.ts`).
+- **Searches do not repeat.** find_places excludes the itinerary and the removed
+  places (capped at `MAX_EXCLUDED`, the request URL has a limit), upstream and
+  again in code. A rerun (remove_place, the UI's replace) excludes those first,
+  then the rest of the trip, and `pickReplacement` checks every place on the trip.
+  A place that was only shown stays available for another slot, which also lets
+  a retried search find its own results.
+- **Search options stay on the ask.** `discovery: "less_known"` (popularity below
+  `LESS_KNOWN_POPULARITY_MAX`), `michelin` and the open day are stored in the ask
+  query (`popularityMax`, `michelin`, `openDay`, with `resolvedTags`, `priceMax`
+  and `resolvedArea`), sent on the main and the fill call, and read back by
+  remove_place and the UI's replace through one reader (`askRerunOfQuery`), so a
+  rerun stays the same search. `openDayOf` (`tools/labels.ts`) derives the day: a
+  target's real date with exact trip dates, else a day hint that names one
+  weekday, never for a stay. Advisor places admitted into the ask meet the same
+  filters; unknown hours or popularity do not count against them, and stored
+  hours that say closed keep them out even when the search dropped the open day,
+  as they do for search results (`findPlaces`). A card with no hours for that day
+  reaches the model as `hours_unknown`.
+- **Loosening is never silent.** Every filter findPlaces drops is a `loosened`
+  code with copy in `LOOSENED_COPY`: the search row and the model say what changed
+  and what to check. A replacement is one place, so its note (`replacementNote`)
+  says only what that place needed (`PlaceResult.loosened`), and a different kind
+  of place than the one removed.
+- **The model chooses on facts.** Top candidates score within about 0.01, so
+  `factsForModel` (`tools/model-output.ts`) gives find_places, score_places and
+  every card the provider's review keywords, dishes, price level, rating, known,
+  Michelin, one verbatim description (`about`) and `practical` tags by family,
+  with the ground rules beside the find_places candidates. An unknown fact stays
+  out, so a missing family reads as unknown, never as no. Slot notes do not count
+  these as quotable facts: `quotesFact` accepts any sentence that contains a fact,
+  so a short tag ("Accepts reservations") would admit a sentence that adds invented
+  hours around it.
 - **Reasons are templates.** The model picks favorites, shared tags and one
   description snippet by index; anything not in the input is dropped and a
   place with no valid favorite gets no reason (`explain.ts`).
+- **"Like" is chosen in code.** Driver shares are nearly flat, so the explain
+  step (`explainCards`) compares tags, read once per search from the `places`
+  rows: cuisine, culinary style, ambience and decor only, empty words out, a tag
+  every candidate carries worth nothing, a cuisine worth more than a mood. Only
+  the favorite of the best overlap carries `tags` on its driver row, stored in
+  the `explainability` jsonb of `trip_places` and `ask_places` and in the
+  checkpoint; at least 2 tags, at most 3, else no line and the "Because Ana
+  loves ..." sentence stays. A plain driver, an artist or film (`media` on the
+  row) and the place itself are never the favorite. Newer evidence for a place
+  replaces its drivers and clears its reason (`upsertTripPlaces`), so tags and
+  reason are written again together here and never disagree. A replacement
+  (remove_place, the UI's replace) has no explain step: no line.
 - **Agent slot notes are for the advisor only** (`note_source = 'agent'`,
   `note_for_traveler` false), with hours, prices and reservation claims
   stripped unless they quote a stored fact (`tools/notes.ts`).

@@ -7,6 +7,7 @@
 // element. Never model prose, never demo data.
 
 import type { Ask, Category, ItinerarySlot, SlotName, TripPlaceCard, TripSnapshot } from "@/lib/contracts";
+import { likeLine } from "@/lib/agent/taste-overlap";
 import { favoriteDrivers } from "@/lib/qloo/normalize";
 import { addPosition, DAY_PARTS, isOpenSlot, nextPosition, slotHolds, type DayPart } from "@/lib/trips/day-parts";
 
@@ -386,6 +387,8 @@ export type SlotReasons = {
   score?: number;
   /** The advisor's own note, quoted. */
   note?: { text: string; label: string };
+  /** "Like Via Carota: Italian, warm, stylish", when a favorite shares enough of its taste. */
+  like?: string;
   /** The favorites most behind the pick, biggest share first. */
   favorites: { entityId: string; name: string; share: number; imageUrl?: string }[];
   /** What to order: the place's own specialty dishes, verbatim. */
@@ -396,8 +399,8 @@ export type SlotReasons = {
 
 /**
  * What the row opens to: the advisor's note on the slot (or on the saved
- * place), the favorites behind the pick with their shares, what to order, and
- * what reviews mention. Null when none exist.
+ * place), the favorite it is most like, the favorites behind the pick with
+ * their shares, what to order, and what reviews mention. Null when none exist.
  */
 export function slotReasons(
   card: Pick<TripPlaceCard, "score" | "because" | "dishes" | "keywords" | "yourPlace">,
@@ -427,11 +430,13 @@ export function slotReasons(
     .slice(0, 2)
     .map((k) => `${k.count} reviews mention ${k.name.trim().toLowerCase()}`);
 
-  if (!note && favorites.length === 0 && order.length === 0 && mentions.length === 0) return null;
+  const like = likeLine(card.because);
+  if (!note && !like && favorites.length === 0 && order.length === 0 && mentions.length === 0) return null;
   return {
     title: `Why ${client}`,
     ...(card.score !== undefined ? { score: card.score } : {}),
     ...(note ? { note } : {}),
+    ...(like ? { like } : {}),
     favorites,
     order,
     mentions,

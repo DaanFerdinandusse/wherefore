@@ -1,11 +1,12 @@
 import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 
-import type { AppUIMessage, FindPlacesOutput } from "@/lib/contracts";
+import type { AppUIMessage, FindPlacesOutput, TripPlaceCard } from "@/lib/contracts";
 
-import { budgetHistory, estimateTokens, OMITTED_OUTPUT_NOTE } from "./history";
+import { budgetHistory, estimateTokens, HISTORY_TOKEN_BUDGET, LARGE_OUTPUT_CHARS, OMITTED_OUTPUT_NOTE } from "./history";
 import { toModelHistory } from "./messages";
 import { historyTools } from "./tools";
+import { cardForModel, findPlacesForModel, recommendPlaceForModel } from "./tools/model-output";
 
 // Later turns replay earlier tool outputs: through each tool's compact model
 // view, and inside a total token budget.
@@ -127,5 +128,84 @@ describe("toModelHistory with the tools", () => {
     part.output = { phase: "done" };
     const history = await toModelHistory(old, { tools: historyTools() });
     expect(history.some((m) => m.role === "tool")).toBe(true);
+  });
+});
+
+describe("the facts stay inside the size budget", () => {
+  // Every fact present at its largest. Measured on real places: 860 characters
+  // at the median, 1,240 at most, so a 5 place search is about 1,200 tokens.
+  const list = (prefix: string, count: number, size: number) =>
+    Array.from({ length: count }, (_, i) => `${prefix} ${i}`.padEnd(size, "x"));
+  const fullCard = (id: string): TripPlaceCard => ({
+    tripPlaceId: `00000000-0000-4000-8000-${id.padStart(12, "0")}`,
+    placeId: `11111111-0000-4000-8000-${id.padStart(12, "0")}`,
+    entityId: `22222222-0000-4000-8000-${id.padStart(12, "0")}`,
+    name: "A Place With A Reasonably Long Name",
+    category: "eat",
+    neighborhood: "Bairro Alto",
+    score: 88,
+    because: [
+      { entityId: "e1", name: "Via Carota", share: 60 },
+      { entityId: "e2", name: "Khruangbin", share: 40 },
+    ],
+    sharedTags: list("Tag", 4, 12).map((name) => ({ tagId: name, name })),
+    reason: "Because Ana loves Via Carota and In the Mood for Love, this one shares its candlelit, unhurried room.",
+    status: "suggested",
+    source: "ask",
+    askIds: ["ask-1"],
+    keywords: list("Keyword", 8, 18).map((name) => ({ name, count: 40 })),
+    dishes: list("Dish", 4, 28),
+    priceLevel: 3,
+    rating: 4.6,
+    popularity: 0.4,
+    michelin: true,
+    about: "x".repeat(200),
+    // 24 names, the card's cap.
+    practical: {
+      dietary: list("Dietary", 13, 14),
+      accessibility: list("Access", 7, 30),
+      noise: ["Moderate"],
+      planning: list("Planning", 3, 30),
+    },
+  });
+
+  const output = (count: number): FindPlacesOutput => ({
+    phase: "done",
+    kind: "ask",
+    askId: "ask-1",
+    label: "Dinner",
+    count,
+    elapsedMs: 900,
+    loosened: [],
+    groundRules: list("No", 8, 40),
+    places: Array.from({ length: count }, (_, i) => fullCard(String(i))),
+  });
+
+  it("keeps one card's model view compact", () => {
+    expect(JSON.stringify(cardForModel(fullCard("1"))).length).toBeLessThan(1_600);
+  });
+
+  it("leaves a recommended card small enough that a long tool loop keeps it", () => {
+    const { value } = recommendPlaceForModel({ card: fullCard("1") });
+    expect(value.length).toBeLessThan(LARGE_OUTPUT_CHARS);
+  });
+
+  it("fits the three searches of one reply, each at its largest, in the budget with room to spare", () => {
+    // 8 results and 2 of the advisor's own places.
+    const tokens = estimateTokens(findPlacesForModel(output(10)));
+    expect(tokens).toBeLessThan(4_500);
+    expect(tokens * 3).toBeLessThan(HISTORY_TOKEN_BUDGET * 0.6);
+  });
+
+  it("replays through budgetHistory: old searches go first, the newest stays whole", () => {
+    const search = (id: string): ModelMessage => ({
+      role: "tool",
+      content: [{ type: "tool-result", toolCallId: id, toolName: "find_places", output: findPlacesForModel(output(10)) }],
+    });
+    const history = Array.from({ length: 8 }, (_, i) => [user(`u${i}`, "more"), call(`c${i}`), search(`c${i}`)]).flat();
+    const out = budgetHistory(history);
+    expect(estimateTokens(out)).toBeLessThanOrEqual(HISTORY_TOKEN_BUDGET + 200);
+    expect(out.at(-1)).toEqual(history.at(-1));
+    expect(pairsHold(out)).toBe(true);
   });
 });

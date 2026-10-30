@@ -57,7 +57,7 @@ function ReasonsHeading({ children }: { children: string }) {
 
 /** The page under a row: why the place was recommended, then the way into the full card. */
 function ReasonsPage({ reasons, onViewDetails }: { reasons: SlotReasons; onViewDetails: () => void }) {
-  const { favorites, order, mentions, note } = reasons;
+  const { favorites, like, order, mentions, note } = reasons;
   return (
     <div className="mx-2 mb-2 flex flex-col gap-3 rounded-row bg-why px-3.5 py-3 @[440px]:ml-[114px]">
       <div className="flex items-center justify-between gap-3">
@@ -73,6 +73,7 @@ function ReasonsPage({ reasons, onViewDetails }: { reasons: SlotReasons; onViewD
           <p className="text-meta text-amber-deep">{note.label}</p>
         </div>
       ) : null}
+      {like ? <p className="text-ui-sm leading-[18px] text-ink">{like}</p> : null}
       <div className="grid gap-x-5 gap-y-3 @[540px]:grid-cols-2">
         {favorites.length > 0 ? (
           <div className="flex min-w-0 flex-col gap-1.5">

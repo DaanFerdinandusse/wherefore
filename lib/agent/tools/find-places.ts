@@ -1,27 +1,34 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { FatalError } from "workflow";
 import { z } from "zod";
 
-import type { Category, FindPlacesOutput, SlotName, SlotTarget, ToolStep, TripPlaceCard } from "@/lib/contracts";
+import type { Category, FindPlacesOutput, SlotName, SlotTarget, ToolStep, TripPlaceCard, Weekday } from "@/lib/contracts";
 import { db } from "@/lib/db";
-import { tripAsks } from "@/lib/db/schema";
+import { places, tripAsks } from "@/lib/db/schema";
 import { MAP_REGION_LABEL } from "@/lib/map/region-prompt";
 import { createAsk, updateAsk } from "@/lib/trips";
 import {
+  categoryOf,
   CATEGORY_FILTER_TAGS,
+  closedOn,
   displayScore,
   findPlaces,
   findTags,
   haversineM,
+  LESS_KNOWN_POPULARITY_MAX,
+  openDuring,
   QlooLocalityMismatchError,
   resolveLocality,
+  WEEKDAY_NAMES,
   type NormalizedPlace,
   type PlaceResult,
   type QlooCall,
 } from "@/lib/qloo";
+import { placeFactsFromProperties, type AskFilters } from "@/lib/trips/map";
 
+import { carryTags } from "../taste-overlap";
 import { assertTurn, finishAsk, guarded, TurnSupersededError, type TurnRef } from "../writes";
 
 import {
@@ -29,6 +36,7 @@ import {
   basedOnFavorites,
   categoryNoun,
   cleanIntent,
+  openDayOf,
   rowTitle,
   searchDetails,
   searchTerms,
@@ -37,6 +45,7 @@ import {
   WIDENED_IN_CATEGORY,
   type SearchCategory,
 } from "./labels";
+import { hoursOf } from "./place-tools";
 import { chooseSearchArea, searchedAreaText, widenedNote, type SearchAreaInput } from "./search-area";
 import {
   cardsInOrder,
@@ -49,15 +58,17 @@ import {
   type BoardItem,
   type RankedPlace,
 } from "./search-core";
+import { searchExclusions } from "./signals";
 import { firstName, loadPlacedPoints, loadToolTrip, logCalls, type ToolTrip } from "./trip-data";
 
 // find_places (PLAN 7): one ask from the advisor becomes one board and map
 // tab. Three phases, each yielded as a preliminary output the card renders:
-//   searching  tags for free text, the search with the trip's signals, the
-//              ask and its places written (keyed by toolCallId);
+//   searching  tags for free text, the search with the trip's signals (the
+//              itinerary and the removed places left out), the ask and its
+//              places written (keyed by toolCallId);
 //   scoring    the advisor's places in the city scored, the ones that fit
-//              the ask (category, tags, price cap, area) kept and marked
-//              "Your place";
+//              the ask (category, tags, price cap, area, less known, Michelin,
+//              open day) kept and marked "Your place";
 //   explaining one grounded sentence per place (lib/agent/explain.ts).
 // Each phase is checkpointed on the ask, so a retried step resumes.
 // A locality mismatch comes back as a clear error output, never an empty tab.
@@ -79,6 +90,10 @@ export type FindPlacesInput = {
   day_hint?: string;
   /** The itinerary slot this search is for: the ask carries it, the workspace highlights it. */
   target?: { day: number; slot: SlotName };
+  /** "less_known": only places below LESS_KNOWN_POPULARITY_MAX. */
+  discovery?: "less_known";
+  /** Only places Michelin lists. */
+  michelin?: boolean;
   take?: number;
 };
 
@@ -89,6 +104,10 @@ export const MIN_TAKE = 3;
 export const MAX_TAKE = 8;
 /** At most this many of the advisor's own places join a small search beyond its results. */
 const MAX_ADVISOR_EXTRAS = 2;
+/** A category search asks for a few more: results of another kind are left out here. */
+const CATEGORY_SPARE = 3;
+/** Tags beyond this add nothing: a few more words are no reason to fail a search. */
+const MAX_TAGS = 4;
 const GENERIC_NOUNS: Record<string, SearchCategory> = {
   bar: "drink",
   bars: "drink",
@@ -158,9 +177,16 @@ export function singularOf(text: string): string | null {
   return /[^s]s$/i.test(text) ? text.slice(0, -1) : null;
 }
 
+/** A kind-of-place tag that is not the asked kind: "boutique" on a hotel ask finds the shop tag. */
+export function isOtherKindTag(tagId: string, category: SearchCategory | undefined): boolean {
+  if (!category || !tagId.startsWith("urn:tag:category:place:")) return false;
+  return categoryOf({ primaryType: null, types: [tagId] }) !== category;
+}
+
 /** Free words to tag ids; ids pass through. At most 4 ids. */
 async function resolveTags(
   texts: string[],
+  category: SearchCategory | undefined,
   ctx: ToolTrip,
   calls: QlooCall[],
 ): Promise<{ ids: string[]; names: string[] }> {
@@ -176,7 +202,7 @@ async function resolveTags(
     const matches = async (query: string) => {
       const found = await findTags(query, { tripId: ctx.trip.id });
       calls.push(...found.calls);
-      return found.tags.filter((t) => namedIn(trimmed, t.name));
+      return found.tags.filter((t) => namedIn(trimmed, t.name) && !isOtherKindTag(t.tagId, category));
     };
     // The lookup reads a plural differently: "shopping malls" finds "near
     // shopping malls", "shopping mall" finds what a mall is.
@@ -204,14 +230,21 @@ export type AskConstraints = {
   tagIds: string[];
   priceMax?: number;
   area?: { lat: number; lon: number; radiusM: number };
+  popularityMax?: number;
+  michelin?: boolean;
+  /** Stored hours that say closed on this day leave a place out. */
+  openDay?: Weekday;
+  /** So do hours that leave this slot out, on that day. */
+  openSlot?: SlotName;
 };
 
 /**
  * The filters that held for this ask's own results: the advisor's places
  * admitted into the ask must meet the same ones. A filter the search had to
- * drop (loosened) does not apply to them either.
+ * drop (loosened) does not apply to them either, except the open day: a place
+ * whose own hours say closed stays out however few places were open.
  */
-export function askConstraints(input: {
+export function askConstraints(input: AskFilters & {
   tagIds: string[];
   loosened: readonly string[];
   priceMax?: number;
@@ -223,16 +256,30 @@ export function askConstraints(input: {
     tagIds: tagsHeld ? input.tagIds : [],
     ...(input.priceMax && priceHeld ? { priceMax: input.priceMax } : {}),
     ...(input.area ? { area: input.area } : {}),
+    ...(input.popularityMax !== undefined && !input.loosened.includes("popularity") ? { popularityMax: input.popularityMax } : {}),
+    ...(input.michelin && !input.loosened.includes("michelin") ? { michelin: true } : {}),
+    ...(input.openDay ? { openDay: input.openDay } : {}),
+    ...(input.openDay && input.openSlot ? { openSlot: input.openSlot } : {}),
   };
 }
 
-/** Does a place meet the ask's filters? An unknown price or position does not count against it. */
+/**
+ * Does a place meet the ask's filters? An unknown price, position, popularity
+ * or set of hours does not count against it. Michelin does: it is a listing,
+ * so a place without one is not on the list.
+ */
 export function meetsAskConstraints(
-  place: Pick<NormalizedPlace, "tags" | "priceLevel" | "lat" | "lon">,
+  place: Pick<NormalizedPlace, "tags" | "priceLevel" | "lat" | "lon"> & Partial<Pick<NormalizedPlace, "properties">>,
   constraints: AskConstraints,
 ): boolean {
   if (constraints.tagIds.length > 0 && !place.tags.some((t) => constraints.tagIds.includes(t.tagId))) return false;
   if (constraints.priceMax && place.priceLevel != null && place.priceLevel > constraints.priceMax) return false;
+  const { popularity, michelin } = placeFactsFromProperties(place.properties);
+  if (constraints.popularityMax !== undefined && popularity !== undefined && popularity >= constraints.popularityMax) return false;
+  if (constraints.michelin && !michelin) return false;
+  if (place.properties?.is_closed === true) return false;
+  if (constraints.openDay && closedOn(place.properties?.hours, constraints.openDay)) return false;
+  if (constraints.openDay && constraints.openSlot && !openDuring(place.properties?.hours, constraints.openDay, constraints.openSlot)) return false;
   const area = constraints.area;
   if (area && place.lat != null && place.lon != null && haversineM(place.lat, place.lon, area.lat, area.lon) > area.radiusM) {
     return false;
@@ -250,7 +297,16 @@ const rankedSchema = z.object({
   category: z.enum(["eat", "drink", "coffee", "see", "stay", "other"]),
   affinity: z.number().nullable(),
   score: z.number().nullable(),
-  explainability: z.array(z.object({ entityId: z.string(), name: z.string(), share: z.number() })),
+  explainability: z.array(
+    z.object({
+      entityId: z.string(),
+      name: z.string(),
+      share: z.number(),
+      tags: z.array(z.string()).optional(),
+      feel: z.boolean().optional(),
+      media: z.boolean().optional(),
+    }),
+  ),
 });
 const stepSchema = z.object({
   key: z.enum(["search", "score", "explain"]),
@@ -274,6 +330,10 @@ const checkpointSchema = z.object({
         tagIds: z.array(z.string()),
         priceMax: z.number().optional(),
         area: z.object({ lat: z.number(), lon: z.number(), radiusM: z.number() }).optional(),
+        popularityMax: z.number().optional(),
+        michelin: z.boolean().optional(),
+        openDay: z.enum(WEEKDAY_NAMES).optional(),
+        openSlot: z.enum(["breakfast", "morning", "lunch", "afternoon", "dinner", "night", "stay"]).optional(),
       }),
     })
     .optional(),
@@ -282,10 +342,26 @@ const checkpointSchema = z.object({
 });
 export type AskCheckpoint = z.infer<typeof checkpointSchema>;
 
+/** A stored checkpoint, or none when it does not read. */
+export function parseCheckpoint(value: unknown): AskCheckpoint {
+  const parsed = checkpointSchema.safeParse(value ?? {});
+  return parsed.success ? parsed.data : {};
+}
+
+/** The cards with no hours on record for `day`: nothing says they are open, whatever got them into the search. */
+async function hoursUnknownOn(cards: TripPlaceCard[], day: Weekday): Promise<string[]> {
+  if (cards.length === 0) return [];
+  const rows = await db
+    .select({ id: places.id, properties: places.properties })
+    .from(places)
+    .where(inArray(places.id, cards.map((c) => c.placeId)));
+  const known = new Set(rows.filter((row) => hoursOf(row.properties.hours)?.[day]).map((row) => row.id));
+  return cards.filter((c) => !known.has(c.placeId)).map((c) => c.tripPlaceId);
+}
+
 async function readCheckpoint(askId: string): Promise<AskCheckpoint> {
   const [row] = await db.select({ checkpoint: tripAsks.checkpoint }).from(tripAsks).where(eq(tripAsks.id, askId)).limit(1);
-  const parsed = checkpointSchema.safeParse(row?.checkpoint ?? {});
-  return parsed.success ? parsed.data : {};
+  return parseCheckpoint(row?.checkpoint);
 }
 
 export async function* findPlacesTool(
@@ -298,16 +374,25 @@ export async function* findPlacesTool(
   const elapsed = () => Date.now() - started;
   const ctx = await loadToolTrip(turn.tripId);
   const take = clampTake(input.take);
+  const askedTags = input.tags?.slice(0, MAX_TAGS);
   const split = splitIntent(cleanIntent(input.intent, input.day_hint));
   const askCategory: SearchCategory | undefined = input.category ?? split.category ?? slotCategory(input.target?.slot);
   const target: SlotTarget | undefined = input.target
     ? slotTarget(input.target, { startDate: ctx.trip.startDate ?? undefined, destinationName: ctx.destination.name })
     : undefined;
+  const openDay = openDayOf({ target: input.target, dayHint: input.day_hint, category: askCategory, trip: ctx.trip });
+  // Kept on the ask, so a rerun (remove_place, the UI's replace) stays the same search.
+  const filters: AskFilters = {
+    ...(input.discovery === "less_known" ? { popularityMax: LESS_KNOWN_POPULARITY_MAX } : {}),
+    ...(input.michelin ? { michelin: true } : {}),
+    ...(openDay ? { openDay } : {}),
+    ...(openDay && input.target ? { openSlot: input.target.slot } : {}),
+  };
   const label = askLabel(input.intent, input.near ? MAP_REGION_LABEL : (target?.label ?? input.day_hint));
   // A region on the map is searched as given, in the destination or not.
   const region = input.near ? { lat: input.near.lat, lon: input.near.lon, radiusM: input.near.radius_m } : undefined;
   const searchedPlace = region ? "this region of the map" : ctx.destination.name;
-  const terms = searchTerms(input.tags, split.text);
+  const terms = searchTerms(askedTags, split.text);
   // "see" stays open: it is the nearest fit for a search that really wants a mall.
   const noShopping = askCategory !== undefined && askCategory !== "see";
   const basedOn = basedOnFavorites(ctx.signals.favoritesUsed.map((f) => f.clientName));
@@ -316,13 +401,14 @@ export async function* findPlacesTool(
   const askQuery = {
     intent: input.intent,
     ...(askCategory ? { category: askCategory } : {}),
-    ...(input.tags?.length ? { tags: input.tags } : {}),
+    ...(askedTags?.length ? { tags: askedTags } : {}),
     ...(input.price_max ? { priceMax: input.price_max } : {}),
     ...(input.area ? { area: input.area } : {}),
     ...(region ? { region } : {}),
     ...(input.day_hint ? { day: input.day_hint } : {}),
     // The slot this ask is for (Ask.target): lib/trips reads it back from the query.
     ...(input.target ? { target: { day: input.target.day, slot: input.target.slot } } : {}),
+    ...filters,
     take,
   };
   // Keyed by toolCallId: a retried step gets the same ask, and its checkpoint.
@@ -366,9 +452,14 @@ export async function* findPlacesTool(
     ...(terms.length ? { terms } : {}),
     ...(target ? { target } : {}),
     ...(searchedArea ? { searchedArea } : {}),
+    ...(openDay ? { openDay } : {}),
+    ...(ctx.rules.length ? { groundRules: ctx.rules } : {}),
     ...extra,
   });
   const failAsk = () => finishAsk(turn, ask.id, { status: "failed", elapsedMs: elapsed(), loosened: [], resultCount: 0 });
+  // The upstream exclusion is trusted but checked, and it never covers the advisor's places.
+  const excluded = new Set(ctx.excludeIds);
+  const notExcluded = (r: PlaceResult) => !excluded.has(r.place.entityId);
 
   yield output("searching");
 
@@ -422,10 +513,10 @@ export async function* findPlacesTool(
       }
 
       // Tags: what the advisor asked for in free text, else the category filter.
-      const wanted = [...(input.tags ?? []), ...(input.tags?.length ? [] : split.text ? [split.text] : [])];
-      const resolved = await resolveTags(wanted, ctx, calls);
+      const wanted = [...(askedTags ?? []), ...(askedTags?.length ? [] : split.text ? [split.text] : [])];
+      const resolved = await resolveTags(wanted, askCategory, ctx, calls);
       const tags = resolved.ids.length > 0 ? resolved.ids : askCategory ? CATEGORY_FILTER_TAGS[askCategory] : [];
-      // Kept on the ask so remove_place can rerun the same search.
+      // Kept on the ask so remove_place and the UI's replace can rerun the same search.
       await guarded(turn, (guard) =>
         updateAsk(ask.id, { query: { ...askQuery, resolvedTags: tags, searchArea } }, ctx.scope, { turn: guard }),
       );
@@ -441,13 +532,15 @@ export async function* findPlacesTool(
             ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
             ...(input.price_max ? { priceMax: input.price_max } : {}),
             noShopping,
-            take,
+            ...filters,
+            ...(ctx.excludeIds.length ? { excludeIds: ctx.excludeIds } : {}),
+            take: askCategory ? take + CATEGORY_SPARE : take,
           },
           { tripId: ctx.trip.id },
         );
         calls.push(...found.calls);
         loosened = found.loosened;
-        results = found.results;
+        results = found.results.filter(notExcluded);
         reachedM = found.radiusM;
       } catch (error) {
         await logCalls(turn, ctx, calls, source, key("search"));
@@ -468,10 +561,14 @@ export async function* findPlacesTool(
       // Few exact matches for the advisor's words: the search dropped every tag.
       // Fill the rest from the asked category instead (exact matches first),
       // so "natural wine bars" never turns into restaurants and cafes.
-      if (resolved.ids.length > 0 && askCategory && loosened.includes("tags")) {
-        const exact = results.filter((r) => r.place.tags.some((t) => resolved.ids.includes(t.tagId)));
+      const otherKind = results.some((r) => r.category !== askCategory);
+      if (resolved.ids.length > 0 && askCategory && (loosened.includes("tags") || otherKind)) {
+        const exact = results.filter(
+          (r) => r.category === askCategory && r.place.tags.some((t) => resolved.ids.includes(t.tagId)),
+        );
         const room = take - exact.length;
         if (room > 0) {
+          const fillExcludeIds = searchExclusions(exact.map((r) => r.place.entityId), ctx.excludeIds);
           try {
             const fill = await findPlaces(
               {
@@ -481,26 +578,22 @@ export async function* findPlacesTool(
                 tags: CATEGORY_FILTER_TAGS[askCategory],
                 tagsOperator: "union",
                 ...(input.price_max ? { priceMax: input.price_max } : {}),
-                ...(exact.length ? { excludeIds: exact.map((r) => r.place.entityId) } : {}),
+                ...filters,
+                ...(fillExcludeIds.length ? { excludeIds: fillExcludeIds } : {}),
                 noShopping,
                 take: Math.min(45, room + 4),
               },
               { tripId: ctx.trip.id },
             );
             calls.push(...fill.calls);
-            const fillers = fill.results.filter((r) => r.category === askCategory).slice(0, room);
+            const fillers = fill.results.filter(notExcluded).filter((r) => r.category === askCategory).slice(0, room);
             if (fillers.length > 0) {
               reachedM = Math.max(reachedM, fill.radiusM);
               const merged = [...exact, ...fillers];
               const affinities = merged.flatMap((r) => r.affinity ?? []);
               results = merged.map((r) => ({ ...r, score: r.affinity === null ? null : displayScore(r.affinity, affinities) }));
-              loosened = [
-                ...new Set([
-                  ...loosened.filter((l) => l !== "tags"),
-                  ...fill.loosened.filter((l) => l !== "tags"),
-                  WIDENED_IN_CATEGORY,
-                ]),
-              ];
+              // Only what the kept places needed: a fill can try more than its best places did.
+              loosened = [...new Set([...merged.flatMap((r) => r.loosened ?? []).filter((l) => l !== "tags"), WIDENED_IN_CATEGORY])];
             }
           } catch (error) {
             if (abortSignal?.aborted) throw error;
@@ -510,10 +603,17 @@ export async function* findPlacesTool(
       }
       await logCalls(turn, ctx, calls, source, key("search"), loosened);
 
-      // Category re-check: results of the asked category first.
-      if (askCategory) {
-        results = [...results.filter((r) => r.category === askCategory), ...results.filter((r) => r.category !== askCategory)];
+      // Category re-check: only the asked kind, unless nothing else came back
+      // (the search has then said what it dropped). The category filter is loose
+      // upstream: a cafe with a restaurant tag is not a dinner.
+      const ofKind = askCategory ? results.filter((r) => r.category === askCategory) : results;
+      const kept = (ofKind.length > 0 ? ofKind : results).slice(0, take);
+      if (kept.length < results.length) {
+        const keptAffinities = kept.flatMap((r) => r.affinity ?? []);
+        results = kept.map((r) => ({ ...r, score: r.affinity === null ? null : displayScore(r.affinity, keptAffinities) }));
       }
+      const applied = new Set<string>(results.flatMap((r) => r.loosened ?? []));
+      loosened = loosened.filter((l) => l === "price_not_applicable" || l === WIDENED_IN_CATEGORY || applied.has(l));
       const items: BoardItem[] = results.map((r) => ({
         place: r.place,
         category: r.category,
@@ -533,6 +633,7 @@ export async function* findPlacesTool(
         loosened,
         priceMax: input.price_max,
         area: { lat: searchArea.lat, lon: searchArea.lon, radiusM: reachedM },
+        ...filters,
       });
       searchedArea = region ? undefined : searchedAreaText(searchArea, reachedM, ctx.destination.name);
       areaNote = [areaNote, widenedNote(searchArea, reachedM)].filter(Boolean).join(" ") || undefined;
@@ -588,8 +689,9 @@ export async function* findPlacesTool(
         // filters (category, tags, price cap, area); in-result ones already do.
         const kept = scores.filter(
           (s) =>
-            inResults.has(s.item.place.entityId) ||
-            (s.item.category === fitCategory && meetsAskConstraints(s.item.place, constraints)),
+            !excluded.has(s.item.place.entityId) &&
+            (inResults.has(s.item.place.entityId) ||
+              (s.item.category === fitCategory && meetsAskConstraints(s.item.place, constraints))),
         );
         // In-result advisor places already carry the link (persistBoardItems);
         // the others join the board and the ask, ranked by affinity.
@@ -642,7 +744,15 @@ export async function* findPlacesTool(
       };
       yield output("explaining", { done: 0, total: toExplain });
       try {
-        explained = (await explainCards(turn, ctx, cards, abortSignal)).size;
+        const { reasons, drivers } = await explainCards(turn, ctx, cards, abortSignal);
+        explained = reasons.size;
+        // The tags reach the ask's rows and the checkpoint too, so a retried step
+        // keeps them. Not a whole result set: the cards are on screen, and a place
+        // replaced while the model ran stays in the tab.
+        ranked = ranked.map((r) => ({ ...r, explainability: carryTags(r.explainability, drivers.get(r.tripPlaceId)) }));
+        await persistAskPlaces(turn, ctx, ask.id, ranked, { replace: false });
+        if (checkpoint.score) checkpoint.score = { ...checkpoint.score, ranked };
+        else if (checkpoint.search) checkpoint.search = { ...checkpoint.search, ranked };
         checkpoint.explain = { done: explained, total: toExplain };
         await saveCheckpoint(checkpoint);
       } catch (error) {
@@ -660,12 +770,14 @@ export async function* findPlacesTool(
       note: `${explained} of ${toExplain}`,
     };
 
+    const hoursUnknown = openDay ? await hoursUnknownOn(cards, openDay) : [];
     await assertTurn(turn);
     await finishAsk(turn, ask.id, { status: "done", elapsedMs: elapsed(), loosened, resultCount: cards.length });
     return output("done", {
       done: explained,
       total: cards.length,
       ...(areaNote ? { progress: areaNote } : {}),
+      ...(hoursUnknown.length ? { hoursUnknown } : {}),
     });
   } catch (error) {
     // The lock is gone (stopped or replaced): the release finishes the ask.

@@ -83,10 +83,17 @@ describe("reasonLine", () => {
     expect(tagPhrase("Cozy")).toBe("cozy");
   });
 
+  it("stops at an artist or film: a place has no feel in common with a band", () => {
+    expect(reasonLine(place({ because: [{ name: "Khruangbin", share: 60, media: true }, { name: "Lilia", share: 40 }] }))?.text).toBe(
+      "Because you love Khruangbin.",
+    );
+  });
+
   it("is null without a named favorite, so nothing is invented", () => {
     expect(reasonLine(place({ because: [] }))).toBeNull();
     expect(reasonLine(place({ because: [{ name: "Other favorites", share: 100 }] }))).toBeNull();
     expect(reasonLine(place({ because: [{ name: "Your places", share: 100 }] }))).toBeNull();
+    expect(reasonLine(place({ because: [{ name: "This trip's picks", share: 100 }] }))).toBeNull();
   });
 });
 

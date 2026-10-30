@@ -12,6 +12,8 @@ import { cn } from "@/lib/ui/cn";
 import { toolErrorText } from "../chat-errors";
 import { placesByMatch } from "../chat-format";
 
+import { PlaceChips } from "../../place-chips";
+
 import { ErrorRow, type PlaceHandlers } from "./parts";
 
 // The search row of find_places (Paper S2 to S5): "Looking at 5 restaurants
@@ -99,6 +101,7 @@ function Tile({ place, scoring, onPlacesHover, onPlaceClick }: { place: TripPlac
               Match
             </span>
           ) : null}
+          <PlaceChips place={place} variant="tile" />
           {place.yourPlace ? (
             <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded-pill bg-photo-chip px-2 py-0.75 text-meta leading-3.5 font-semibold text-white">
               <Bookmark aria-hidden className="size-2.5 fill-white" strokeWidth={0} />
@@ -144,7 +147,7 @@ function Chip({ place, picked, selected, onPlacesHover, onPlaceClick }: { place:
         onBlur={() => onPlacesHover?.(null)}
         onClick={() => onPlaceClick?.(place.tripPlaceId)}
         className={cn(
-          "flex w-full items-center gap-2 rounded-row p-1.25 text-left transition-colors",
+          "flex h-full w-full items-center gap-2 rounded-row p-1.25 text-left transition-colors",
           selected ? "bg-why ring-[1.5px] ring-amber-dot" : "bg-surface-raised ring-1 ring-ink/6 hover:bg-white",
         )}
       >
@@ -160,6 +163,7 @@ function Chip({ place, picked, selected, onPlacesHover, onPlaceClick }: { place:
         <span className="flex min-w-0 flex-col gap-px">
           <span className="truncate text-ui-sm leading-4.25 font-semibold text-ink">{place.name}</span>
           {line ? <span className={cn("truncate text-meta", picked ? "font-semibold text-amber" : "text-text-2")}>{line}</span> : null}
+          <PlaceChips place={place} variant="row" />
         </span>
       </button>
     </li>
@@ -179,7 +183,7 @@ export function SearchRow({ state, preliminary, input, output, errorText, onRetr
   const detail = output?.terms?.join(", ") ?? output?.details;
   const figure = running ? progressFigure(output) : undefined;
   const scoring = running && output?.phase !== "done";
-  const notes = [...loosenedCopy(output?.loosened ?? []), ...(!running && output?.progress ? [output.progress] : [])];
+  const notes = [...loosenedCopy(output?.loosened ?? [], output?.openDay), ...(!running && output?.progress ? [output.progress] : [])];
 
   return (
     <div

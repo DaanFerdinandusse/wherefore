@@ -9,6 +9,8 @@ export type TripPlaceSource = "seed" | "ask" | "advisor" | "manual";
 export type TripPlaceStatus = "suggested" | "added" | "removed";
 export type SlotName = "breakfast" | "morning" | "lunch" | "afternoon" | "dinner" | "night" | "stay";
 export type TripStage = "planning" | "shared" | "traveling" | "done";
+/** A day of the week, lower case: "only places open that day" on a search. */
+export type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
 
 export type TasteTag = { tagId: string; name: string; type?: string; score?: number };
 export type PlaceTag = { tagId: string; name: string; type?: string };
@@ -32,7 +34,17 @@ export type FavoriteCandidate = {
 
 // Per client favorite: how much it drove a recommendation. Shares are integer
 // percentages that sum to 100 within one result.
-export type Explainability = { entityId: string; name: string; share: number }[];
+export type Explainability = {
+  entityId: string;
+  name: string;
+  share: number;
+  /** On the one favorite this place is most like, the taste tags they share ("Like Via Carota: Italian, warm, stylish"). */
+  tags?: string[];
+  /** Those tags are a shared feel, not a likeness: the favorite is another kind of place ("Same intimate, romantic feel as Attaboy"). */
+  feel?: boolean;
+  /** An artist or film: it drives the match and has no place tags. */
+  media?: boolean;
+}[];
 
 export type Destination = {
   name: string;
@@ -55,6 +67,21 @@ export type TripCover = {
 
 /** A word or dish reviews mention, with how many reviews mention it ("Tuna tostadas", 312). */
 export type PlaceKeyword = { name: string; count: number };
+
+/**
+ * What the provider's tags say about a visit, by family, names verbatim
+ * ("Vegan", "Usually a wait", "Good for kids"). A missing family means the
+ * provider says nothing about it, never that the answer is no.
+ */
+export type PlacePractical = {
+  dietary?: string[];
+  accessibility?: string[];
+  children?: string[];
+  noise?: string[];
+  planning?: string[];
+  occasion?: string[];
+  visit?: string[];
+};
 
 /** One favorite of a traveler's client profile, with the place photo when it resolved. */
 export type TravelerFavorite = { name: string; entityId?: string; imageUrl?: string };
@@ -92,7 +119,23 @@ export type TripPlaceCard = {
   dishes?: string[];
   /** 1 to 4. */
   priceLevel?: number;
+  /** How known the place is, 0 to 1 (provider percentile). Absent when unknown. Never shown as a number. */
+  popularity?: number;
+  /** The provider links the place to Michelin. Says nothing about stars. */
+  michelin?: boolean;
+  /** The provider's business rating, above 0 up to 5. */
+  rating?: number;
+  /** One short provider description, verbatim, cut to about 200 characters. */
+  about?: string;
+  /** Practical facts from the place's tags. */
+  practical?: PlacePractical;
 };
+
+/** The facts a choice between places rests on. Everything comes from the provider; an unknown fact stays out. */
+export type PlaceFacts = Pick<
+  TripPlaceCard,
+  "keywords" | "dishes" | "priceLevel" | "popularity" | "michelin" | "rating" | "about" | "practical"
+>;
 
 export type Ask = {
   id: string;
@@ -133,7 +176,7 @@ export type SharedTripPlace = {
   imageUrl?: string;
   neighborhood?: string;
   /** "Because you love Via Carota and Lilia": the favorite names and their shares. */
-  because: { name: string; share: number }[];
+  because: { name: string; share: number; media?: boolean }[];
   sharedTags: string[];
   reason?: string;
   /** Up to three photo urls, the first one first. `imageUrl` is the first of them. */
@@ -278,6 +321,12 @@ export type FindPlacesOutput = {
   terms?: string[];
   /** Where the search looked, for the model: "within 2.5 km of day 2's places". */
   searchedArea?: string;
+  /** The weekday the search keeps to places open on, so a loosened note can name it. */
+  openDay?: Weekday;
+  /** The trip's ground rules, so the model chooses with them beside the candidates. */
+  groundRules?: string[];
+  /** Cards with no hours on record for `openDay`: nothing says they are open that day. */
+  hoursUnknown?: string[];
 };
 
 /** An itinerary slot a search or a recommendation is for. */
@@ -317,7 +366,7 @@ export type ChatOpening = {
 
 export type ScorePlacesOutput = {
   phase: ToolPhase;
-  places: (Pick<TripPlaceCard, "tripPlaceId" | "placeId" | "name" | "score" | "because" | "yourPlace"> & {
+  places: (Pick<TripPlaceCard, "tripPlaceId" | "placeId" | "name" | "score" | "because" | "yourPlace"> & PlaceFacts & {
     imageUrl?: string;
     /** The provider's id, for places scored by name that are not on the board. */
     entityId?: string;
@@ -351,7 +400,7 @@ export type LookupPlaceOutput = {
 export type RemovePlaceOutput = {
   removed?: Pick<TripPlaceCard, "tripPlaceId" | "placeId" | "name" | "category">;
   replacement?: TripPlaceCard;
-  /** Why no replacement came back, in plain words. */
+  /** Why no replacement came back, or what the search had to loosen to find it, in plain words. */
   note?: string;
   error?: string;
 };
@@ -369,6 +418,8 @@ export type TripContextOutput = {
     name: string;
     role: string;
     favorites: string[];
+    /** Artists and films that drive the search: "Khruangbin (artist)". */
+    media?: string[];
     tasteTags: string[];
     rules: string[];
     drivesSearch?: boolean;

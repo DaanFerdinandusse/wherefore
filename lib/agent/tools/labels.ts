@@ -1,4 +1,5 @@
-import type { Category, SlotName, SlotTarget } from "@/lib/contracts";
+import type { Category, SlotName, SlotTarget, Weekday } from "@/lib/contracts";
+import { WEEKDAY_NAMES } from "@/lib/qloo/normalize";
 
 // Words the tools and the tool cards share: ask labels ("Natural wine · Sat"),
 // card titles ("Searched natural wine bars"), category phrases and loosened
@@ -111,13 +112,51 @@ export const WIDENED_IN_CATEGORY = "widened_in_category";
 /** Loosened filter codes from the search, in the words the card and the model use. */
 export const LOOSENED_COPY: Record<string, string> = {
   tags: "Widened beyond the category to find enough places",
+  popularity: "Too few less known places, so check which of these carry the Less known chip.",
+  michelin: "Too few Michelin places, so check which of these carry the Michelin chip.",
   price: "Price cap dropped to find enough places",
+  hours: "Too few places are listed as open that day, so check the hours on these.",
   price_not_applicable: "Price cap not applied to museums and hotels",
   [WIDENED_IN_CATEGORY]: "Few exact matches, so the rest are other places of the same kind",
 };
 
-export function loosenedCopy(loosened: readonly string[]): string[] {
-  return loosened.map((code) => LOOSENED_COPY[code]).filter((text): text is string => Boolean(text));
+/** The copy of each loosened code. `openDay` puts the day in the hours line ("open on Monday"). */
+export function loosenedCopy(loosened: readonly string[], openDay?: Weekday): string[] {
+  return loosened.flatMap((code) => {
+    const text = LOOSENED_COPY[code];
+    if (!text) return [];
+    return [code === "hours" && openDay ? text.replace("that day", `on ${capitalize(openDay)}`) : text];
+  });
+}
+
+/** The same codes for the one place a replacement brings back. */
+const REPLACEMENT_COPY: Record<string, string> = {
+  popularity: "Too few less known places, so check if this one carries the Less known chip.",
+  michelin: "Too few Michelin places, so check if this one carries the Michelin chip.",
+  price: "Price cap dropped to find this one.",
+  hours: "Too few places are listed as open that day, so check the hours of this one.",
+  price_not_applicable: "Price cap not applied to museums and hotels.",
+};
+
+/**
+ * What a replacement search tells the advisor about the place it found, as one
+ * line: `loosened` is what was dropped to reach that place (PlaceResult), not
+ * what the search tried for the rest of its list. "tags" alone says nothing:
+ * what counts is `otherKind`, a replacement of another category than the
+ * removed place.
+ */
+export function replacementNote(
+  loosened: readonly string[],
+  openDay?: Weekday,
+  options: { otherKind?: boolean } = {},
+): string | undefined {
+  const notes = loosened.flatMap((code) => {
+    const text = REPLACEMENT_COPY[code];
+    if (!text) return [];
+    return [code === "hours" && openDay ? text.replace("that day", `on ${capitalize(openDay)}`) : text];
+  });
+  if (options.otherKind) notes.unshift("Nothing of the same kind was left, so this one is a different kind of place.");
+  return notes.length > 0 ? notes.join(" ") : undefined;
 }
 
 /** "Lisbon · near Príncipe Real · based on Ana's favorites". */
@@ -165,6 +204,41 @@ function weekdayOf(iso: string): number {
   return new Date(Date.UTC(y!, m! - 1, d!)).getUTCDay();
 }
 
+/** "Fri" from an ISO date. */
+export function weekdayShort(iso: string): string {
+  return WEEKDAY_SHORT[weekdayOf(iso)]!;
+}
+
+/** "friday" from an ISO date. */
+export function weekdayName(iso: string): Weekday {
+  return WEEKDAY_NAMES[(weekdayOf(iso) + 6) % 7]!;
+}
+
+/** The one weekday a day hint names ("Saturday night", "this sat"); none when it names several. */
+export function weekdayInHint(dayHint: string | undefined): Weekday | undefined {
+  const words = dayHint?.toLowerCase().match(/[a-z]+/g) ?? [];
+  const named = new Set(words.flatMap((word) => WEEKDAYS[word] ?? []));
+  if (named.size !== 1) return undefined;
+  const [short] = named;
+  return WEEKDAY_NAMES.find((day) => WEEKDAYS[day] === short);
+}
+
+/**
+ * The day a search keeps to places open on. A target decides by its real date
+ * (exact trip dates only), otherwise a day hint that names a weekday. Never for
+ * a hotel: hours say nothing about a stay.
+ */
+export function openDayOf(input: {
+  target?: { day: number; slot: SlotName };
+  dayHint?: string;
+  category?: Category;
+  trip: { startDate?: string | null; datesMode: string };
+}): Weekday | undefined {
+  if (input.category === "stay" || input.target?.slot === "stay") return undefined;
+  const date = input.target && input.trip.datesMode === "exact" ? dateOfDay(input.trip.startDate ?? undefined, input.target.day) : undefined;
+  return date ? weekdayName(date) : weekdayInHint(input.dayHint);
+}
+
 /**
  * A slot as a button and chip label: "Fri dinner", "Day 2 lunch" without
  * dates, "Lisbon stay" for the stay slot.
@@ -176,7 +250,7 @@ export function slotTarget(
   const date = dateOfDay(trip.startDate, input.day);
   let label: string;
   if (input.slot === "stay") label = trip.destinationName ? `${trip.destinationName} stay` : "Stay";
-  else if (date) label = `${WEEKDAY_SHORT[weekdayOf(date)]} ${SLOT_WORDS[input.slot]}`;
+  else if (date) label = `${weekdayShort(date)} ${SLOT_WORDS[input.slot]}`;
   else label = `Day ${input.day} ${SLOT_WORDS[input.slot]}`;
   return { day: input.day, slot: input.slot, label, ...(date ? { date } : {}) };
 }

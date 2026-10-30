@@ -27,10 +27,33 @@ describe("composeOpening", () => {
     });
   });
 
+  it("does not call matched-less favorites missing, and names the fix", () => {
+    const opening = composeOpening({ ...lisbon, favoritesCount: 0, savedFavorites: 3, advisorPlacesInCity: 0 });
+    expect(opening.paragraphs[0]).toContain("None of Ana's favorites matched yet, so the matches stay broad until you check them on Ana's profile.");
+    expect(opening.paragraphs[0]).not.toContain("no favorites saved");
+  });
+
   it("leaves out what the trip does not have", () => {
     const opening = composeOpening({ ...lisbon, startDate: undefined, endDate: undefined, advisorPlacesInCity: 0, travelerNames: ["Ana Ruiz"] });
     expect(opening.created).toBe("Ana, Lisbon");
     expect(opening.paragraphs[0]).toBe("A trip to Lisbon for Ana. I will match every pick to Ana's five favorites.");
+  });
+
+  it("counts what drives the search, whoever named it", () => {
+    const opening = composeOpening({
+      ...lisbon,
+      favoritesCount: 2,
+      favoriteOwners: ["Ana Ruiz"],
+      advisorPlacesInCity: 0,
+    });
+    expect(opening.paragraphs[0]).toContain("I will match every pick to Ana's two favorites.");
+
+    const both = composeOpening({ ...lisbon, favoritesCount: 6, favoriteOwners: ["Ana Ruiz", "Marcus Lee"], advisorPlacesInCity: 0 });
+    expect(both.paragraphs[0]).toContain("I will match every pick to Ana's and Marcus's six favorites.");
+
+    const companionOnly = composeOpening({ ...lisbon, favoritesCount: 3, favoriteOwners: ["Marcus Lee"], advisorPlacesInCity: 0 });
+    expect(companionOnly.paragraphs[0]).toContain("Marcus's three favorites");
+    expect(companionOnly.paragraphs[0]).not.toContain("no favorites saved");
   });
 
   it("says plainly when the client has no favorites", () => {

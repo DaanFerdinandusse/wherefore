@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
 
+import { MEDIA_KIND_LABEL } from "@/lib/clients/candidates";
 import type { Category, TripContextOutput } from "@/lib/contracts";
 import { db } from "@/lib/db";
 import { clientFavorites, clients, itinerarySlots, places, tripAsks, tripPlaces, trips, tripTravelers } from "@/lib/db/schema";
@@ -18,6 +19,7 @@ import { toAsk, toSlot } from "@/lib/trips/map";
 // and the tool wrap it in a <trip_data> block (tools/model-output.ts).
 
 const MAX_FAVORITES = 8;
+const MAX_MEDIA = 6;
 const MAX_TAGS = 8;
 const MAX_RULES = 8;
 const MAX_ADVISOR_PLACES = 15;
@@ -38,9 +40,10 @@ export function fitContext(context: TripContextOutput, maxChars = MAX_CONTEXT_CH
     if (out.itinerary.length > 10) out.itinerary.pop();
     else if (out.advisorPlaces.length > 5) out.advisorPlaces.pop();
     else if (out.board.asks.length > 3) out.board.asks.shift();
-    else if (out.travelers.some((t) => t.favorites.length > 3 || t.tasteTags.length > 3)) {
+    else if (out.travelers.some((t) => t.favorites.length > 3 || (t.media?.length ?? 0) > 3 || t.tasteTags.length > 3)) {
       for (const t of out.travelers) {
         if (t.favorites.length > 3) t.favorites.pop();
+        if (t.media && t.media.length > 3) t.media.pop();
         if (t.tasteTags.length > 3) t.tasteTags.pop();
       }
     } else if (out.itinerary.length > 0) out.itinerary.pop();
@@ -173,6 +176,10 @@ export async function loadTripContext(tripId: string): Promise<TripContextOutput
               .slice(0, MAX_FAVORITES)
               .map((f) => clip(f.name ?? f.query, 60))
           : [],
+        media: (profile?.mediaFavorites ?? [])
+          .filter((m) => m.entityId)
+          .slice(0, MAX_MEDIA)
+          .map((m) => `${clip(m.name ?? m.query, 60)} (${MEDIA_KIND_LABEL[m.kind].toLowerCase()})`),
         tasteTags: (profile?.tasteTags ?? []).slice(0, MAX_TAGS).map((tag) => tag.name),
         rules: (profile?.groundRules ?? []).slice(0, MAX_RULES).map((rule) => clip(rule)),
       };

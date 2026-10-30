@@ -320,6 +320,10 @@ function tripPlacesUpsert(tripId: string, rows: TripPlaceUpsert[], scope: ScopeI
     guardOrTrue(turn, tripId),
   );
   const pick = (column: string, current: SQL) => sql`case when ${BETTER} then ${ex(column)} else ${current} end`;
+  // A display score is a rank in one result set, and the affinity decides which
+  // place is better. Found again on the same signals, a place takes the score of
+  // the search it now sits in, so a list never reads 69, 60, 77.
+  const SAME_SIGNALS = sql`(excluded.best_score is not null and excluded.best_affinity is not null and ${tripPlaces.signalHash} is not distinct from excluded.signal_hash)`;
   return db
     .insert(tripPlaces)
     .select(source)
@@ -328,13 +332,14 @@ function tripPlacesUpsert(tripId: string, rows: TripPlaceUpsert[], scope: ScopeI
       set: {
         source: sql`case when array_position(${PRIORITY}, ${ex("source")}) > array_position(${PRIORITY}, ${tripPlaces.source}) then ${ex("source")} else ${tripPlaces.source} end`,
         category: sql`case when ${tripPlaces.category} = 'other' then ${ex("category")} else ${tripPlaces.category} end`,
-        bestScore: pick("best_score", sql`${tripPlaces.bestScore}`),
+        bestScore: sql`case when ${BETTER} or ${SAME_SIGNALS} then ${ex("best_score")} else ${tripPlaces.bestScore} end`,
         bestAffinity: pick("best_affinity", sql`${tripPlaces.bestAffinity}`),
         signalHash: pick("signal_hash", sql`${tripPlaces.signalHash}`),
         explainability: pick("explainability", sql`${tripPlaces.explainability}`),
         sharedTags: pick("shared_tags", sql`${tripPlaces.sharedTags}`),
         advisorPlaceId: sql`coalesce(${ex("advisor_place_id")}, ${tripPlaces.advisorPlaceId})`,
-        reason: sql`coalesce(${ex("reason")}, ${tripPlaces.reason})`,
+        // A reason names the drivers it was written on, so it goes with them.
+        reason: sql`case when ${BETTER} then ${ex("reason")} else coalesce(${ex("reason")}, ${tripPlaces.reason}) end`,
         updatedAt: sql`now()`,
       },
     })

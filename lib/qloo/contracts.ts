@@ -2,7 +2,7 @@
 // normalize.ts annotate their exports with these, so typecheck fails the moment
 // an implementation drifts from what the tools and the UI code against.
 
-import type { Category, Destination, Explainability, FavoriteCandidate, PlaceTag, TasteTag } from "@/lib/contracts";
+import type { Category, Destination, Explainability, FavoriteCandidate, PlaceTag, TasteTag, SlotName, Weekday } from "@/lib/contracts";
 import type { places } from "@/lib/db/schema/core";
 
 import type { QlooClient } from "./client";
@@ -52,6 +52,8 @@ export type PlaceResult = {
   /** Meters from the destination point: the API's distance, or computed from
    *  the coordinates when it gives none. Null without either. */
   distanceM: number | null;
+  /** What was dropped to reach this result. Left out for a strict result. */
+  loosened?: LoosenedFilter[];
 };
 
 /** One request to the upstream, for the "How we got this" panel and trip_calls. */
@@ -98,12 +100,16 @@ export type EntityCandidate = FavoriteCandidate & {
 /**
  * What findPlaces did not apply as asked:
  * - "tags": too few results, so filter.tags was dropped.
+ * - "popularity": too few less known places, so the popularity cap was dropped.
+ * - "michelin": too few Michelin places, so that filter was dropped.
  * - "price": too few results, so the price cap was dropped.
+ * - "hours": too few places listed as open that day, so the open day was dropped. Always
+ *   the last to go: a closed restaurant is the worst outcome.
  * - "price_not_applicable": a price cap was asked for a see or stay ask
  *   (museums, hotels carry no price level), so it was never applied. The UI
  *   says "Price cap not applied to museums and hotels".
  */
-export type LoosenedFilter = "tags" | "price" | "price_not_applicable";
+export type LoosenedFilter = "tags" | "popularity" | "michelin" | "price" | "hours" | "price_not_applicable";
 
 export type LocalityCheck = {
   /** What the trip asked for (the destination's disambiguation or name). */
@@ -138,6 +144,14 @@ export type FindPlacesInput = {
   priceMax?: number;
   /** Leave out malls and department stores: they carry the tags of what is inside them. */
   noShopping?: boolean;
+  /** Keeps to places at or below this popularity (0 to 1). LESS_KNOWN_POPULARITY_MAX for "less known". */
+  popularityMax?: number;
+  /** Keeps to places the provider links to Michelin. */
+  michelin?: boolean;
+  /** Keeps to places open on this day. */
+  openDay?: Weekday;
+  /** With openDay: keeps to places open for part of this slot, by their own hours. */
+  openSlot?: SlotName;
   take: number;
   page?: number;
 };

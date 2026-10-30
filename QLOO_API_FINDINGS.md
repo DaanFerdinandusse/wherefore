@@ -39,6 +39,20 @@ Each result carries `query.affinity` and a rich `properties` block: `short_descr
 
 Note: affinity scores are bunched (0.79 to 0.80 for the top 10), so show rank or relative bars rather than raw decimals.
 
+Three more filters on `/v2/insights`, tested live 2026-10-30. All three keep explainability and combine with each other:
+- `filter.popularity.max=0.6`: popularity is a 0 to 1 percentile at the top level of each entity. In Lisbon it surfaced Ceia at 0.02, rating 4.9. The app calls below 0.6 "less known".
+- `filter.external.exists=michelin`: `external.michelin` is a list of `{ id, stars }` in insights and one `{ id }` under `properties.external` in `/search` and `/entities`. `stars` is often null, so the key means listed, not starred.
+- `filter.hours=monday` works, and we do not send it. It reads the `/v2/insights` copy of the hours, which is unreliable (below), checks the day only (a lunch-only place passes a dinner search), and drops places with no `hours` block.
+- Hours and closure come from `/entities`. Tested 2026-10-30 on 278 Lisbon places:
+  - `/v2/insights` usually lists only the first span of a day: O Talho reads `12:00 to 16:00` there and adds `19:00 to 23:30` on `/entities`.
+  - 405 of 1,617 day entries differ. 41 places are closed on `/v2/insights` for days `/entities` has open, and 16 of them read closed all seven days (Quintal das Docas, Mensagem). `filter.hours` drops them with no trace. 7 places go the other way.
+  - `properties.is_closed` is true on 6 of the 278 on `/entities` (Tribo da Terra, Boa Vida), with `hours: {}`, and false on every `/v2/insights` row. They rank normally and pass `filter.hours`.
+  - `/search` and `/entities` agree byte for byte. Which one is right in the world could not be tested; `/v2/insights` missing every closure suggests it is the stale copy.
+  - Shapes: a block has all 7 days or is `{}`, at most 2 spans, `T00:00:00` both ways means 24 hours, and a past-midnight span closes earlier than it opens.
+  - Other fields also differ between the two (rating, name, primary genre, price level), so a stored value depends on which endpoint wrote the row.
+- Explainability lists only the strongest signals from about 10 signals up (8 intact, 10 cut). Scores then sum to about 0.92, and the weakest favorites have no row: an artist among 20 signals was never listed.
+- Request length: 8153 characters answered 200, 8270 answered 414 (tested with 203 and 206 excluded ids). An id costs 39 characters in `filter.exclude.entities` or `signal.interests.entities`, so `MAX_EXCLUDED` stays well below that with 24 signals and tags.
+
 ### 3. Category grouping: `filter.tags`
 ```
 &filter.tags=urn:tag:category:place:cocktail_bar

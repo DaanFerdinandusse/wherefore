@@ -87,7 +87,7 @@ export function SearchCard({ tool, state, preliminary, input, output, destinatio
   const details = running && output?.progress ? output.progress : output?.details;
   const extraSteps = (output?.steps ?? []).filter((s) => s.key !== "search");
   const stageLine = failed ? undefined : searchStageLine(output, running);
-  const notes = [...loosenedCopy(output?.loosened ?? []), ...(!running && output?.progress ? [output.progress] : [])];
+  const notes = [...loosenedCopy(output?.loosened ?? [], output?.openDay), ...(!running && output?.progress ? [output.progress] : [])];
 
   return (
     <CardFrame tool={tool} state={state} preliminary={preliminary}>

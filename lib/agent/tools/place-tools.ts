@@ -17,27 +17,30 @@ import {
   CATEGORY_FILTER_TAGS,
   findPlaces,
   QlooLocalityMismatchError,
+  WEEKDAY_NAMES,
   type PlaceResult,
 } from "@/lib/qloo";
 import { upsertPlaces } from "@/lib/places";
 import { saveReplacement, setSlots, setTripPlaceStatus, type SlotInput } from "@/lib/trips";
 import { appendPositions, slotHolds, slotRule } from "@/lib/trips/day-parts";
-import { asCategory, toSlot } from "@/lib/trips/map";
+import { askRerunOfQuery, asCategory, DESCRIPTION_KEYS, descriptionTexts, toSlot } from "@/lib/trips/map";
+import { pickReplacement } from "@/lib/trips/replace";
 
-import { cacheWrite, guarded, type TurnRef } from "../writes";
+import { cacheWrite, guarded, TurnSupersededError, type TurnRef } from "../writes";
 
+import { replacementNote } from "./labels";
 import { cleanAgentNote } from "./notes";
 import { severalPlacesError } from "./place-name";
-import { chooseSearchArea, searchAreaSchema } from "./search-area";
+import { chooseSearchArea } from "./search-area";
 import {
   cardsInOrder,
-  DESCRIPTION_KEYS,
-  descriptionTexts,
   driversOf,
+  explainCards,
   resolveTripPlaceRefs,
   tripPlaceRowOf,
   type BoardItem,
 } from "./search-core";
+import { searchExclusions } from "./signals";
 import { loadToolTrip, logCalls } from "./trip-data";
 
 // lookup_place, set_itinerary and remove_place: the small tools.
@@ -45,7 +48,6 @@ import { loadToolTrip, logCalls } from "./trip-data";
 // ------------------------------------------------------------ lookup_place
 
 const MAX_DESCRIPTION = 400;
-const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -59,7 +61,7 @@ function clip(value: string, max: number): string {
 export function hoursOf(raw: unknown): Record<string, string> | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const out: Record<string, string> = {};
-  for (const day of DAYS) {
+  for (const day of WEEKDAY_NAMES) {
     const spans = (raw as Record<string, unknown>)[day];
     if (!Array.isArray(spans) || spans.length === 0) continue;
     const parts = spans.flatMap((span) => {
@@ -129,17 +131,18 @@ export type SetItineraryInput = {
 
 /**
  * What a model note about a place may quote: the place's descriptions and
- * its opening hours, verbatim (notes.ts).
+ * its opening hours, verbatim (notes.ts). Never its tags: a sentence passes
+ * when it contains a fact, so a short name ("Accepts reservations") would
+ * carry any invented hours or price written around it.
  */
+export function noteFactsOf(row: Pick<typeof places.$inferSelect, "description" | "properties">): string[] {
+  return [...descriptionTexts(row), ...Object.values(hoursOf(row.properties.hours) ?? {})];
+}
+
 async function noteFacts(placeIds: string[]): Promise<Map<string, string[]>> {
   if (placeIds.length === 0) return new Map();
   const rows = await db.select().from(places).where(inArray(places.id, [...new Set(placeIds)]));
-  return new Map(
-    rows.map((row) => [
-      row.id,
-      [...descriptionTexts(row), ...Object.values(hoursOf(row.properties.hours) ?? {})],
-    ]),
-  );
+  return new Map(rows.map((row) => [row.id, noteFactsOf(row)]));
 }
 
 export async function setItineraryTool(
@@ -221,7 +224,7 @@ export async function removePlaceTool(
   turn: TurnRef,
   toolCallId: string,
 ): Promise<RemovePlaceOutput> {
-  const ctx = await loadToolTrip(turn.tripId);
+  const before = await loadToolTrip(turn.tripId);
   const match = (await resolveTripPlaceRefs(turn.tripId, [input.place_id])).get(input.place_id);
   // A name that could mean two places removes neither.
   if (match?.matches) return { error: severalPlacesError(input.place_id, match.matches) };
@@ -237,7 +240,7 @@ export async function removePlaceTool(
 
   // Already replaced: by this call (a retry) or an earlier one.
   if (found.status === "removed" && found.replacedBy) {
-    const [replacement] = await cardsInOrder(ctx, [found.replacedBy]);
+    const [replacement] = await cardsInOrder(before, [found.replacedBy]);
     return {
       removed,
       ...(replacement ? { replacement } : {}),
@@ -245,9 +248,12 @@ export async function removePlaceTool(
     };
   }
   if (found.status !== "removed") {
-    await guarded(turn, (guard) => setTripPlaceStatus(found.id, "removed", ctx.scope, { turn: guard }));
+    await guarded(turn, (guard) => setTripPlaceStatus(found.id, "removed", before.scope, { turn: guard }));
   }
   if (!input.replace) return { removed };
+  // Read again after the removal: a place the advisor just dropped from the
+  // itinerary is no longer a pick, so the replacement is not searched for on it.
+  const ctx = await loadToolTrip(turn.tripId);
 
   // Where the place came from: its best ranked ask, else its category.
   const [origin] = await db
@@ -257,24 +263,20 @@ export async function removePlaceTool(
     .where(eq(askPlaces.tripPlaceId, found.id))
     .orderBy(askPlaces.rank)
     .limit(1);
-  const query = origin?.query ?? {};
-  const tags =
-    Array.isArray(query.resolvedTags) && query.resolvedTags.every((t) => typeof t === "string")
-      ? (query.resolvedTags as string[])
-      : removed.category !== "other"
-        ? CATEGORY_FILTER_TAGS[removed.category]
-        : [];
-  const priceMax = typeof query.priceMax === "number" ? query.priceMax : undefined;
+  const { tags: askTags, priceMax, area: askArea, ...filters } = askRerunOfQuery(origin?.query ?? {});
+  const tags = askTags.length > 0 ? askTags : removed.category !== "other" ? CATEGORY_FILTER_TAGS[removed.category] : [];
   // The same circle as the search it came from, so a replacement stays near the day.
-  const stored = searchAreaSchema.safeParse(query.searchArea);
-  const area = stored.success ? stored.data : chooseSearchArea({ destination: ctx.destination, placed: [] });
+  const area = askArea ?? chooseSearchArea({ destination: ctx.destination, placed: [] });
 
   const onTrip = await db
     .select({ entityId: places.entityId })
     .from(places)
     .innerJoin(tripPlaces, eq(tripPlaces.placeId, places.id))
     .where(eq(tripPlaces.tripId, turn.tripId));
-  const excludeIds = onTrip.map((r) => r.entityId).slice(0, 200);
+  const onTripIds = onTrip.map((r) => r.entityId);
+  // The itinerary and the removed places first: the request has a cap, the pick
+  // below checks every place on the trip.
+  const excludeIds = searchExclusions(ctx.excludeIds, onTripIds);
 
   let results: PlaceResult[];
   try {
@@ -285,6 +287,7 @@ export async function removePlaceTool(
         signals: ctx.signals.signals,
         ...(tags.length ? { tags, tagsOperator: "union" as const } : {}),
         ...(priceMax ? { priceMax } : {}),
+        ...filters,
         excludeIds,
         take: 5,
       },
@@ -296,9 +299,11 @@ export async function removePlaceTool(
     if (error instanceof QlooLocalityMismatchError) return { removed, note: "No replacement: the search came back from another city." };
     throw new FatalError(`Removed ${removed.name}, but the search for a replacement did not answer. Ask again for one.`);
   }
-  const pick =
-    results.find((r) => removed.category === "other" || r.category === removed.category) ?? results[0];
+  const pick = pickReplacement(results, onTripIds, removed.category);
   if (!pick) return { removed, note: "No other place matched, so nothing replaced it." };
+  const note = replacementNote(pick.loosened ?? [], filters.openDay, {
+    otherKind: removed.category !== "other" && pick.category !== removed.category,
+  });
 
   const item: BoardItem = {
     place: pick.place,
@@ -345,6 +350,13 @@ export async function removePlaceTool(
     ),
   );
   if (!tripPlaceId) return { removed, note: "The replacement could not be saved." };
+  const [fresh] = await cardsInOrder(ctx, [tripPlaceId]);
+  // A replacement reads like the cards around it. Its place is saved, so a
+  // failed explain only leaves it without a reason.
+  await explainCards(turn, ctx, fresh ? [fresh] : []).catch((error) => {
+    if (error instanceof TurnSupersededError) throw error;
+    console.error(`[remove_place ${toolCallId}] explaining the replacement failed`, error);
+  });
   const [replacement] = await cardsInOrder(ctx, [tripPlaceId]);
-  return { removed, ...(replacement ? { replacement } : {}) };
+  return { removed, ...(replacement ? { replacement, ...(note ? { note } : {}) } : {}) };
 }
