@@ -99,6 +99,8 @@ export function PlaceCard({
   const client = firstName(trip.clientName);
   const [tab, setTab] = useState<Tab>("for");
   const [gallery, setGallery] = useState<{ placeId: string; src: string } | null>(null);
+  const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
+  const photosExpanded = expandedPlaceId === card.placeId;
   const { profile, failed: profileFailed } = useTripPlaceProfile(true, card.tripPlaceId);
   const place = profile?.place ?? null;
   const wantFull = tab !== "for";
@@ -158,6 +160,8 @@ export function PlaceCard({
           name={card.name}
           tall={variant === "overlay"}
           tripPlaceId={card.tripPlaceId}
+          expanded={photosExpanded}
+          onExpand={() => setExpandedPlaceId(card.placeId)}
           onOpenGallery={(src) => setGallery({ placeId: card.placeId, src })}
           chips={
             <>
@@ -173,6 +177,24 @@ export function PlaceCard({
             </>
           }
         />
+
+        {photosExpanded ? (
+          <div role="region" aria-label={`More photos of ${card.name}`} className="mt-1.5 grid grid-cols-3 gap-1.5" data-testid="place-card-gallery">
+            {photos.slice(3).map((photo, index) => (
+              <button
+                key={`${photo.src}-${index}`}
+                type="button"
+                aria-label={`View photo ${index + 4} of ${card.name}`}
+                aria-haspopup="dialog"
+                onClick={() => setGallery({ placeId: card.placeId, src: photo.src })}
+                className="relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-lg bg-avatar focus-visible:outline-offset-[-4px]"
+              >
+                <LoadingPhoto photo={photo} sizes="240px" />
+                <GoogleCredit attributions={photo.attributions} />
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {gallery?.placeId === card.placeId ? (
           <PhotoViewer photos={photos} name={card.name} initialSrc={gallery.src} onClose={() => setGallery(null)} />
@@ -224,7 +246,7 @@ function GoogleCredit({ attributions }: { attributions?: GoogleAttribution[] }) 
 }
 
 /** Photo frames reserve space while details load and open the selected image. */
-function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGallery }: {
+function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGallery, expanded, onExpand }: {
   photos: CardPhoto[];
   loading: boolean;
   name: string;
@@ -232,6 +254,8 @@ function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGal
   chips: ReactNode;
   tripPlaceId: string;
   onOpenGallery: (src: string) => void;
+  expanded: boolean;
+  onExpand: () => void;
 }) {
   const slotCount = loading ? 3 : Math.min(photos.length, 3);
   const onDragStart = (event: DragEvent) => startPlaceDrag(event, tripPlaceId);
@@ -250,17 +274,22 @@ function PhotoStrip({ photos, loading, name, tall, chips, tripPlaceId, onOpenGal
     <div className={cn("flex shrink-0 gap-1.5", height)} draggable onDragStart={onDragStart} data-testid="place-card-photos">
       {Array.from({ length: slotCount }, (_, index) => {
         const photo = photos[index];
-        const hasMore = index === 2 && photos.length > 3;
+        const hasMore = index === 2 && photos.length > 3 && !expanded;
         return (
           <button
             key={index}
             type="button"
             disabled={!photo}
-            onClick={() => photo && onOpenGallery(photo.src)}
+            onClick={() => {
+              if (hasMore) onExpand();
+              else if (photo) onOpenGallery(photo.src);
+            }}
             aria-label={hasMore ? `Open more photos of ${name}` : `View photo ${index + 1} of ${name}`}
-            aria-haspopup="dialog"
+            aria-haspopup={hasMore ? undefined : "dialog"}
+            aria-expanded={hasMore ? false : undefined}
             className={cn(
-              "relative overflow-hidden bg-avatar text-left enabled:cursor-zoom-in focus-visible:outline-offset-[-4px]",
+              "relative overflow-hidden bg-avatar text-left focus-visible:outline-offset-[-4px]",
+              hasMore ? "cursor-pointer" : "enabled:cursor-zoom-in",
               slotCount === 1 ? "w-full rounded-photo" : index === 0 ? "w-[52%] shrink-0 rounded-l-photo rounded-r-lg" :
                 index === slotCount - 1 ? "min-w-0 grow rounded-l-lg rounded-r-photo" : "w-[27.5%] shrink-0 rounded-lg",
             )}
