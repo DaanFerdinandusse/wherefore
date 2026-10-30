@@ -17,7 +17,7 @@ export default function ClientPage({
   return (
     <>
       <ClientsList searchParams={searchParams} />
-      <ClientProfileSheet params={params} intercepted={false} />
+      <ClientProfileSheet params={params} />
     </>
   );
 }

@@ -16,7 +16,7 @@ export default function NewClientPage({
   return (
     <>
       <ClientsList searchParams={searchParams} />
-      <NewClientSheet intercepted={false} />
+      <NewClientSheet />
     </>
   );
 }

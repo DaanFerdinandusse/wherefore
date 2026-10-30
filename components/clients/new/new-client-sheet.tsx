@@ -5,9 +5,9 @@ import { NewClientForm } from "./new-client-form";
 
 // C1 New client in its sheet. The form reads ?return= (the New trip panel
 // that asked), so it sits behind Suspense.
-export function NewClientSheet({ intercepted }: { intercepted: boolean }) {
+export function NewClientSheet() {
   return (
-    <ClientModal intercepted={intercepted} label="New client">
+    <ClientModal label="New client">
       <Suspense fallback={null}>
         <NewClientForm />
       </Suspense>
