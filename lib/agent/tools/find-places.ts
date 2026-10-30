@@ -288,7 +288,7 @@ export async function* findPlacesTool(
   };
   // Keyed by toolCallId: a retried step gets the same ask, and its checkpoint.
   const ask = await guarded(turn, (guard) =>
-    createAsk(turn.tripId, { label, toolCallId, status: "running", query: askQuery }, ctx.scope, { turn: guard }),
+    createAsk(turn.tripId, { label, toolCallId, status: "running", query: askQuery, target: input.target }, ctx.scope, { turn: guard }),
   );
   const source = `ask:${ask.id}`;
   const checkpoint = await readCheckpoint(ask.id);

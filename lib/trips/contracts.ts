@@ -167,6 +167,7 @@ export type AskPlaceInput = {
 
 export type CreateAskInput = {
   label: string;
+  target?: Ask["target"];
   query?: Record<string, unknown>;
   /** Idempotency key: a second create with the same tool call id returns the first ask. */
   toolCallId?: string | null;
@@ -176,6 +177,7 @@ export type CreateAskInput = {
 
 export type AskPatch = Partial<{
   label: string;
+  target: Ask["target"] | null;
   query: Record<string, unknown>;
   status: Ask["status"];
   resultCount: number;

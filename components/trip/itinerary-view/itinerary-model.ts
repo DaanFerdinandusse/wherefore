@@ -131,7 +131,8 @@ export function suggestionsBySlot(state: ModelState): Map<string, TripPlaceCard>
     if (!ask.target || ask.status === "archived" || ask.status === "failed") continue;
     const key = slotKey(ask.target);
     if (filled.has(key) || out.has(key)) continue;
-    const best = places.filter((p) => p.status === "suggested" && p.askIds.includes(ask.id)).sort(byScore)[0];
+    const candidates = places.filter((p) => p.status === "suggested" && p.askIds.includes(ask.id));
+    const best = candidates.find((p) => p.tripPlaceId === ask.pickTripPlaceId) ?? candidates.sort(byScore)[0];
     if (best) {
       out.set(key, best);
       used.add(best.tripPlaceId);

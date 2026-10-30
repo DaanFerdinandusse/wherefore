@@ -42,20 +42,20 @@ export async function recommendPlaceTool(input: RecommendPlaceInput, turn: TurnR
   const askId = input.ask_id && card.askIds.includes(input.ask_id) ? input.ask_id : card.askIds.at(-1);
   const [ask] = askId
     ? await db
-        .select({ id: tripAsks.id, query: tripAsks.query })
+        .select({ id: tripAsks.id, query: tripAsks.query, target: tripAsks.target })
         .from(tripAsks)
         .where(and(eq(tripAsks.id, askId), eq(tripAsks.tripId, turn.tripId)))
         .limit(1)
     : [];
 
-  const rawTarget = input.target ?? targetOfQuery(ask?.query) ?? undefined;
+  const rawTarget = input.target ?? ask?.target ?? targetOfQuery(ask?.query) ?? undefined;
   const target = rawTarget
     ? slotTarget(rawTarget, { startDate: ctx.trip.startDate ?? undefined, destinationName: ctx.destination.name })
     : undefined;
 
   if (ask) {
     const query = { ...ask.query, pick: card.tripPlaceId, ...(rawTarget ? { target: rawTarget } : {}) };
-    await guarded(turn, (guard) => updateAsk(ask.id, { query }, ctx.scope, { turn: guard }));
+    await guarded(turn, (guard) => updateAsk(ask.id, { query, ...(rawTarget ? { target: rawTarget } : {}) }, ctx.scope, { turn: guard }));
   }
 
   const terms = [...(card.keywords ?? []), ...(card.dishes ?? []), ...card.sharedTags.map((t) => t.name)];

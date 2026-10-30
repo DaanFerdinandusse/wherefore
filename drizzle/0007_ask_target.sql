@@ -1,0 +1,1 @@
+ALTER TABLE "trip_asks" ADD COLUMN "target" jsonb;

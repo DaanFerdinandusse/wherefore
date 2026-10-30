@@ -471,6 +471,7 @@ export const createAsk: CreateAsk = async (tripId, input, scope, options = {}) =
       tripId: sql`${tripId}::uuid`,
       label: sql`${input.label.trim()}::text`,
       query: sql`${JSON.stringify(input.query ?? {})}::jsonb`,
+      target: sql`${input.target ? JSON.stringify(input.target) : null}::jsonb`,
       toolCallId: sql`${input.toolCallId ?? null}::text`,
       chatMessageId: sql`${input.chatMessageId ?? null}::text`,
       status: sql`${input.status ?? "running"}::text`,

@@ -23,6 +23,7 @@ import {
   slotList,
   subLine,
   suggestionHint,
+  suggestionsBySlot,
   usesCards,
   whyBox,
 } from "./itinerary-model";
@@ -253,5 +254,16 @@ describe("a place card", () => {
       text: "Ask for the counter",
       label: "Your note on this place",
     });
+  });
+});
+
+
+describe("recommended slot pick", () => {
+  it("keeps the agent pick even when another result has a higher score", () => {
+    const state = initialState(snapshot({
+      asks: [{ id: ASK, label: "Dinner", status: "done", resultCount: 2, loosened: [], target: { day: 1, slot: "dinner" }, pickTripPlaceId: "picked" }],
+      places: [card("highest", { score: 99, askIds: [ASK] }), card("picked", { score: 85, askIds: [ASK] })],
+    }));
+    expect([...suggestionsBySlot(state).values()].map((p) => p.tripPlaceId)).toEqual(["picked"]);
   });
 });

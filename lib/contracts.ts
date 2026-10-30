@@ -95,6 +95,8 @@ export type Ask = {
   loosened: string[];
   /** The itinerary slot this search is for ("Friday dinner"), when the advisor named one. */
   target?: { day: number; slot: SlotName };
+  /** The recommended place from this search. */
+  pickTripPlaceId?: string;
 };
 
 export type ItinerarySlot = {

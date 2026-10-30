@@ -40,8 +40,14 @@ export function isSlotName(value: string): value is SlotName {
  * `result_count` is only the final count written when the ask completes, so
  * it is the fallback, not the source.
  */
+const AskTarget = z.object({ day: z.number().int().positive(), slot: z.enum(SLOT_ORDER) });
+
 export function toAsk(row: typeof tripAsks.$inferSelect, liveCount?: number): Ask {
+  const target = AskTarget.safeParse(row.target ?? row.query?.target);
+  const pick = z.string().uuid().safeParse(row.query?.pick);
   return {
+    ...(target.success ? { target: target.data } : {}),
+    ...(pick.success ? { pickTripPlaceId: pick.data } : {}),
     id: row.id,
     label: row.label,
     status: asAskStatus(row.status),

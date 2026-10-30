@@ -15,7 +15,7 @@ test("7. a tool error renders Retry, and Retry starts the ask again", async ({ p
 
   const failedCard = page.locator('[data-testid="tool-card"][data-tool="echo_places"][data-state="output-error"]');
   await expect(failedCard.first()).toBeVisible({ timeout: 90_000 });
-  await expect(failedCard.first().getByTestId("tool-error")).toContainText("Try the search again");
+  await expect(failedCard.first().getByTestId("tool-error")).toContainText("The step did not finish");
   await waitForIdle(request, chatId);
   await expect(page.getByTestId("chat-column")).toHaveAttribute("data-busy", "false");
 

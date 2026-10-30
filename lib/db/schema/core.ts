@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import type {
+  Ask,
   BuiltFrom,
   Destination,
   Explainability,
@@ -236,6 +237,7 @@ export const tripAsks = pgTable(
       .notNull()
       .references(() => trips.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
+    target: jsonb("target").$type<Ask["target"]>(),
     query: jsonb("query").$type<Record<string, unknown>>().notNull().default({}),
     toolCallId: text("tool_call_id"),
     chatMessageId: text("chat_message_id"),
