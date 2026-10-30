@@ -164,6 +164,7 @@ function WorkspaceShell({
         {wide ? null : nav}
         <div className="flex min-h-0 flex-1 flex-col">
           <ChatColumn
+            key={chat.chat.id}
             chatId={chat.chat.id}
             tripId={trip.id}
             initial={chat}
