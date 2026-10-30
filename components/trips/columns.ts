@@ -22,13 +22,20 @@ export type StageColumn = { stage: TripStage; label: string; dotClass: string };
 
 export const STAGE_COLUMNS: readonly StageColumn[] = [
   { stage: "planning", label: "Planning", dotClass: "bg-ink" },
-  { stage: "shared", label: "Shared with client", dotClass: "bg-ink" },
+  { stage: "shared", label: "Shared with client", dotClass: "bg-ochre" },
   { stage: "traveling", label: "Traveling now", dotClass: "bg-green" },
   { stage: "done", label: "Done", dotClass: "bg-ink/30" },
 ];
 
 /** Cards shown per column before "Show N more". */
 export const COLUMN_LIMIT = 6;
+/** Done trips are compact rows and stay quiet: two before "Show N more". */
+export const DONE_LIMIT = 2;
+
+/** How many cards a column shows before "Show N more". */
+export function columnLimit(stage: TripStage): number {
+  return stage === "done" ? DONE_LIMIT : COLUMN_LIMIT;
+}
 
 export function stageLabel(stage: TripStage): string {
   return STAGE_COLUMNS.find((c) => c.stage === stage)?.label ?? stage;

@@ -103,52 +103,14 @@ export function daysUntil(startDate: string | null, today: string): number | nul
   return nightsCount(today, startDate);
 }
 
-export type CardStatus = {
-  text: string;
-  /** 0..1 for the progress bar, or null for no bar. */
-  progress: number | null;
-  tone: "plain" | "strong" | "warning";
-  barTone?: "ink" | "green";
-};
 
-/**
- * The bottom line of a trip card. Only facts from the row: seed state, places,
- * filled days and the dates.
- */
-export function cardStatus(card: TripCard, today: string): CardStatus {
-  const { places, days, emptyDays } = card.counts;
-  const filledDays = Math.max(0, days - emptyDays);
+/** "Sep" for a trip this year, "Mar 2025" for another year. */
+export function shortMonthLabel(iso: string, today: string): string {
+  const { year, month } = parts(iso);
+  return year === parts(today).year ? MONTHS_SHORT[month] : `${MONTHS_SHORT[month]} ${year}`;
+}
 
-  if (card.seedStatus === "failed") {
-    return { text: "Could not build the first list", progress: null, tone: "warning" };
-  }
-  if (card.seedStatus === "running") {
-    return { text: "Building the first list", progress: null, tone: "plain" };
-  }
-
-  if (card.stage === "done") {
-    const finished = card.endDate ?? card.startDate;
-    const head = finished ? `Finished ${dayMonthLabel(finished)}` : "Finished";
-    return { text: `${head} · ${plural(places, "place")}`, progress: null, tone: "plain" };
-  }
-
-  if (card.stage === "traveling") {
-    const day = tripDayToday(card, today);
-    if (day !== null) {
-      return { text: `Day ${day} of ${days}`, progress: Math.min(1, day / days), tone: "plain", barTone: "green" };
-    }
-    return { text: plural(places, "place"), progress: null, tone: "plain" };
-  }
-
-  if (places === 0) {
-    return card.stage === "planning"
-      ? { text: "No places yet", progress: 0, tone: "plain", barTone: "ink" }
-      : { text: "No places yet", progress: null, tone: "plain" };
-  }
-
-  const filled = `${filledDays} of ${days} days filled`;
-  if (card.stage === "shared") {
-    return { text: `${plural(places, "place")} · ${filled}`, progress: null, tone: "plain" };
-  }
-  return { text: `${plural(places, "place")} · ${filled}`, progress: filledDays / days, tone: "plain", barTone: "ink" };
+/** The right side of a done row: "Elena Costa, Sep", or the name alone without dates. */
+export function doneRowLabel(card: Pick<TripCard, "clientName" | "startDate">, today: string): string {
+  return card.startDate ? `${card.clientName}, ${shortMonthLabel(card.startDate, today)}` : card.clientName;
 }
