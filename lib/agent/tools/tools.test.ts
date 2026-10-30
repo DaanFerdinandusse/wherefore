@@ -4,8 +4,21 @@ import type { Category } from "@/lib/contracts";
 
 import { assignResults, categoryCounts, emptyLoopState, runCategoryLoop } from "./category-loop";
 import { activeToolsFor, SEED_TOOL } from "./index";
-import { askLabel, cleanIntent, loosenedCopy, searchTitle, shortDay } from "./labels";
+import {
+  askLabel,
+  categoryNoun,
+  cleanIntent,
+  dateOfDay,
+  loosenedCopy,
+  rowTitle,
+  searchTerms,
+  searchTitle,
+  shortDay,
+  slotPhrase,
+  slotTarget,
+} from "./labels";
 import { asTripData, DATA_CLOSE } from "./model-output";
+import { matchClientNote, mentions, targetOfQuery } from "./recommend-format";
 import { ADVISOR_DRIVER_ID, buildSignals, driversFor, MAX_SIGNALS } from "./signals";
 
 describe("ask labels", () => {
@@ -165,10 +178,68 @@ describe("category loop", () => {
 
 describe("tool activation", () => {
   const tools = { seed_trip: 1, find_places: 1, get_trip_context: 1 };
-  it("forces seed_trip alone on the seed turn's first step, hides it otherwise", () => {
-    expect(activeToolsFor(tools, { seed: true, stepNumber: 0 })).toEqual([SEED_TOOL]);
-    expect(activeToolsFor(tools, { seed: true, stepNumber: 1 })).not.toContain(SEED_TOOL);
-    expect(activeToolsFor(tools, { seed: false, stepNumber: 0 })).toEqual(["find_places", "get_trip_context"]);
+  it("never offers seed_trip: a new trip waits for the brief", () => {
+    expect(activeToolsFor(tools)).not.toContain(SEED_TOOL);
+    expect(activeToolsFor(tools)).toEqual(["find_places", "get_trip_context"]);
+  });
+});
+
+describe("slots and search rows", () => {
+  const trip = { startDate: "2027-05-14", destinationName: "Lisbon" };
+
+  it("labels a slot from the trip dates, the day number without them, and the stay by city", () => {
+    expect(slotTarget({ day: 1, slot: "dinner" }, trip)).toEqual({ day: 1, slot: "dinner", label: "Fri dinner", date: "2027-05-14" });
+    expect(slotTarget({ day: 2, slot: "night" }, trip).label).toBe("Sat late");
+    expect(slotTarget({ day: 2, slot: "lunch" }, {}).label).toBe("Day 2 lunch");
+    expect(slotTarget({ day: 1, slot: "stay" }, trip).label).toBe("Lisbon stay");
+    expect(dateOfDay("2027-05-14", 5)).toBe("2027-05-18");
+    expect(dateOfDay(undefined, 2)).toBeUndefined();
+  });
+
+  it("says a slot inside a sentence", () => {
+    expect(slotPhrase({ day: 1, slot: "dinner", date: "2027-05-14" })).toBe("Friday dinner");
+    expect(slotPhrase({ day: 3, slot: "lunch" })).toBe("day 3 lunch");
+    expect(slotPhrase({ day: 1, slot: "stay" })).toBe("the stay");
+  });
+
+  it("titles the row by phase, count and category", () => {
+    const target = { day: 1, slot: "dinner" as const, date: "2027-05-14" };
+    expect(rowTitle({ phase: "pending", count: 5, category: "eat", target })).toBe("Looking for restaurants for Friday dinner");
+    expect(rowTitle({ phase: "running", count: 5, category: "eat", target })).toBe("Looking at 5 restaurants for Friday dinner");
+    expect(rowTitle({ phase: "done", count: 4, category: "drink" })).toBe("Looked at 4 bars");
+    expect(rowTitle({ phase: "done", count: 1, category: "stay", dayHint: "Saturday" })).toBe("Looked at 1 hotel for Saturday");
+    expect(categoryNoun(undefined, 3)).toBe("places");
+  });
+
+  it("keeps the advisor's words as short lower case terms", () => {
+    expect(searchTerms(["Seafood", "lively", "seafood"], "ignored")).toEqual(["seafood", "lively"]);
+    expect(searchTerms(undefined, "seafood and lively")).toEqual(["seafood", "lively"]);
+    expect(searchTerms([], "")).toEqual([]);
+  });
+});
+
+describe("recommend_place facts", () => {
+  it("quotes the sentence of the client notes that names a keyword or dish", () => {
+    const notes = "Light sleeper. Orders oysters everywhere. Hates loud music after midnight, really really hates it a lot.";
+    expect(matchClientNote(notes, [{ name: "Oysters", count: 214 }, "Fresh fish"])).toEqual({
+      text: "Orders oysters everywhere",
+      matches: ["Oysters"],
+    });
+    expect(matchClientNote(notes, ["Sushi"])).toBeNull();
+    expect(matchClientNote("", ["Oysters"])).toBeNull();
+  });
+
+  it("matches whole words only, singular or plural", () => {
+    expect(mentions("Loves a good oyster bar", "Oysters")).toBe(true);
+    expect(mentions("Not into barbecue", "bar")).toBe(false);
+    expect(mentions("Café at 8", "cafe")).toBe(true);
+  });
+
+  it("reads a valid slot target from an ask query", () => {
+    expect(targetOfQuery({ target: { day: 2, slot: "dinner" } })).toEqual({ day: 2, slot: "dinner" });
+    expect(targetOfQuery({ target: { day: 0, slot: "dinner" } })).toBeNull();
+    expect(targetOfQuery({ target: { day: 2, slot: "brunch" } })).toBeNull();
+    expect(targetOfQuery(null)).toBeNull();
   });
 });
 

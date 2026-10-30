@@ -218,6 +218,49 @@ export type FindPlacesOutput = {
   steps?: ToolStep[];
   /** Seed only, on the final output. */
   summary?: SeedSummary;
+  /** How many places the search asked for, so the row can show that many tiles while they load. */
+  take?: number;
+  /** The itinerary slot the search is for, with its label ("Fri dinner"). */
+  target?: SlotTarget;
+  /** "restaurants", "cocktail bars": the noun of the row title ("Looking at 5 restaurants"). */
+  noun?: string;
+  /** The advisor's words as short chips ("seafood, lively"). */
+  terms?: string[];
+};
+
+/** An itinerary slot a search or a recommendation is for. */
+export type SlotTarget = {
+  day: number;
+  slot: SlotName;
+  /** "Fri dinner", "Day 2 lunch", "Lisbon stay". */
+  label: string;
+  /** ISO date of the day, when the trip has dates. */
+  date?: string;
+};
+
+/**
+ * recommend_place: the one pick of a search, shown as the full place card in
+ * the chat. Every word on the card is rendered in code from these facts.
+ */
+export type RecommendPlaceOutput = {
+  card?: TripPlaceCard;
+  askId?: string;
+  target?: SlotTarget;
+  /** The client's first name, for "For Ana" and "Not for Ana". */
+  clientFirstName?: string;
+  /** A sentence of the advisor's own notes on the client that names one of the place's keywords or dishes. */
+  clientNote?: { text: string; matches: string[] };
+  error?: string;
+};
+
+/** The first message of an empty chat, composed in code from trip facts (no model run). */
+export type ChatOpening = {
+  /** "Ana and Clara, Lisbon, 14 to 18 May". */
+  created: string;
+  /** "From the new trip form". */
+  createdFrom: string;
+  paragraphs: string[];
+  placeholder: string;
 };
 
 export type ScorePlacesOutput = {

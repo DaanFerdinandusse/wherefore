@@ -50,6 +50,10 @@ export type GooglePlaceDetails = {
   priceLevel?: number;
   reviews?: GoogleReview[];
   editorialSummary?: string;
+  /** Google's "reservable": true takes reservations, false does not, missing is unknown. */
+  reservable?: boolean;
+  /** Google's price range per person, in whole currency units. */
+  priceRange?: { currency: string; start?: number; end?: number };
 };
 
 export type PlaceDetails = (placeId: string, tier: DetailsTier) => Promise<GooglePlaceDetails>;

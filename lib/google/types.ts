@@ -29,6 +29,13 @@ export const reviewSchema = z.looseObject({
   googleMapsUri: z.string().optional(),
 });
 
+// google.type.Money: units is an int64 sent as a string.
+const moneySchema = z.looseObject({
+  currencyCode: z.string().optional(),
+  units: z.union([z.string(), z.number()]).optional(),
+  nanos: z.number().optional(),
+});
+
 const openingHoursSchema = z.looseObject({
   openNow: z.boolean().optional(),
   weekdayDescriptions: z.array(z.string()).optional(),
@@ -55,5 +62,12 @@ export const placeDetailsSchema = z.looseObject({
   priceLevel: z.string().optional(),
   reviews: z.array(reviewSchema).optional(),
   editorialSummary: localizedText.optional(),
+  reservable: z.boolean().optional(),
+  priceRange: z
+    .looseObject({
+      startPrice: moneySchema.optional(),
+      endPrice: moneySchema.optional(),
+    })
+    .optional(),
 });
 export type RawPlaceDetails = z.infer<typeof placeDetailsSchema>;

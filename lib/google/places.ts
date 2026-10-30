@@ -45,6 +45,9 @@ export const FULL_FIELDS = [
   "priceLevel",
   "reviews",
   "editorialSummary",
+  // Enterprise: whether the place takes reservations, and its price per person.
+  "reservable",
+  "priceRange",
 ] as const;
 
 export function fieldMask(tier: DetailsTier): string {
@@ -136,6 +139,23 @@ function attribution(raw: { displayName?: string; uri?: string; photoUri?: strin
   };
 }
 
+type RawMoney = { currencyCode?: string; units?: string | number; nanos?: number };
+
+function amountOf(money: RawMoney | undefined): number | undefined {
+  if (!money || money.units === undefined) return undefined;
+  const units = Number(money.units);
+  return Number.isFinite(units) ? units : undefined;
+}
+
+/** Google's priceRange as whole units of one currency; undefined without a currency or amount. */
+export function priceRangeOf(raw: { startPrice?: RawMoney; endPrice?: RawMoney } | undefined): GooglePlaceDetails["priceRange"] {
+  const currency = raw?.startPrice?.currencyCode ?? raw?.endPrice?.currencyCode;
+  const start = amountOf(raw?.startPrice);
+  const end = amountOf(raw?.endPrice);
+  if (!currency || (start === undefined && end === undefined)) return undefined;
+  return { currency, ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}) };
+}
+
 export function normalizeDetails(raw: RawPlaceDetails, tier: DetailsTier): GooglePlaceDetails {
   const details: GooglePlaceDetails = {
     tier,
@@ -166,6 +186,8 @@ export function normalizeDetails(raw: RawPlaceDetails, tier: DetailsTier): Googl
       phone: raw.nationalPhoneNumber,
       priceLevel: raw.priceLevel ? PRICE_LEVELS[raw.priceLevel] : undefined,
       editorialSummary: raw.editorialSummary?.text,
+      reservable: raw.reservable,
+      priceRange: priceRangeOf(raw.priceRange),
       reviews: (raw.reviews ?? []).map((review) => ({
         rating: review.rating,
         text: review.text?.text ?? review.originalText?.text,

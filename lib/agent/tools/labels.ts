@@ -1,4 +1,4 @@
-import type { Category } from "@/lib/contracts";
+import type { Category, SlotName, SlotTarget } from "@/lib/contracts";
 
 // Words the tools and the tool cards share: ask labels ("Natural wine · Sat"),
 // card titles ("Searched natural wine bars"), category phrases and loosened
@@ -135,6 +135,101 @@ export function basedOnFavorites(names: readonly string[]): string | undefined {
   const joined =
     possessive.length === 1 ? possessive[0] : `${possessive.slice(0, -1).join(", ")} and ${possessive.at(-1)}`;
   return `based on ${joined} favorites`;
+}
+
+// ------------------------------------------------------- slots and search rows
+
+const SLOT_WORDS: Record<SlotName, string> = {
+  morning: "morning",
+  lunch: "lunch",
+  afternoon: "afternoon",
+  dinner: "dinner",
+  night: "late",
+  stay: "stay",
+};
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const WEEKDAY_LONG = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+/** The ISO date of trip day `day` (1 based), when the trip has a start date. */
+export function dateOfDay(startDate: string | undefined, day: number): string | undefined {
+  if (!startDate || !/^\d{4}-\d{2}-\d{2}/.test(startDate)) return undefined;
+  const [y, m, d] = startDate.slice(0, 10).split("-").map(Number);
+  const date = new Date(Date.UTC(y!, m! - 1, d! + day - 1));
+  return date.toISOString().slice(0, 10);
+}
+
+function weekdayOf(iso: string): number {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d!)).getUTCDay();
+}
+
+/**
+ * A slot as a button and chip label: "Fri dinner", "Day 2 lunch" without
+ * dates, "Lisbon stay" for the stay slot.
+ */
+export function slotTarget(
+  input: { day: number; slot: SlotName },
+  trip: { startDate?: string; destinationName?: string },
+): SlotTarget {
+  const date = dateOfDay(trip.startDate, input.day);
+  let label: string;
+  if (input.slot === "stay") label = trip.destinationName ? `${trip.destinationName} stay` : "Stay";
+  else if (date) label = `${WEEKDAY_SHORT[weekdayOf(date)]} ${SLOT_WORDS[input.slot]}`;
+  else label = `Day ${input.day} ${SLOT_WORDS[input.slot]}`;
+  return { day: input.day, slot: input.slot, label, ...(date ? { date } : {}) };
+}
+
+/** A slot inside a sentence: "Friday dinner", "day 2 lunch", "the stay". */
+export function slotPhrase(target: Pick<SlotTarget, "day" | "slot" | "date">): string {
+  if (target.slot === "stay") return "the stay";
+  const word = target.slot === "night" ? "late" : SLOT_WORDS[target.slot];
+  if (target.date) return `${WEEKDAY_LONG[weekdayOf(target.date)]} ${word}`;
+  return `day ${target.day} ${word}`;
+}
+
+const NOUNS: Record<Category, [string, string]> = {
+  eat: ["restaurant", "restaurants"],
+  drink: ["bar", "bars"],
+  coffee: ["cafe", "cafes"],
+  see: ["place to see", "places to see"],
+  stay: ["hotel", "hotels"],
+  other: ["place", "places"],
+};
+
+/** "restaurants", "bar": the noun of a search row for a category. */
+export function categoryNoun(category: Category | undefined, count: number): string {
+  const [one, many] = NOUNS[category ?? "other"];
+  return count === 1 ? one : many;
+}
+
+/**
+ * The search row title. Before any place is back: "Looking for restaurants
+ * for Friday dinner"; with places, running: "Looking at 5 restaurants for
+ * Friday dinner"; done: "Looked at 5 restaurants for Friday dinner".
+ */
+export function rowTitle(input: {
+  phase: "pending" | "running" | "done";
+  count: number;
+  category?: Category;
+  target?: Pick<SlotTarget, "day" | "slot" | "date">;
+  dayHint?: string;
+}): string {
+  const when = input.target ? ` for ${slotPhrase(input.target)}` : input.dayHint?.trim() ? ` for ${squash(input.dayHint)}` : "";
+  if (input.phase === "pending") return `Looking for ${categoryNoun(input.category, 2)}${when}`;
+  const noun = categoryNoun(input.category, input.count);
+  return `${input.phase === "done" ? "Looked" : "Looking"} at ${input.count} ${noun}${when}`;
+}
+
+/** The advisor's words as row chips: tags first, else the intent without its category noun. Lower case, at most 4. */
+export function searchTerms(tags: readonly string[] | undefined, intentText: string): string[] {
+  const raw = tags && tags.length > 0 ? tags : intentText ? intentText.split(/,|\band\b/) : [];
+  const out: string[] = [];
+  for (const term of raw) {
+    const clean = squash(term).toLowerCase();
+    if (clean && !out.includes(clean)) out.push(clean);
+  }
+  return out.slice(0, 4);
 }
 
 /** "1.4 s" from milliseconds. */
