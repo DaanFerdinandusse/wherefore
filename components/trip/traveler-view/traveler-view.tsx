@@ -1,140 +1,288 @@
-import type { SharedTripDay, SharedTripView } from "@/lib/contracts";
-import { ArchPhoto } from "@/components/ui/arch-photo";
-import { StarburstOrnament } from "@/components/ui/starburst-ornament";
+import { Heart } from "lucide-react";
+
+import type { SharedFavorite, SharedTripDay, SharedTripView } from "@/lib/contracts";
+import { FilmImage } from "@/components/ui/film-image";
 import { cn } from "@/lib/ui/cn";
 
 import {
+  bandHeading,
   dateRangeLabel,
-  dayHeading,
-  dayNeighborhoods,
+  dayLayouts,
+  dayTitle,
+  favoriteImage,
   favoritesBehind,
-  groupDays,
   heroImage,
-  heroSummary,
-  joinNames,
-  travelerDays,
+  heroIntro,
+  nightsOf,
+  photoFrames,
+  placeImages,
+  pageReasons,
+  rowFrames,
+  splitStays,
+  stayFacts,
+  type StayEntry,
+  withoutHero,
 } from "./format";
-import { SlotCard } from "./slot-card";
+import { AdvisorInitials, AdvisorNote, FavoritePhoto, LovedFor, PhotoRow, ReasonRow, StayFacts } from "./parts";
+import { PlaceBlock, PlaceColumn } from "./place-block";
 
-// The itinerary as the traveler sees it (Paper "05 Traveler view"). The same
-// body renders on the public page /s/[token] and inside the workspace's
-// "Traveler view" tab; `embedded` drops the share bar, the page width and
-// moves every heading one level down so the workspace keeps its own h1.
+// The itinerary as the traveler sees it (Paper "K1 Traveler itinerary"): a
+// hero with the city photo and a short letter, the favorites the picks were
+// built from, one section per planned day, the stay, and a footer with the
+// advisor. The same body renders on the public page /s/[token] and inside
+// the workspace's "Traveler view" tab; `embedded` moves every heading one
+// level down so the workspace keeps its own h1. Layout follows the width of
+// the component (container queries), not the window, so it holds in a
+// narrow workspace panel as well as on a phone. Free days are not shown.
 // No state and no server-only imports, so it renders on either side.
 
-const GUTTER = "px-4 md:px-10 lg:px-16";
+const GUTTER = "px-4 @3xl:px-10 @5xl:px-16";
 
-type Levels = { title: "h1" | "h2"; day: "h2" | "h3"; slot: "h3" | "h4" };
+type Reasons = ReturnType<typeof pageReasons>;
 
-function ShareBar({ view }: { view: SharedTripView }) {
-  const advisor = view.advisorName?.trim();
-  return (
-    <header className="border-b border-rule">
-      <div className={cn("mx-auto flex h-14 max-w-[1440px] items-center justify-between gap-4 md:h-16", GUTTER)}>
-        {/* The Wordmark component links to the advisor's Trips page; a traveler has no account there. */}
-        <span className="font-display text-wordmark leading-8 whitespace-nowrap text-ink tracking-[-0.03em]">
-          Tastebrief
-        </span>
-        <p className="flex min-w-0 flex-col items-end text-right text-ui-sm md:flex-row md:items-baseline md:gap-1.5 md:text-ui">
-          <span className="font-semibold text-ink">Prepared for {view.preparedFor}</span>
-          {advisor ? <span className="truncate text-text-muted">by {advisor}</span> : null}
-        </p>
-      </div>
-    </header>
-  );
+type Levels = { title: "h1" | "h2"; section: "h2" | "h3"; place: "h3" | "h4" };
+
+function Wordmark() {
+  // The Wordmark component links to the advisor's Trips page; a traveler has no account there.
+  return <span className="font-display text-wordmark-sm text-ink">Tastebrief</span>;
 }
 
-function Hero({ view, level }: { view: SharedTripView; level: Levels["title"] }) {
+function Hero({ view, level, image }: { view: SharedTripView; level: Levels["title"]; image: ReturnType<typeof heroImage> }) {
   const Title = level;
-  const image = heroImage(view);
   const dates = dateRangeLabel(view.startDate, view.endDate);
-  const favorites = favoritesBehind(view);
-  const eyebrow = [`For ${view.preparedFor}`, dates].filter(Boolean).join(" · ");
+  const intro = heroIntro(view);
+  const advisor = view.advisorName?.trim();
 
   return (
     <section
       className={cn(
-        "grid gap-7 pt-5 md:pt-10 lg:items-end lg:gap-16 lg:pt-16",
-        image && "lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]",
+        "flex flex-col @5xl:grid @5xl:min-h-[760px] @5xl:grid-rows-[auto_1fr]",
+        image ? "@5xl:grid-cols-[780fr_660fr]" : "@5xl:grid-cols-1",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center justify-between gap-4 py-5 @5xl:pt-12 @5xl:pb-0",
+          GUTTER,
+          image && "@5xl:col-start-2 @5xl:row-start-1",
+        )}
+      >
+        <Wordmark />
+        {dates ? <p className="text-ui-sm text-text-muted">{dates}</p> : null}
+      </div>
+      {image ? (
+        <div className="relative mx-4 aspect-4/5 overflow-hidden rounded-photo bg-avatar @3xl:mx-10 @3xl:aspect-16/10 @5xl:col-start-1 @5xl:row-span-2 @5xl:row-start-1 @5xl:mx-0 @5xl:aspect-auto @5xl:rounded-none">
+          <FilmImage src={image.src} alt={image.alt} priority sizes="(min-width: 1024px) 55vw, 100vw" />
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "flex flex-col gap-6 pt-8 pb-12 @3xl:gap-7 @5xl:self-end @5xl:pt-16 @5xl:pb-14",
+          GUTTER,
+          image && "@5xl:col-start-2 @5xl:row-start-2",
+        )}
+      >
+        <Title className="font-display text-name text-ink @3xl:text-hero">
+          {view.destinationName},
+          <br />
+          for {view.preparedFor}
+        </Title>
+        {intro ? (
+          <p className="max-w-[470px] font-display text-reason-sm text-text-4 italic @3xl:text-intro">{intro}</p>
+        ) : null}
+        {advisor ? (
+          <div className="flex items-center gap-3">
+            <AdvisorInitials name={advisor} size={40} />
+            <p className="flex flex-col">
+              <span className="text-ui-sm text-text-muted">Prepared by</span>
+              <span className="text-action font-semibold text-ink">{advisor}</span>
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function FavoritesBand({
+  favorites,
+  heading,
+  level,
+}: {
+  favorites: SharedFavorite[];
+  heading: string;
+  level: Levels["section"];
+}) {
+  const Heading = level;
+  return (
+    <section
+      className={cn(
+        "flex flex-col gap-7 bg-sand py-10 @5xl:flex-row @5xl:items-center @5xl:justify-between @5xl:py-11",
         GUTTER,
       )}
     >
-      <div className="order-2 flex flex-col gap-4 lg:order-1 lg:pb-4">
-        <p className="text-body font-semibold tracking-[0.02em] text-text-3">{eyebrow}</p>
-        <Title className="font-display text-title text-balance text-ink md:text-name lg:text-hero">{view.title}</Title>
-        <p className="max-w-[560px] text-body-lg text-text-3">{heroSummary(view)}</p>
-        {favorites.length > 0 ? (
-          <p className="max-w-[560px] text-ui text-text-2">
-            <span className="font-semibold text-ink">Chosen from the places you already love: </span>
-            {joinNames(favorites)}
-          </p>
-        ) : null}
+      <div className="flex max-w-[460px] flex-col gap-3">
+        <p className="flex items-center gap-2 text-ui-sm font-semibold tracking-[0.08em] text-amber uppercase">
+          <Heart aria-hidden className="size-4" strokeWidth={2} />
+          Built from your favorites
+        </p>
+        <Heading className="max-w-[420px] font-display text-card-sm text-ink @3xl:text-card-md">
+          {heading}
+        </Heading>
       </div>
-      {image ? (
-        <ArchPhoto
-          src={image.src}
-          alt={image.alt}
-          priority
-          sizes="(min-width: 1024px) 440px, (min-width: 768px) 60vw, 100vw"
-          className="order-1 mx-auto aspect-square w-full max-w-[440px] md:aspect-[4/5] lg:order-2 lg:mx-0"
+      {/* One row: on a phone it scrolls sideways instead of wrapping. */}
+      <ul className="-mx-4 flex gap-4 overflow-x-auto px-4 py-1.5 @3xl:mx-0 @3xl:gap-7 @3xl:overflow-visible @3xl:px-0">
+
+        {favorites.map((favorite) => (
+          <li key={favorite.name} className="flex w-[76px] flex-col items-center gap-2.5 text-center">
+            <FavoritePhoto name={favorite.name} src={favorite.imageUrl} ring="band" className="size-[64px] @3xl:size-[76px]" />
+            <span className="text-ui-sm font-semibold text-ink">{favorite.name}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function DayHeader({ day, level }: { day: SharedTripDay; level: Levels["section"] }) {
+  const Heading = level;
+  const { title, detail } = dayTitle(day);
+  return (
+    <header className="flex flex-col gap-1 border-b border-rule-strong pb-4 @3xl:flex-row @3xl:items-baseline @3xl:gap-6 @3xl:pb-5">
+      <Heading className="font-display text-title text-ink @3xl:text-day">{title}</Heading>
+      {detail ? <p className="text-body-lg text-text-3 @3xl:text-prose">{detail}</p> : null}
+    </header>
+  );
+}
+
+function DaySection(props: {
+  day: SharedTripDay;
+  layout: "stack" | "row";
+  levels: Levels;
+  favorites: SharedFavorite[];
+  reasons: Reasons;
+  advisorName: string | null;
+  heroSrc?: string;
+  firstBlock: number;
+}) {
+  const { day, layout, levels, favorites, reasons, advisorName, heroSrc, firstBlock } = props;
+  if (layout === "row") {
+    const frames = rowFrames(day.slots.length);
+    return (
+      <section className={cn("flex flex-col gap-8 pt-14 pb-16 @3xl:gap-10 @3xl:pt-[72px] @3xl:pb-24", GUTTER)}>
+        <DayHeader day={day} level={levels.section} />
+        <div className="flex flex-col gap-12 @3xl:flex-row @3xl:items-start @3xl:gap-8">
+          {day.slots.map((slot, i) => (
+            <PlaceColumn
+              key={`${slot.slot}-${slot.position}`}
+              slot={slot}
+              favorites={favorites}
+              reasons={reasons}
+              advisorName={advisorName}
+              headingLevel={levels.place}
+              heroSrc={heroSrc}
+              frame={frames[i] ?? { ratio: "1 / 1", grow: 1 }}
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className={cn("flex flex-col gap-12 pt-16 pb-10 @3xl:gap-[88px] @3xl:pt-[104px]", GUTTER)}>
+      <DayHeader day={day} level={levels.section} />
+      {day.slots.map((slot, i) => (
+        <PlaceBlock
+          key={`${slot.slot}-${slot.position}`}
+          slot={slot}
+          favorites={favorites}
+          reasons={reasons}
+          advisorName={advisorName}
+          headingLevel={levels.place}
+          heroSrc={heroSrc}
+          index={firstBlock + i}
         />
-      ) : null}
+      ))}
     </section>
   );
 }
 
-function PlannedDay({ day, levels }: { day: SharedTripDay; levels: Levels }) {
-  const Heading = levels.day;
-  const neighborhoods = dayNeighborhoods(day.slots);
+function StaySection({
+  stay,
+  nights,
+  favorites,
+  reasons,
+  advisorName,
+  level,
+  heroSrc,
+}: {
+  stay: StayEntry;
+  nights: number | null;
+  favorites: SharedFavorite[];
+  reasons: Reasons;
+  advisorName: string | null;
+  level: Levels["section"];
+  heroSrc?: string;
+}) {
+  const Heading = level;
+  const { place } = stay;
+  // Two photos at most, as a wide pair.
+  const frames = photoFrames(withoutHero(placeImages(place), heroSrc).slice(0, 2), 2);
+  const reason = reasons.get(place) ?? null;
+  const facts = stayFacts(place, nights);
+  const keywords = place.keywords ?? [];
+
   return (
-    <section className={cn("pt-14 lg:pt-20", GUTTER)}>
-      <header className="flex flex-col gap-1 md:flex-row md:items-baseline md:gap-5">
-        <Heading className="font-display text-section text-ink md:text-title">{dayHeading(day)}</Heading>
-        <p className="text-body-lg text-text-muted">
-          Day {day.day}
-          {neighborhoods ? ` · ${neighborhoods}` : null}
-        </p>
-      </header>
-      <ul className="mt-6 grid gap-10 md:mt-7 md:grid-cols-2 md:gap-8 lg:grid-cols-3">
-        {day.slots.map((slot) => (
-          <li key={`${slot.slot}-${slot.position}`}>
-            <SlotCard slot={slot} headingLevel={levels.slot} />
-          </li>
-        ))}
-      </ul>
+    <section className={cn("flex flex-col gap-8 bg-sand py-16 @3xl:gap-10 @3xl:py-[104px]", GUTTER)}>
+      <Heading className="font-display text-title text-ink @3xl:text-day">You stay at {place.name}</Heading>
+      <PhotoRow frames={frames} alt={place.name} />
+      <div className="flex flex-col gap-7 @5xl:flex-row @5xl:items-start @5xl:gap-20">
+        <div className="min-w-0 flex-1">
+          {reason ? (
+            <ReasonRow text={reason.text} favorite={reason.favorite} favoriteSrc={favoriteImage(favorites, reason.favorite)} />
+          ) : place.neighborhood ? (
+            <p className="text-action font-semibold text-amber">{place.neighborhood}</p>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-5 @5xl:w-[540px] @5xl:shrink-0 @5xl:pt-1.5">
+          {facts ? <StayFacts text={facts} /> : null}
+          {place.description ? <p className="text-body-lg text-text-3 @3xl:text-prose">{place.description}</p> : null}
+          {keywords.length > 0 ? <LovedFor keywords={keywords} /> : null}
+          {stay.advisorNote ? <AdvisorNote note={stay.advisorNote} advisorName={advisorName} /> : null}
+        </div>
+      </div>
     </section>
   );
 }
 
-function FreeDays({ days, levels }: { days: SharedTripDay[]; levels: Levels }) {
-  const Heading = levels.day;
-  return (
-    <section className={cn("pt-14 lg:pt-20", GUTTER)}>
-      <ul className="grid gap-3 md:grid-cols-2 md:gap-4">
-        {days.map((day) => (
-          <li key={day.day} className="flex flex-col gap-1 rounded-photo bg-avatar/70 px-5 py-4 md:px-6 md:py-5">
-            <Heading className="font-display text-wordmark leading-[34px] text-ink">{dayHeading(day)}</Heading>
-            <p className="text-ui text-text-2">
-              <span className="font-semibold text-ink">Day {day.day} · Free day.</span> Nothing planned, so the day
-              is yours.
-            </p>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function Footer({ view }: { view: SharedTripView }) {
+function Footer({ view, level }: { view: SharedTripView; level: Levels["section"] }) {
+  const Heading = level;
   const advisor = view.advisorName?.trim();
+  const first = advisor?.split(/\s+/)[0];
+  const subject = encodeURIComponent(view.title);
   return (
-    <footer className={cn("mt-20 flex flex-col items-center gap-4 border-t border-rule py-14 text-center lg:mt-24", GUTTER)}>
-      <StarburstOrnament size={44} />
-      <p className="font-display text-wordmark text-balance text-ink">Built from what you already love</p>
-      {advisor ? (
-        <p className="text-ui text-text-muted">
-          Prepared by {advisor} for {view.preparedFor}
-        </p>
+    <footer
+      className={cn(
+        "flex flex-col gap-6 border-t border-rule pt-12 pb-14 @3xl:flex-row @3xl:items-center @3xl:justify-between @3xl:pt-14 @3xl:pb-16",
+        GUTTER,
+      )}
+    >
+      <div className="flex items-center gap-4">
+        {advisor ? <AdvisorInitials name={advisor} size={52} /> : null}
+        <div className="flex flex-col gap-0.5">
+          <Heading className="font-display text-card-sm text-ink">Want to change something?</Heading>
+          <p className="text-body text-text-3">
+            {advisor ? `${advisor} plans this trip for you.` : "Your advisor plans this trip for you."}
+          </p>
+        </div>
+      </div>
+      {view.advisorEmail ? (
+        <a
+          href={`mailto:${view.advisorEmail}?subject=${subject}`}
+          className="self-start rounded-pill bg-ink px-[22px] py-[13px] text-action font-semibold text-white transition-colors hover:bg-text-4 @3xl:self-auto"
+        >
+          {first ? `Message ${first}` : "Message your advisor"}
+        </a>
       ) : null}
     </footer>
   );
@@ -142,29 +290,59 @@ function Footer({ view }: { view: SharedTripView }) {
 
 export function TravelerView({ view, embedded }: { view: SharedTripView; embedded: boolean }) {
   const levels: Levels = embedded
-    ? { title: "h2", day: "h3", slot: "h4" }
-    : { title: "h1", day: "h2", slot: "h3" };
-  const groups = groupDays(travelerDays(view));
+    ? { title: "h2", section: "h3", place: "h4" }
+    : { title: "h1", section: "h2", place: "h3" };
+  const { days, stays } = splitStays(view);
+  const layouts = dayLayouts(days);
+  const favorites = favoritesBehind(view);
+  const image = heroImage(view);
+  const heroSrc = image?.src;
+  const nights = stays.length === 1 ? nightsOf(view.startDate, view.endDate) : null;
+  // Block numbers run across days, so photo layouts rotate over the whole page.
+  const firstBlocks = days.map((_, i) => days.slice(0, i).reduce((sum, day) => sum + day.slots.length, 0));
+  const reasons = pageReasons([
+    ...days.flatMap((day) => day.slots.flatMap((slot) => (slot.place ? [slot.place] : []))),
+    ...stays.map((stay) => stay.place),
+  ]);
 
   return (
-    <div className={cn("bg-surface text-ink", !embedded && "min-h-dvh")}>
-      {embedded ? null : <ShareBar view={view} />}
+    <div className={cn("@container bg-surface text-ink", !embedded && "min-h-dvh")}>
       <div className={embedded ? "w-full" : "mx-auto max-w-[1440px]"}>
-        <Hero view={view} level={levels.title} />
-        {groups.length === 0 ? (
-          <p className={cn("pt-14 text-body-lg text-text-2", GUTTER)}>
+        <Hero view={view} level={levels.title} image={image} />
+        {favorites.length > 0 ? (
+          <FavoritesBand favorites={favorites} heading={bandHeading(view)} level={levels.section} />
+        ) : null}
+        {days.length === 0 && stays.length === 0 ? (
+          <p className={cn("py-16 text-body-lg text-text-2", GUTTER)}>
             Your days are still being planned. Open this link again soon.
           </p>
-        ) : (
-          groups.map((group) =>
-            group.kind === "planned" ? (
-              <PlannedDay key={group.day.day} day={group.day} levels={levels} />
-            ) : (
-              <FreeDays key={`free-${group.days[0]?.day}`} days={group.days} levels={levels} />
-            ),
-          )
-        )}
-        <Footer view={view} />
+        ) : null}
+        {days.map((day, i) => (
+          <DaySection
+            key={day.day}
+            day={day}
+            layout={layouts[i] ?? "stack"}
+            levels={levels}
+            favorites={favorites}
+            reasons={reasons}
+            advisorName={view.advisorName}
+            heroSrc={heroSrc}
+            firstBlock={firstBlocks[i] ?? 0}
+          />
+        ))}
+        {stays.map((stay) => (
+          <StaySection
+            key={stay.place.name}
+            stay={stay}
+            nights={nights}
+            favorites={favorites}
+            reasons={reasons}
+            advisorName={view.advisorName}
+            level={levels.section}
+            heroSrc={heroSrc}
+          />
+        ))}
+        <Footer view={view} level={levels.section} />
       </div>
     </div>
   );

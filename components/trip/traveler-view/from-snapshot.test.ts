@@ -71,17 +71,43 @@ describe("travelerViewFromSnapshot", () => {
                 neighborhood: "Roma Norte",
                 because: [{ name: "Lilia", share: 100 }],
                 sharedTags: ["Seafood"],
+                images: ["https://images.qloo.com/i/contramar.jpg"],
               },
             },
           ],
         },
         { day: 2, date: "2026-11-13", slots: [{ slot: "morning", position: 0, advisorNote: "Sleep in, you earned it." }] },
       ],
+      favorites: [{ name: "Lilia" }],
     });
     const text = JSON.stringify(view);
     expect(text).not.toContain("corner table");
     expect(text).not.toContain("Private note");
     expect(text).not.toContain("Gone");
     expect(text).not.toContain("0.91");
+  });
+
+  it("carries the card's keywords and dishes, and what the workspace adds", () => {
+    const withFacts: TripSnapshot = {
+      ...snapshot,
+      places: [
+        card({
+          keywords: [
+            { name: "tuna tostadas", count: 312 },
+            { name: "service", count: 200 },
+          ],
+          dishes: ["Tostadas De Atun"],
+        }),
+      ],
+    };
+    const view = travelerViewFromSnapshot(withFacts, "Daan", {
+      advisorEmail: "daan@example.test",
+      favorites: [{ entityId: "e-lilia", name: "Lilia", imageUrl: "https://example.test/lilia.jpg" }],
+    });
+    const place = view.days[0]?.slots[0]?.place;
+    expect(place?.keywords).toEqual(["Tuna tostadas"]);
+    expect(place?.dishes).toEqual(["Tostadas de atun"]);
+    expect(view.advisorEmail).toBe("daan@example.test");
+    expect(view.favorites).toEqual([{ name: "Lilia", imageUrl: "https://example.test/lilia.jpg" }]);
   });
 });
