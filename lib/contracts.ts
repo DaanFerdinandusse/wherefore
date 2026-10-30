@@ -40,6 +40,8 @@ export type Explainability = {
   share: number;
   /** On the one favorite this place is most like, the taste tags they share ("Like Via Carota: Italian, warm, stylish"). */
   tags?: string[];
+  /** Those tags are a shared feel, not a likeness: the favorite is another kind of place ("Same intimate, romantic feel as Attaboy"). */
+  feel?: boolean;
   /** An artist or film: it drives the match and has no place tags. */
   media?: boolean;
 }[];

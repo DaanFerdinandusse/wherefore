@@ -193,6 +193,7 @@ export async function replaceTripPlace(
         popularityMax: query.popularityMax,
         michelin: query.michelin,
         openDay: query.openDay,
+        openSlot: query.openSlot,
         take: TAKE,
       },
       { tripId, client: deps.client },

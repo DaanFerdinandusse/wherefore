@@ -24,7 +24,7 @@ import { descriptionTexts } from "@/lib/trips/map";
 import { agentModelRef, agentProviderOptions } from "@/lib/codex/provider";
 
 import { explainPlaces, factSnippets, type ExplainInput } from "../explain";
-import { likeDriver, searchTags, withOverlap } from "../taste-overlap";
+import { likeDriver, mediaNotes, searchTags, withOverlap } from "../taste-overlap";
 import { cacheWrite, guarded, writeReasons, type TurnRef } from "../writes";
 
 import { driversFor, isPlainDriver } from "./signals";
@@ -214,29 +214,38 @@ export async function explainCards(
   abortSignal?: AbortSignal,
 ): Promise<ExplainedCards> {
   if (cards.length === 0) return { reasons: new Map(), drivers: new Map() };
-  const favoriteIds = [
-    ...new Set(cards.flatMap((c) => c.because.filter((b) => !isPlainDriver(b.entityId) && !b.media).map((b) => b.entityId))),
-  ];
+  // All of the client's favorite places, not just this search's drivers: what
+  // sets one favorite apart from the others must not change with the search.
+  const favoriteIds = ctx.signals.favorites.filter((f) => !f.media).map((f) => f.entityId);
   const rows = await db
     .select({
       id: places.id,
       entityId: places.entityId,
       tags: places.tags,
+      primaryType: places.primaryType,
+      types: places.types,
       description: places.description,
       properties: places.properties,
     })
     .from(places)
     .where(or(inArray(places.id, [...new Set(cards.map((c) => c.placeId))]), inArray(places.entityId, favoriteIds)));
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const favoriteTags = new Map(rows.map((r) => [r.entityId, r.tags]));
+  const favoriteRows = new Set(favoriteIds);
+  const favorites = new Map(
+    rows.filter((r) => favoriteRows.has(r.entityId)).map((r) => [r.entityId, { tags: r.tags, category: categoryOf(r) }]),
+  );
   const search = searchTags(cards.map((c) => byId.get(c.placeId)?.tags ?? []));
 
   const drivers = new Map<string, Explainability>();
   for (const card of cards) {
-    const candidate = { entityId: card.entityId, tags: byId.get(card.placeId)?.tags ?? [] };
-    const tagged = likeDriver(card.because) ? card.because : withOverlap(candidate, card.because, favoriteTags, search);
+    const candidate = { entityId: card.entityId, tags: byId.get(card.placeId)?.tags ?? [], category: card.category };
+    const tagged = likeDriver(card.because) ? card.because : withOverlap(candidate, card.because, favorites, search);
     if (likeDriver(tagged)) drivers.set(card.tripPlaceId, tagged);
   }
+  const notes = mediaNotes(
+    cards.map((card) => ({ id: card.tripPlaceId, category: card.category, because: card.because, keywords: card.keywords })),
+    new Set(ctx.signals.favorites.filter((f) => f.artist).map((f) => f.entityId)),
+  );
 
   const inputs: ExplainInput[] = cards
     .filter((card) => !card.reason)
@@ -251,6 +260,7 @@ export async function explainCards(
         sharedTags: card.sharedTags.map((t) => t.name),
         facts: row ? factSnippets(descriptionTexts(row)) : [],
         yourPlace: Boolean(card.yourPlace),
+        ...(notes.get(card.tripPlaceId) ? { mediaNote: notes.get(card.tripPlaceId) } : {}),
       };
     });
   const ownerOf: Record<string, string> = {};

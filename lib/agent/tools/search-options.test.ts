@@ -17,7 +17,7 @@ import { placeFactsOf } from "@/lib/trips/map";
 
 import type { TurnRef } from "../writes";
 
-import { findPlacesTool } from "./find-places";
+import { findPlacesTool, isOtherKindTag } from "./find-places";
 import { loosenedCopy, WIDENED_IN_CATEGORY } from "./labels";
 import { DATA_OPEN, findPlacesForModel } from "./model-output";
 import { removePlaceTool } from "./place-tools";
@@ -115,10 +115,35 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
         `call-${++call}`,
       ),
     );
-    expect(searchInput(0)).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "sunday" });
+    expect(searchInput(0)).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "sunday", openSlot: "dinner" });
     expect(output.openDay).toBe("sunday");
     const [ask] = await db.select({ query: tripAsks.query }).from(tripAsks).where(eq(tripAsks.id, output.askId!));
-    expect(ask?.query).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "sunday" });
+    expect(ask?.query).toMatchObject({ popularityMax: 0.6, michelin: true, openDay: "sunday", openSlot: "dinner" });
+  });
+
+  it("leaves out what is not the asked kind of place, and reads the scores of this search in order", async () => {
+    const results = found(["kind-a", "kind-cafe", "kind-b"]);
+    mocks.findPlaces.mockResolvedValue({
+      ...results,
+      results: results.results.map((r) => (r.place.name === "kind-cafe" ? { ...r, category: "coffee" as const } : r)),
+    });
+    const output = await drain(findPlacesTool({ intent: "dinner", target: { day: 2, slot: "dinner" } }, turn, `call-${++call}`));
+    expect(output.places.map((p) => p.name)).toEqual(["kind-a", "kind-b"]);
+    expect(output.places.map((p) => p.score)).toEqual([94, 60]);
+
+    // A place found again on the same signals takes this search's score.
+    mocks.findPlaces.mockResolvedValue(found(["kind-new", "kind-a", "kind-b"]));
+    const again = await drain(findPlacesTool({ intent: "another dinner" }, turn, `call-${++call}`));
+    const scores = again.places.map((p) => p.score ?? 0);
+    expect(scores).toEqual([...scores].sort((a, b) => b - a));
+  });
+
+  it("does not search on a kind of place from another category", () => {
+    expect(isOtherKindTag("urn:tag:category:place:boutique", "stay")).toBe(true);
+    expect(isOtherKindTag("urn:tag:category:place:boutique_hotel", "stay")).toBe(false);
+    expect(isOtherKindTag("urn:tag:category:place:italian_restaurant", "eat")).toBe(false);
+    expect(isOtherKindTag("urn:tag:genre:place:restaurant:seafood", "stay")).toBe(false);
+    expect(isOtherKindTag("urn:tag:category:place:boutique", undefined)).toBe(false);
   });
 
   it("reads the facts back through the card query and puts the ground rules beside them", async () => {

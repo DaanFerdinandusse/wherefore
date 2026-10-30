@@ -10,7 +10,7 @@ import { memoryCacheStore } from "./cache";
 import { createQlooClient } from "./client";
 import { MAX_EXCLUDED, MAX_SIGNALS } from "../agent/tools/signals";
 import { QlooLocalityMismatchError } from "./errors";
-import { CATEGORY_FILTER_TAGS, closedOn, isCategoryTagFilter, isUnpricedTagFilter } from "./normalize";
+import { CATEGORY_FILTER_TAGS, closedOn, isCategoryTagFilter, isUnpricedTagFilter, openDuring } from "./normalize";
 
 const template = insightsFixture.results.entities[0];
 const SEAFOOD = "urn:tag:genre:place:restaurant:seafood";
@@ -25,10 +25,12 @@ function entities(n: number, prefix: string) {
   }));
 }
 
-function clientFor(handler: (url: URL) => unknown) {
+function clientFor(handler: (url: URL) => unknown, handlesEntities = false) {
   const urls: URL[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
     const url = new URL(String(input));
+    // Hours come from /entities after every search, and count for nothing here.
+    if (url.pathname === "/entities" && !handlesEntities) return new Response(JSON.stringify({ success: true, results: [] }), { status: 200 });
     urls.push(url);
     return new Response(JSON.stringify(handler(url)), { status: 200 });
   });
@@ -60,7 +62,7 @@ describe("findPlaces", () => {
     expect(out.results.map((r) => r.score)).toEqual([94, 87, 80, 74, 67, 60]);
     expect(out.results[0].signalScores.length).toBe(4);
     expect(out.results[0].category).toBe("eat");
-    expect(out.calls).toHaveLength(1);
+    expect(out.calls.filter((c) => c.endpoint === "/v2/insights")).toHaveLength(1);
     expect(out.calls[0]).toMatchObject({ endpoint: "/v2/insights", count: 6, cached: false, tripId: "trip-1" });
     expect(out.localityCheck).toEqual({ requested: "Lisboa, Portugal", resolved: "Lisbon, Portugal", ok: true, dropped: 0 });
   });
@@ -84,7 +86,7 @@ describe("findPlaces", () => {
     // Strict results come first, then each looser step fills what is left.
     const ids = out.results.map((r) => r.place.entityId);
     expect(ids).toEqual(["strict0", "strict1", "mid0", "loose0", "loose1", "loose2", "loose3", "loose4"]);
-    expect(out.calls).toHaveLength(3);
+    expect(out.calls.filter((c) => c.endpoint === "/v2/insights")).toHaveLength(3);
   });
 
   it("stops loosening as soon as there are enough", async () => {
@@ -285,6 +287,52 @@ describe("findPlaces", () => {
     expect(out.results).toHaveLength(5);
   });
 
+  describe("open for the slot", () => {
+    const spans = (...times: [string, string][]) =>
+      times.map(([opens, closes]) => ({ closed: false, opens: `T${opens}:00`, closes: `T${closes}:00` }));
+    const lunch = spans(["12:00", "16:00"]);
+    const lunchAndDinner = spans(["12:00", "16:00"], ["19:00", "23:30"]);
+    const withHours = (id: string, monday: unknown) => ({ ...template, entity_id: id, name: id, properties: { ...template.properties, hours: { monday } } });
+
+    function slotClient(fromEntities: Record<string, unknown>, failEntities = false) {
+      const entityIds: string[] = [];
+      const { client, urls } = clientFor((url) => {
+        if (url.pathname !== "/entities") {
+          const first = spans(["12:00", "16:00"]);
+          return { results: { entities: ["split", "shut", "unknown"].flatMap((p) => entities(2, p)).map((e) => ({ ...e, properties: { ...e.properties, hours: { monday: first } } })) } };
+        }
+        if (failEntities) return { oops: true };
+        const ids = (url.searchParams.get("entity_ids") ?? "").split(",");
+        entityIds.push(...ids);
+        return { success: true, results: ids.flatMap((id) => (id in fromEntities ? [withHours(id, fromEntities[id])] : [])) };
+      }, true);
+      return { client, urls, entityIds };
+    }
+
+    const hours = { split0: lunchAndDinner, split1: lunchAndDinner, shut0: lunch, shut1: lunch };
+
+    it("reads every span from /entities, and leaves out the places shut for the slot", async () => {
+      const { client, urls } = slotClient(hours);
+      const out = await findPlaces({ destination: lisbon, signals, openDay: "monday", openSlot: "dinner", take: 3 }, { client });
+      expect(out.results.map((r) => r.place.entityId).sort()).toEqual(["split0", "split1", "unknown0"]);
+      expect(out.results.find((r) => r.place.entityId === "split0")?.place.properties.hours).toEqual({ monday: lunchAndDinner });
+      expect(urls[0]?.searchParams.get("take")).toBe("9");
+    });
+
+    it("keeps a place the lookup says nothing about, and a search whose lookup fails", async () => {
+      const { client } = slotClient({}, true);
+      const out = await findPlaces({ destination: lisbon, signals, openDay: "monday", openSlot: "dinner", take: 5 }, { client });
+      expect(out.results).toHaveLength(5);
+    });
+
+    it("gives a place the full hours without a slot too", async () => {
+      const { client, entityIds } = slotClient(hours);
+      const out = await findPlaces({ destination: lisbon, signals, take: 2 }, { client });
+      expect(entityIds).toHaveLength(2);
+      expect(out.results[0]?.place.properties.hours).toEqual({ monday: lunchAndDinner });
+    });
+  });
+
   it("never lets a looser result displace a strict one, even with a higher affinity", async () => {
     const { client } = clientFor((url) => {
       if (url.searchParams.has("filter.tags")) {
@@ -414,6 +462,37 @@ describe("isUnpricedTagFilter", () => {
     expect(isUnpricedTagFilter(["urn:tag:genre:place:restaurant:natural_wine"])).toBe(false);
     expect(isUnpricedTagFilter(["urn:tag:ambience:qloo:cozy"])).toBe(false);
     expect(isUnpricedTagFilter([])).toBe(false);
+  });
+});
+
+describe("openDuring", () => {
+  const hours = {
+    monday: [
+      { closed: false, opens: "T12:00:00", closes: "T16:00:00" },
+      { closed: false, opens: "T19:00:00", closes: "T23:30:00" },
+    ],
+    tuesday: [{ closed: false, opens: "T08:00:00", closes: "T17:00:00" }],
+    wednesday: [{ closed: true }],
+    thursday: [{ closed: false, opens: "T18:00:00", closes: "T02:00:00" }],
+  };
+
+  it("takes any span that reaches into the slot", () => {
+    expect(openDuring(hours, "monday", "lunch")).toBe(true);
+    expect(openDuring(hours, "monday", "dinner")).toBe(true);
+    expect(openDuring(hours, "monday", "morning")).toBe(false);
+    expect(openDuring(hours, "tuesday", "dinner")).toBe(false);
+    expect(openDuring(hours, "wednesday", "dinner")).toBe(false);
+  });
+
+  it("carries a span past midnight", () => {
+    expect(openDuring(hours, "thursday", "night")).toBe(true);
+  });
+
+  it("does not hold unknown hours against a place, or apply to a stay", () => {
+    expect(openDuring(hours, "friday", "dinner")).toBe(true);
+    expect(openDuring(undefined, "friday", "dinner")).toBe(true);
+    expect(openDuring({ monday: [{ opens: "soon" }] }, "monday", "dinner")).toBe(true);
+    expect(openDuring(hours, "tuesday", "stay")).toBe(true);
   });
 });
 

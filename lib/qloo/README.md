@@ -58,7 +58,7 @@ Fewer than 5 kept results (or `take` if smaller): drop `filter.tags`, then the p
 | `"popularity"` | too few less known places, `filter.popularity.max` dropped | "Too few less known places, so check which of these carry the Less known chip." |
 | `"michelin"` | too few Michelin places, `filter.external.exists` dropped | "Too few Michelin places, so check which of these carry the Michelin chip." |
 | `"price"` | too few results, price cap dropped | "Price cap dropped to find enough places" |
-| `"hours"` | too few places listed as open that day (closed, or no hours block), `filter.hours` dropped | "Too few places are listed as open on Monday, so check the hours on these." |
+| `"hours"` | too few places listed as open that day (closed, or no hours block), `filter.hours` dropped. A place whose own hours say closed that day, or for the asked slot, stays out regardless. Those hours come from `/entities`: `/v2/insights` lists only the first span of a day | "Too few places are listed as open on Monday, so check the hours on these." |
 | `"price_not_applicable"` | `priceMax` asked on a see or stay ask; never sent | "Price cap not applied to museums and hotels" |
 
 The price filter drops places without a `price_level` (museums, hotels), so when every tag is a see or stay category (`isUnpricedTagFilter`), `findPlaces` does not send `priceMax` and returns `"price_not_applicable"` first in `loosened`, whether or not the tags were dropped later.

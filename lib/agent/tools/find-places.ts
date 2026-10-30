@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { places, tripAsks } from "@/lib/db/schema";
 import { createAsk, updateAsk } from "@/lib/trips";
 import {
+  categoryOf,
   CATEGORY_FILTER_TAGS,
   closedOn,
   displayScore,
@@ -16,6 +17,7 @@ import {
   findTags,
   haversineM,
   LESS_KNOWN_POPULARITY_MAX,
+  openDuring,
   QlooLocalityMismatchError,
   resolveLocality,
   WEEKDAY_NAMES,
@@ -91,6 +93,8 @@ export const MIN_TAKE = 3;
 export const MAX_TAKE = 8;
 /** At most this many of the advisor's own places join a small search beyond its results. */
 const MAX_ADVISOR_EXTRAS = 2;
+/** A category search asks for a few more: results of another kind are left out here. */
+const CATEGORY_SPARE = 3;
 const AREA_RADIUS_M = 1_500;
 const GENERIC_NOUNS: Record<string, SearchCategory> = {
   bar: "drink",
@@ -150,9 +154,16 @@ function namedIn(text: string, name: string): boolean {
     .every((word) => hay.includes(` ${word} `) || hay.includes(` ${word}s `));
 }
 
+/** A kind-of-place tag that is not the asked kind: "boutique" on a hotel ask finds the shop tag. */
+export function isOtherKindTag(tagId: string, category: SearchCategory | undefined): boolean {
+  if (!category || !tagId.startsWith("urn:tag:category:place:")) return false;
+  return categoryOf({ primaryType: null, types: [tagId] }) !== category;
+}
+
 /** Free words to tag ids; ids pass through. At most 4 ids. */
 async function resolveTags(
   texts: string[],
+  category: SearchCategory | undefined,
   ctx: ToolTrip,
   calls: QlooCall[],
 ): Promise<{ ids: string[]; names: string[] }> {
@@ -167,7 +178,7 @@ async function resolveTags(
     }
     const found = await findTags(trimmed, { tripId: ctx.trip.id });
     calls.push(...found.calls);
-    for (const tag of found.tags.filter((t) => namedIn(trimmed, t.name)).slice(0, 3)) {
+    for (const tag of found.tags.filter((t) => namedIn(trimmed, t.name) && !isOtherKindTag(t.tagId, category)).slice(0, 3)) {
       if (!ids.includes(tag.tagId)) ids.push(tag.tagId);
       if (!names.includes(tag.name)) names.push(tag.name);
     }
@@ -189,6 +200,8 @@ export type AskConstraints = {
   michelin?: boolean;
   /** Stored hours that say closed on this day leave a place out. */
   openDay?: Weekday;
+  /** So do hours that leave this slot out, on that day. */
+  openSlot?: SlotName;
 };
 
 /**
@@ -212,6 +225,7 @@ export function askConstraints(input: AskFilters & {
     ...(input.popularityMax !== undefined && !input.loosened.includes("popularity") ? { popularityMax: input.popularityMax } : {}),
     ...(input.michelin && !input.loosened.includes("michelin") ? { michelin: true } : {}),
     ...(input.openDay ? { openDay: input.openDay } : {}),
+    ...(input.openDay && input.openSlot ? { openSlot: input.openSlot } : {}),
   };
 }
 
@@ -230,6 +244,7 @@ export function meetsAskConstraints(
   if (constraints.popularityMax !== undefined && popularity !== undefined && popularity >= constraints.popularityMax) return false;
   if (constraints.michelin && !michelin) return false;
   if (constraints.openDay && closedOn(place.properties?.hours, constraints.openDay)) return false;
+  if (constraints.openDay && constraints.openSlot && !openDuring(place.properties?.hours, constraints.openDay, constraints.openSlot)) return false;
   const area = constraints.area;
   if (area && place.lat != null && place.lon != null && haversineM(place.lat, place.lon, area.lat, area.lon) > area.radiusM) {
     return false;
@@ -253,6 +268,7 @@ const rankedSchema = z.object({
       name: z.string(),
       share: z.number(),
       tags: z.array(z.string()).optional(),
+      feel: z.boolean().optional(),
       media: z.boolean().optional(),
     }),
   ),
@@ -281,6 +297,7 @@ const checkpointSchema = z.object({
         popularityMax: z.number().optional(),
         michelin: z.boolean().optional(),
         openDay: z.enum(WEEKDAY_NAMES).optional(),
+        openSlot: z.enum(["morning", "lunch", "afternoon", "dinner", "night", "stay"]).optional(),
       }),
     })
     .optional(),
@@ -332,6 +349,7 @@ export async function* findPlacesTool(
     ...(input.discovery === "less_known" ? { popularityMax: LESS_KNOWN_POPULARITY_MAX } : {}),
     ...(input.michelin ? { michelin: true } : {}),
     ...(openDay ? { openDay } : {}),
+    ...(openDay && input.target ? { openSlot: input.target.slot } : {}),
   };
   const label = askLabel(input.intent, target?.label ?? input.day_hint);
   const terms = searchTerms(input.tags, split.text);
@@ -439,7 +457,7 @@ export async function* findPlacesTool(
 
       // Tags: what the advisor asked for in free text, else the category filter.
       const wanted = [...(input.tags ?? []), ...(input.tags?.length ? [] : split.text ? [split.text] : [])];
-      const resolved = await resolveTags(wanted, ctx, calls);
+      const resolved = await resolveTags(wanted, askCategory, ctx, calls);
       const tags = resolved.ids.length > 0 ? resolved.ids : askCategory ? CATEGORY_FILTER_TAGS[askCategory] : [];
       // Kept on the ask so remove_place and the UI's replace can rerun the same search.
       const resolvedArea = area ? { resolvedArea: area } : {};
@@ -457,7 +475,7 @@ export async function* findPlacesTool(
             ...(input.price_max ? { priceMax: input.price_max } : {}),
             ...filters,
             ...(ctx.excludeIds.length ? { excludeIds: ctx.excludeIds } : {}),
-            take,
+            take: askCategory ? take + CATEGORY_SPARE : take,
           },
           { tripId: ctx.trip.id },
         );
@@ -481,8 +499,11 @@ export async function* findPlacesTool(
       // Few exact matches for the advisor's words: the search dropped every tag.
       // Fill the rest from the asked category instead (exact matches first),
       // so "natural wine bars" never turns into restaurants and cafes.
-      if (resolved.ids.length > 0 && askCategory && loosened.includes("tags")) {
-        const exact = results.filter((r) => r.place.tags.some((t) => resolved.ids.includes(t.tagId)));
+      const otherKind = results.some((r) => r.category !== askCategory);
+      if (resolved.ids.length > 0 && askCategory && (loosened.includes("tags") || otherKind)) {
+        const exact = results.filter(
+          (r) => r.category === askCategory && r.place.tags.some((t) => resolved.ids.includes(t.tagId)),
+        );
         const room = take - exact.length;
         if (room > 0) {
           const fillExcludeIds = searchExclusions(exact.map((r) => r.place.entityId), ctx.excludeIds);
@@ -517,10 +538,17 @@ export async function* findPlacesTool(
       }
       await logCalls(turn, ctx, calls, source, key("search"), loosened);
 
-      // Category re-check: results of the asked category first.
-      if (askCategory) {
-        results = [...results.filter((r) => r.category === askCategory), ...results.filter((r) => r.category !== askCategory)];
+      // Category re-check: only the asked kind, unless nothing else came back
+      // (the search has then said what it dropped). The category filter is loose
+      // upstream: a cafe with a restaurant tag is not a dinner.
+      const ofKind = askCategory ? results.filter((r) => r.category === askCategory) : results;
+      const kept = (ofKind.length > 0 ? ofKind : results).slice(0, take);
+      if (kept.length < results.length) {
+        const keptAffinities = kept.map((r) => r.affinity);
+        results = kept.map((r) => ({ ...r, score: displayScore(r.affinity, keptAffinities) }));
       }
+      const applied = new Set<string>(results.flatMap((r) => r.loosened ?? []));
+      loosened = loosened.filter((l) => l === "price_not_applicable" || l === WIDENED_IN_CATEGORY || applied.has(l));
       const items: BoardItem[] = results.map((r) => ({
         place: r.place,
         category: r.category,

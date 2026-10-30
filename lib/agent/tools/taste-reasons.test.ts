@@ -84,8 +84,8 @@ describe.skipIf(!hasDatabase)("specific reasons through find_places", () => {
     LIKE.entityId = entity("via");
     const client = await createClient({ name: "Ana Ruiz" }, run.owner);
     const placeIds = await upsertPlaces([
-      { entityId: entity("via"), name: "Via Carota", tags: [tag("Italian", CUISINE), tag("Warm", AMBIENCE), tag("Stylish", AMBIENCE), tag("Cozy", AMBIENCE)] },
-      { entityId: entity("lilia"), name: "Lilia", tags: [tag("Italian", CUISINE)] },
+      { entityId: entity("via"), name: "Via Carota", types: ["urn:tag:category:place:restaurant"], tags: [tag("Italian", CUISINE), tag("Warm", AMBIENCE), tag("Stylish", AMBIENCE), tag("Cozy", AMBIENCE)] },
+      { entityId: entity("lilia"), name: "Lilia", types: ["urn:tag:category:place:restaurant"], tags: [tag("Italian", CUISINE)] },
     ]);
     await addFavorite(client.id, { query: "via", entityId: entity("via"), placeId: placeIds[entity("via")], match: "resolved", candidates: [] }, run.owner);
     await addFavorite(client.id, { query: "lilia", entityId: entity("lilia"), placeId: placeIds[entity("lilia")], match: "resolved", candidates: [] }, run.owner);
@@ -111,7 +111,7 @@ describe.skipIf(!hasDatabase)("specific reasons through find_places", () => {
 
   it("stores the favorite, its tags and the sentence on the trip place", async () => {
     const card = daNoi(output);
-    expect(card.reason).toBe("Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.");
+    expect(card.reason).toBe("Like Via Carota: Italian, warm and stylish.");
     expect(card.because.find((d) => d.tags)).toEqual(LIKE);
     expect(card.because.find((d) => d.entityId === entity("band"))?.media).toBe(true);
     const [row] = await db.select().from(tripPlaces).where(eq(tripPlaces.id, card.tripPlaceId));
@@ -143,7 +143,7 @@ describe.skipIf(!hasDatabase)("specific reasons through find_places", () => {
   it("keeps the reason and the tags of a place found again on weaker evidence", async () => {
     mocks.findPlaces.mockResolvedValue(found(0.7));
     const again = await drain(findPlacesTool({ intent: "a third dinner" }, turn, `${run.entityPrefix}call-${++call}`));
-    expect(daNoi(again).reason).toBe("Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.");
+    expect(daNoi(again).reason).toBe("Like Via Carota: Italian, warm and stylish.");
     expect(daNoi(again).because.find((d) => d.tags)).toEqual(LIKE);
   });
 
@@ -151,7 +151,7 @@ describe.skipIf(!hasDatabase)("specific reasons through find_places", () => {
     mocks.findPlaces.mockResolvedValue(found(0.9));
     const again = await drain(findPlacesTool({ intent: "another dinner" }, turn, `${run.entityPrefix}call-${++call}`));
     expect(daNoi(again).score).toBe(90);
-    expect(daNoi(again).reason).toBe("Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.");
+    expect(daNoi(again).reason).toBe("Like Via Carota: Italian, warm and stylish.");
     expect(daNoi(again).because.find((d) => d.tags)).toEqual(LIKE);
 
     // Via Carota is no driver any more: its reason must not outlive it.

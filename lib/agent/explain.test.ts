@@ -105,28 +105,37 @@ describe("structured reasons", () => {
       expect(reason).toBe("Like Via Carota: Italian, warm and stylish; known for its natural wine list.");
     });
 
-    it("adds the artist or film among the top three drivers", () => {
-      const reason = renderReason({ ...like, because: [...like.because, band] }, { drivers: ["Lilia"], tags: [] }, context);
-      expect(reason).toBe("Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.");
+    it("adds a noted artist or film, with the fact that ties them", () => {
+      const noted = { ...like, because: [...like.because, band], mediaNote: { name: "Khruangbin" } };
+      expect(renderReason(noted, { drivers: ["Lilia"], tags: [] }, context)).toBe(
+        "Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin.",
+      );
+      const fact = { ...noted, mediaNote: { name: "Khruangbin", fact: "reviews mention live music" } };
+      expect(renderReason(fact, { drivers: ["Lilia"], tags: [] }, context)).toBe(
+        "Like Via Carota: Italian, warm and stylish. Also fits Ana's love of Khruangbin: reviews mention live music.",
+      );
+    });
+
+    it("says a shared feel across kinds of place, and no more", () => {
+      const feel = {
+        ...place,
+        because: [{ name: "Attaboy", share: 30, entityId: "e-bar", tags: ["Intimate", "Romantic"], feel: true }],
+      };
+      expect(renderReason(feel, { drivers: ["Attaboy"], tags: [] }, context)).toBe("Same intimate, romantic feel as Attaboy.");
     });
 
     it("says whose love it is", () => {
       const reason = renderReason(
-        { ...like, because: [...like.because, band] },
+        { ...like, because: [...like.because, band], mediaNote: { name: "Khruangbin" } },
         { drivers: ["Lilia"], tags: [] },
         { ...context, ownerOf: { Khruangbin: "Marcus Lee" } },
       );
       expect(reason).toContain("Also fits Marcus's love of Khruangbin.");
     });
 
-    it("keeps an artist or film out when it is not a top driver", () => {
-      const others = [
-        { name: "A", share: 40, entityId: "e-a" },
-        { name: "B", share: 30, entityId: "e-b" },
-        { name: "Via Carota", share: 25, entityId: "e-via", tags: ["Italian", "Warm"] },
-        { ...band, share: 5 },
-      ];
-      expect(renderReason({ ...like, because: others }, { drivers: ["A"], tags: [] }, context)).toBe("Like Via Carota: Italian and warm.");
+    it("keeps an artist or film out without a note", () => {
+      const reason = renderReason({ ...like, because: [...like.because, band] }, { drivers: ["Lilia"], tags: [] }, context);
+      expect(reason).toBe("Like Via Carota: Italian, warm and stylish.");
     });
 
     it("never takes a plain driver as the favorite", () => {
@@ -137,7 +146,7 @@ describe("structured reasons", () => {
 
   describe("without a tag line", () => {
     const band = { name: "Khruangbin", share: 30, entityId: "e-band", media: true };
-    const withBand = { ...place, because: [band, ...place.because] };
+    const withBand = { ...place, because: [band, ...place.because], mediaNote: { name: "Khruangbin" } };
 
     it("falls back to the favorites sentence", () => {
       expect(renderReason(place, { drivers: ["Via Carota"], tags: ["Cozy"], fact: "Known for its natural wine list" }, context)).toBe(

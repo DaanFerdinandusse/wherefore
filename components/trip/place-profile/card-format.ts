@@ -6,6 +6,7 @@
 
 import type { Explainability, ItinerarySlot, PlaceKeyword, SlotName } from "@/lib/contracts";
 import type { GoogleReview } from "@/lib/google/contracts";
+import { SLOT_WINDOWS } from "@/lib/qloo/normalize";
 
 import { firstName, namedDrivers, parseRanges, plainHours } from "./profile-format";
 
@@ -53,17 +54,6 @@ export function hoursOnDate(openingHours: readonly string[] | undefined, date: s
   const closed = /^closed$/i.test(text);
   return { weekday: SHORT_WEEKDAYS[d.getUTCDay()]!, text: closed ? "Closed" : text, closed };
 }
-
-// The hours a slot covers, in minutes from midnight. A guide for "open for
-// the slot", not a booking time: the place only has to be open for part of it.
-const SLOT_WINDOWS: Record<SlotName, [number, number] | null> = {
-  morning: [9 * 60, 12 * 60],
-  lunch: [12 * 60, 15 * 60],
-  afternoon: [14 * 60, 18 * 60],
-  dinner: [19 * 60, 22 * 60],
-  night: [21 * 60, 25 * 60],
-  stay: null,
-};
 
 /** Open for part of the slot (true), closed for all of it (false), or unknown (null). */
 export function openForSlot(hours: DayHours | null, slot: SlotName): boolean | null {

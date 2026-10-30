@@ -2,7 +2,7 @@
 // category, the card score and the "because they loved" shares. No I/O, so the
 // UI can import it too (it never names the provider).
 
-import type { Category, Destination, Explainability, PlaceTag, TasteTag, Weekday } from "@/lib/contracts";
+import type { Category, Destination, Explainability, PlaceTag, SlotName, TasteTag, Weekday } from "@/lib/contracts";
 
 import type { LocalityCandidate, LocalityCheck, NormalizedPlace, PlaceResult, SignalScore } from "./contracts";
 import type { RawLocality, RawPlace } from "./types";
@@ -33,6 +33,44 @@ export function closedOn(hours: unknown, day: Weekday): boolean {
   if (!hours || typeof hours !== "object") return false;
   const spans = (hours as Record<string, unknown>)[day];
   return Array.isArray(spans) && spans.length > 0 && spans.every((span) => (span as { closed?: unknown } | null)?.closed === true);
+}
+
+// The hours a slot covers, in minutes from midnight. A guide for "open for
+// the slot", not a booking time: the place only has to be open for part of it.
+export const SLOT_WINDOWS: Record<SlotName, [number, number] | null> = {
+  morning: [9 * 60, 12 * 60],
+  lunch: [12 * 60, 15 * 60],
+  afternoon: [14 * 60, 18 * 60],
+  dinner: [19 * 60, 22 * 60],
+  night: [21 * 60, 25 * 60],
+  stay: null,
+};
+
+/** "T19:30:00" in minutes from midnight. */
+function spanMinutes(time: unknown): number | null {
+  const match = typeof time === "string" ? /^T?(\d{2}):(\d{2})/.exec(time) : null;
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+/**
+ * Does a place's own hours block have it open for part of this slot? Reads
+ * every span of the day, so it needs hours from /entities: /v2/insights lists
+ * only the first one. Unknown hours, or a time that does not read, do not count
+ * against a place.
+ */
+export function openDuring(hours: unknown, day: Weekday, slot: SlotName): boolean {
+  const window = SLOT_WINDOWS[slot];
+  if (!window || !hours || typeof hours !== "object") return true;
+  const spans = (hours as Record<string, unknown>)[day];
+  if (!Array.isArray(spans) || spans.length === 0) return true;
+  return spans.some((span) => {
+    const { closed, opens, closes } = (span ?? {}) as { closed?: unknown; opens?: unknown; closes?: unknown };
+    if (closed === true) return false;
+    const from = spanMinutes(opens);
+    const to = spanMinutes(closes);
+    if (from === null || to === null) return true;
+    return from < window[1] && (to <= from ? to + 24 * 60 : to) > window[0];
+  });
 }
 
 // ---------------------------------------------------------------- places row

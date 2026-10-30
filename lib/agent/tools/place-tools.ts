@@ -24,13 +24,14 @@ import { saveReplacement, setSlots, setTripPlaceStatus, type SlotInput } from "@
 import { askRerunOfQuery, DESCRIPTION_KEYS, descriptionTexts } from "@/lib/trips/map";
 import { pickReplacement } from "@/lib/trips/replace";
 
-import { cacheWrite, guarded, type TurnRef } from "../writes";
+import { cacheWrite, guarded, TurnSupersededError, type TurnRef } from "../writes";
 
 import { replacementNote } from "./labels";
 import { cleanAgentNote } from "./notes";
 import {
   cardsInOrder,
   driversOf,
+  explainCards,
   resolveTripPlaceIds,
   tripPlaceRowOf,
   type BoardItem,
@@ -313,6 +314,13 @@ export async function removePlaceTool(
     ),
   );
   if (!tripPlaceId) return { removed, note: "The replacement could not be saved." };
+  const [fresh] = await cardsInOrder(ctx, [tripPlaceId]);
+  // A replacement reads like the cards around it. Its place is saved, so a
+  // failed explain only leaves it without a reason.
+  await explainCards(turn, ctx, fresh ? [fresh] : []).catch((error) => {
+    if (error instanceof TurnSupersededError) throw error;
+    console.error(`[remove_place ${toolCallId}] explaining the replacement failed`, error);
+  });
   const [replacement] = await cardsInOrder(ctx, [tripPlaceId]);
   return { removed, ...(replacement ? { replacement, ...(note ? { note } : {}) } : {}) };
 }

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { registryModel } from "@/lib/codex/workflow-model";
 
-import { isProperAdjective, likeDriver, mediaDriver, tagPhrase } from "./taste-overlap";
+import { isProperAdjective, likeDriver, likePhrase, tagPhrase, type MediaNote } from "./taste-overlap";
 
 export { tagPhrase } from "./taste-overlap";
 
@@ -14,11 +14,12 @@ export { tagPhrase } from "./taste-overlap";
 // a template:
 //
 //   "Like Via Carota: Italian, warm and stylish; known for its natural wine
-//    list. Also fits Ana's love of Khruangbin."
+//    list. Also fits Ana's love of Khruangbin: reviews mention live music."
 //
 // The favorite and the tags of "Like" are chosen in code (taste-overlap.ts),
-// never by the model; the media clause appears when an artist or film is among
-// the three biggest drivers. A place with no tag line says who it is for:
+// never by the model, and so is the media clause (mediaNotes): a fact ties the
+// artist to the place, or it is the one place of the search they lead. A place
+// with no tag line says who it is for:
 //
 //   "Because Ana loves Via Carota and Lilia; it shares cozy and Italian;
 //    known for its natural wine list."
@@ -39,7 +40,9 @@ export type ExplainInput = {
    * favorites", "Your places", "This trip's picks") are never picked. `tags`
    * marks the favorite the place is like, `media` an artist or film.
    */
-  because: { name: string; share: number; entityId?: string; tags?: string[]; media?: boolean }[];
+  because: { name: string; share: number; entityId?: string; tags?: string[]; feel?: boolean; media?: boolean }[];
+  /** The artist or film this place's reason names (mediaNotes). */
+  mediaNote?: MediaNote;
   /** The client's taste tags this place shares. */
   sharedTags: string[];
   /** Short description snippets from the provider (factSnippets). */
@@ -179,11 +182,11 @@ function becauseClause(favorites: readonly string[], client: string, context: Ex
 
 /**
  * The sentence for a validated pick: "Like <favorite>: <tags>" when the place
- * has a favorite it is like, else "Because Ana loves ...". An artist or film
- * among the top drivers gets its own sentence unless the first one names it.
+ * has a favorite it is like, else "Because Ana loves ...". A noted artist or
+ * film gets its own sentence unless the first one names it.
  */
 export function renderReason(
-  place: Pick<ExplainInput, "name" | "neighborhood" | "because">,
+  place: Pick<ExplainInput, "name" | "neighborhood" | "because" | "mediaNote">,
   selection: ReasonSelection,
   context: ExplainContext,
 ): string {
@@ -192,7 +195,7 @@ export function renderReason(
   const like = likeDriver(named);
   const clauses: string[] = [];
   if (like) {
-    clauses.push(`Like ${like.name}: ${listOf((like.tags ?? []).map(tagPhrase))}`);
+    clauses.push(likePhrase(like, like.feel ? (like.tags ?? []).map(tagPhrase).join(", ") : listOf((like.tags ?? []).map(tagPhrase))));
   } else {
     clauses.push(becauseClause(selection.drivers, client, context));
     if (selection.tags.length > 0) clauses.push(`it shares ${listOf(selection.tags.map(tagPhrase))}`);
@@ -201,10 +204,11 @@ export function renderReason(
     const names = [place.name, ...(place.neighborhood ? [place.neighborhood] : []), ...(context.properNames ?? [])];
     clauses.push(snippetClause(selection.fact, names));
   }
-  const media = mediaDriver(named);
+  const media = place.mediaNote;
   const sentence = `${clauses.join("; ")}.`;
   if (!media || (!like && selection.drivers.includes(media.name))) return sentence;
-  return `${sentence} Also fits ${firstName(context.ownerOf?.[media.name] ?? client)}'s love of ${media.name}.`;
+  const owner = firstName(context.ownerOf?.[media.name] ?? client);
+  return `${sentence} Also fits ${owner}'s love of ${media.name}${media.fact ? `: ${media.fact}` : ""}.`;
 }
 
 const pickSchema = z.object({

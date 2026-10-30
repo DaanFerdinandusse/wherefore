@@ -60,13 +60,13 @@ export type SignalFavorite = {
 };
 
 /** A client's artists and films, as stored on the client. */
-export type SignalMedia = Pick<MediaFavorite, "entityId" | "name" | "query"> & { clientId: string };
+export type SignalMedia = Pick<MediaFavorite, "entityId" | "name" | "query"> & Partial<Pick<MediaFavorite, "kind">> & { clientId: string };
 
 export type TripSignals = {
   /** Entity ids for signal.interests.entities, favorites first. */
   signals: string[];
   /** Named client favorites (places, artists, films), for explainability. */
-  favorites: { entityId: string; name: string; media?: true }[];
+  favorites: { entityId: string; name: string; media?: true; artist?: true }[];
   favoritesUsed: BuiltFrom["favorites"];
   companionsWithoutFavorites: string[];
   /** Advisor place entity ids added as signals (blend on), else empty. */
@@ -141,7 +141,7 @@ export function buildSignals(input: {
       ),
       ...(input.media ?? []).flatMap((m) =>
         m.clientId === traveler.clientId && m.entityId
-          ? [{ entityId: m.entityId, name: m.name ?? m.query, media: true as const }]
+          ? [{ entityId: m.entityId, name: m.name ?? m.query, media: true as const, ...(m.kind === "artist" ? { artist: true as const } : {}) }]
           : [],
       ),
     ];

@@ -314,16 +314,20 @@ export function placeFactsOf(
 }
 
 /** The search options of an ask that a rerun of it must keep. */
-export type AskFilters = Pick<FindPlacesInput, "popularityMax" | "michelin" | "openDay">;
+export type AskFilters = Pick<FindPlacesInput, "popularityMax" | "michelin" | "openDay" | "openSlot">;
+
+const SLOT_NAMES: readonly SlotName[] = ["morning", "lunch", "afternoon", "dinner", "night", "stay"];
 
 /** The search options stored on an ask's query (find_places writes them). */
 export function askFiltersOfQuery(query: Record<string, unknown>): AskFilters {
   const popularityMax = cardPopularity(query.popularityMax);
   const openDay = WEEKDAY_NAMES.find((day) => day === query.openDay);
+  const openSlot = SLOT_NAMES.find((slot) => slot === query.openSlot);
   return {
     ...(popularityMax !== undefined ? { popularityMax } : {}),
     ...(query.michelin === true ? { michelin: true } : {}),
     ...(openDay ? { openDay } : {}),
+    ...(openDay && openSlot ? { openSlot } : {}),
   };
 }
 

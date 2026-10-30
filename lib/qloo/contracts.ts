@@ -2,7 +2,7 @@
 // normalize.ts annotate their exports with these, so typecheck fails the moment
 // an implementation drifts from what the tools and the UI code against.
 
-import type { Category, Destination, Explainability, FavoriteCandidate, PlaceTag, TasteTag, Weekday } from "@/lib/contracts";
+import type { Category, Destination, Explainability, FavoriteCandidate, PlaceTag, TasteTag, SlotName, Weekday } from "@/lib/contracts";
 import type { places } from "@/lib/db/schema/core";
 
 import type { QlooClient } from "./client";
@@ -138,6 +138,8 @@ export type FindPlacesInput = {
   michelin?: boolean;
   /** Keeps to places open on this day. */
   openDay?: Weekday;
+  /** With openDay: keeps to places open for part of this slot, by their own hours. */
+  openSlot?: SlotName;
   take: number;
   page?: number;
 };
