@@ -1,7 +1,7 @@
 import { getToolName, isToolUIPart } from "ai";
 import { z } from "zod";
 
-import type { AppUIMessage, FindPlacesOutput, PlaceVerdict, RecommendPlaceOutput, SlotName, TripPlaceCard } from "@/lib/contracts";
+import type { AppUIMessage, FindPlacesOutput, ItinerarySlot, PlaceVerdict, RecommendPlaceOutput, SetItineraryOutput, SlotName, TripPlaceCard } from "@/lib/contracts";
 
 import type { PlacesMeta } from "../contracts";
 
@@ -142,6 +142,24 @@ export function toolPlaceEvents(messages: AppUIMessage[]): ToolPlacesEvent[] {
           key: `${part.toolCallId}|done|1|${preliminary}`,
         });
       }
+    }
+  }
+  return events;
+}
+
+/** One finished set_itinerary, for the panel. `replace` means the rest of the itinerary was cleared. */
+export type ToolSlotsEvent = { toolCallId: string; slots: ItinerarySlot[]; replace: boolean };
+
+/** What the agent wrote into the itinerary, in transcript order. */
+export function toolSlotEvents(messages: AppUIMessage[]): ToolSlotsEvent[] {
+  const events: ToolSlotsEvent[] = [];
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (!isToolUIPart(part) || part.state !== "output-available" || part.preliminary || getToolName(part) !== "set_itinerary") continue;
+      const output = part.output as SetItineraryOutput | undefined;
+      if (!Array.isArray(output?.applied)) continue;
+      const mode = (part.input as { mode?: unknown } | undefined)?.mode;
+      events.push({ toolCallId: part.toolCallId, slots: output.applied, replace: mode === "replace" });
     }
   }
   return events;

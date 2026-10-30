@@ -23,7 +23,7 @@ import {
   recommendationByPlace,
   type Recommendation,
 } from "./chat-format";
-import { extractChatPlaces, placesMetaOf, toolPlaceEvents } from "./chat-places";
+import { extractChatPlaces, placesMetaOf, toolPlaceEvents, toolSlotEvents } from "./chat-places";
 import { Composer } from "./composer";
 import { isAtBottom } from "./dock-layout";
 import { Thread } from "./thread";
@@ -99,6 +99,7 @@ export function ChatColumn({
   const places = useTripStore((s) => s.places);
   const selectedPlaceId = useTripStore((s) => s.selectedPlaceId);
   const select = useTripStore((s) => s.select);
+  const dispatch = useTripStore((s) => s.dispatch);
   const setHighlight = useTripStore((s) => s.setHighlight);
   const chatPrompt = useTripStore((s) => s.chatPrompt);
   const clearChatPrompt = useTripStore((s) => s.clearChatPrompt);
@@ -122,6 +123,17 @@ export function ChatColumn({
       onPlacesRef.current?.(event.places, placesMetaOf(event));
     }
   }, [messages]);
+  // What the agent writes into the itinerary shows at once. An edit from an
+  // earlier turn is already in the snapshot, and may be older than it.
+  const appliedSlots = useRef(new Set<string>());
+  useEffect(() => {
+    for (const event of toolSlotEvents(messages)) {
+      if (appliedSlots.current.has(event.toolCallId)) continue;
+      appliedSlots.current.add(event.toolCallId);
+      if (!busy) continue;
+      dispatch({ type: event.replace ? "slots" : "slotsSaved", slots: event.slots });
+    }
+  }, [messages, busy, dispatch]);
 
   const empty = !messages.some((m) => !m.metadata?.hidden);
   const opening = useOpening(chatId, empty, givenOpening);

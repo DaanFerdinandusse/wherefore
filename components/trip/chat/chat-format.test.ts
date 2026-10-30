@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { AppUIMessage, TripPlaceCard } from "@/lib/contracts";
 
 import { toolErrorText } from "./chat-errors";
-import { placesMetaOf, toolPlaceEvents } from "./chat-places";
+import { placesMetaOf, toolPlaceEvents, toolSlotEvents } from "./chat-places";
 import { placesByVerdict, composerPlaceholder, liveRecommendationId, mainNeighborhood, picksByAsk, placesByMatch, recommendationByPlace } from "./chat-format";
 
 const card = (id: string, extra: Partial<TripPlaceCard> = {}): TripPlaceCard => ({
@@ -126,5 +126,23 @@ describe("placesByVerdict", () => {
   it("keeps the backup right behind the pick", () => {
     const order = placesByVerdict([place("a"), place("b"), place("c")], [verdict("a", "out"), verdict("b", "backup"), verdict("c", "pick")]).map((p) => p.tripPlaceId);
     expect(order).toEqual(["c", "b", "a"]);
+  });
+});
+
+describe("toolSlotEvents", () => {
+  const slot = { id: "s", day: 2, slot: "lunch" as const, tripPlaceId: "t", note: "", position: 0 };
+  const message = (part: Record<string, unknown>) => ({ id: "m", role: "assistant", parts: [part] }) as unknown as AppUIMessage;
+  const part = (extra: Record<string, unknown>) => ({ type: "tool-set_itinerary", toolCallId: "c", state: "output-available", input: { mode: "merge" }, output: { applied: [slot], rejected: [] }, ...extra });
+
+  it("reads what the agent wrote into the itinerary", () => {
+    expect(toolSlotEvents([message(part({}))])).toEqual([{ toolCallId: "c", slots: [slot], replace: false }]);
+  });
+
+  it("marks a whole new itinerary", () => {
+    expect(toolSlotEvents([message(part({ input: { mode: "replace" } }))])[0]?.replace).toBe(true);
+  });
+
+  it("waits for the tool to finish", () => {
+    expect(toolSlotEvents([message(part({ state: "input-available", output: undefined }))])).toEqual([]);
   });
 });
