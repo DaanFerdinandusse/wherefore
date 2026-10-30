@@ -6,6 +6,21 @@ export type ChatProblem = { problem: string; recovery: string; retry: boolean };
 
 const SERVER_JSON = /\{"error":"([a-z_]+:[a-z]+)","message":"([^"]+)"\}/;
 
+/**
+ * A failed tool in plain words. Tool outputs already carry advisor-facing
+ * errors; the SDK's own errors (a request the model shaped wrong, a step
+ * that threw) are internal, so they become one line that names what happened.
+ */
+export function toolErrorText(text: string | undefined, what = "search"): string {
+  if (!text?.trim()) return `The ${what} did not finish.`;
+  if (/InvalidToolInput|TypeValidation|ToolCallRepair|NoSuchTool/i.test(text)) {
+    return `The ${what} request was not valid, so nothing was looked up.`;
+  }
+  if (/^Interrupted$/i.test(text.trim())) return `The ${what} was interrupted.`;
+  if (/^AI_|Error:|\{"/.test(text) || text.length > 200) return `The ${what} did not finish.`;
+  return text;
+}
+
 export function describeChatError(error: Error | string | undefined): ChatProblem | undefined {
   if (!error) return undefined;
   const text = typeof error === "string" ? error : error.message;

@@ -3,14 +3,24 @@
 import { ArrowUp, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-// The composer: Enter sends, Shift+Enter is a newline, "/" anywhere outside
-// a field focuses it. While a reply runs the send button becomes Stop.
+import { cn } from "@/lib/ui/cn";
+
+// The composer docked at the bottom of the chat column (Paper G1, S1 to S5):
+// a white pill with the placeholder from trip facts and a round button that
+// sends (arrow) or, while a turn runs, stops it (square). Enter sends,
+// Shift+Enter is a newline. "/" outside a field focuses it, and so does the
+// workspace's focus event. While a turn runs the field stays open, so the
+// advisor can type the next change; it sends once the turn is over.
+
+export const FOCUS_COMPOSER_EVENT = "tastebrief:focus-composer";
 
 type Props = {
   busy: boolean;
   stopping: boolean;
+  placeholder: string;
   onSend: (text: string) => void;
   onStop: () => void;
+  className?: string;
 };
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -18,19 +28,25 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-export function Composer({ busy, stopping, onSend, onStop }: Props) {
+export function Composer({ busy, stopping, placeholder, onSend, onStop, className }: Props) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    const focus = () => ref.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "/" && !event.metaKey && !event.ctrlKey && !isTypingTarget(event.target)) {
+      if (event.defaultPrevented) return;
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !isTypingTarget(event.target)) {
         event.preventDefault();
-        ref.current?.focus();
+        focus();
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(FOCUS_COMPOSER_EVENT, focus);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(FOCUS_COMPOSER_EVENT, focus);
+    };
   }, []);
 
   const submit = () => {
@@ -41,7 +57,10 @@ export function Composer({ busy, stopping, onSend, onStop }: Props) {
 
   return (
     <form
-      className="flex items-end gap-2 rounded-card bg-surface-raised/80 p-2 hairline"
+      className={cn(
+        "flex items-end gap-2.5 rounded-[31px] border border-ink/6 bg-white/90 py-2 pr-2 pl-5 shadow-composer",
+        className,
+      )}
       onSubmit={(event) => {
         event.preventDefault();
         submit();
@@ -56,7 +75,7 @@ export function Composer({ busy, stopping, onSend, onStop }: Props) {
         data-testid="composer"
         rows={1}
         value={text}
-        placeholder="Ask for places, or press / to type"
+        placeholder={placeholder}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -64,28 +83,30 @@ export function Composer({ busy, stopping, onSend, onStop }: Props) {
             submit();
           }
         }}
-        className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-ink outline-none placeholder:text-text-2 field-sizing-content"
+        className="field-sizing-content max-h-40 min-h-11 flex-1 resize-none bg-transparent py-2.5 text-body-lg leading-5.5 text-ink outline-none placeholder:text-text-muted"
       />
       {busy ? (
         <button
           type="button"
           onClick={onStop}
           disabled={stopping}
+          aria-label={stopping ? "Stopping" : "Stop"}
+          title={stopping ? "Stopping" : "Stop the reply"}
           data-testid="stop-button"
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-pill bg-ink px-3.5 text-surface-raised disabled:opacity-60"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-pill bg-ink text-white transition-opacity disabled:opacity-60"
         >
-          <Square aria-hidden className="size-3 fill-current" strokeWidth={1.75} />
-          {stopping ? "Stopping" : "Stop"}
+          <Square aria-hidden className="size-3.5 fill-current" strokeWidth={0} />
         </button>
       ) : (
         <button
           type="submit"
           disabled={!text.trim()}
+          aria-label="Send"
+          title="Send"
           data-testid="send-button"
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-pill bg-ink px-3.5 text-surface-raised disabled:opacity-40"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-pill bg-ink text-white transition-opacity disabled:opacity-85"
         >
-          <ArrowUp aria-hidden className="size-3.5" strokeWidth={1.75} />
-          Send
+          <ArrowUp aria-hidden className="size-4.5" strokeWidth={2.4} />
         </button>
       )}
     </form>

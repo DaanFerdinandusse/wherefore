@@ -117,6 +117,19 @@
   --shadow-panel: 0 30px 90px rgb(22 19 15 / 0.35);
   --shadow-pin: 0 3px 8px rgb(28 26 23 / 0.14);
   --shadow-pin-photo: 0 6px 16px rgb(28 26 23 / 0.22);
+
+  /* v3 chat column and place card (Paper "v3 Chat + itinerary"). */
+  --color-why: #f5e6cc;
+  --color-amber-dot: #c98a2e;
+  --color-amber-deep: #6b4615;
+  --color-skeleton: #ddd2bf;
+  --color-skeleton-light: #ece4d6;
+  --color-photo-chip: rgb(22 19 15 / 0.7);
+  --color-track: rgb(22 19 15 / 0.05);
+  --text-chat: 17px;
+  --text-chat--line-height: 26px;
+  --shadow-soft: 0 1px 3px rgb(22 19 15 / 0.06), 0 0 0 1px rgb(22 19 15 / 0.04);
+  --shadow-composer: 0 12px 32px rgb(22 19 15 / 0.12), 0 1px 3px rgb(22 19 15 / 0.06);
 }
 
 :root {
@@ -271,6 +284,11 @@ textarea {
   the browser scales down together with the 24px bottom corners. This one
   reads the width from the nearest container (`@container` on the parent).
 */
+/* A loading tile in the chat: the warm diagonal sheen of the designs. */
+@utility skeleton-sheen {
+  background-image: linear-gradient(110deg, var(--color-skeleton) 0%, var(--color-skeleton-light) 45%, var(--color-skeleton) 90%);
+}
+
 @utility arch-top-fluid {
   border-radius: 50cqi 50cqi 24px 24px;
 }

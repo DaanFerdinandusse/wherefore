@@ -199,7 +199,8 @@ const NOUNS: Record<Category, [string, string]> = {
 
 /** "restaurants", "bar": the noun of a search row for a category. */
 export function categoryNoun(category: Category | undefined, count: number): string {
-  const [one, many] = NOUNS[category ?? "other"];
+  // A streaming tool input can carry a partial category ("ea").
+  const [one, many] = (category && NOUNS[category]) || NOUNS.other;
   return count === 1 ? one : many;
 }
 

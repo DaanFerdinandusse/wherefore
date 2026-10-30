@@ -66,6 +66,10 @@ export type PlacesMeta = {
   count?: number;
   elapsedMs?: number;
   loosened?: string[];
+  /** The itinerary slot the ask is for (find_places target): the itinerary highlights it. */
+  target?: { day: number; slot: ItinerarySlot["slot"] };
+  /** recommend_place: the one pick of the ask, suggested for `target`. */
+  pickTripPlaceId?: string;
 };
 
 /** The glass chat dock. Owned by the chat runtime. */

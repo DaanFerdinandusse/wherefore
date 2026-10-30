@@ -18,7 +18,7 @@ test("3. two tabs see the same stream; stop in one stops both", async ({ browser
   const cardIn = (tab: typeof tabA) => tab.locator('[data-testid="tool-card"][data-tool="slow_count"]');
   await expect(cardIn(tabA)).toBeVisible();
   await expect(cardIn(tabB)).toBeVisible({ timeout: 20_000 });
-  await expect(tabB.getByTestId("chat-dock")).toHaveAttribute("data-busy", "true");
+  await expect(tabB.getByTestId("chat-column")).toHaveAttribute("data-busy", "true");
 
   await tabB.getByTestId("stop-button").click();
 
@@ -29,7 +29,7 @@ test("3. two tabs see the same stream; stop in one stops both", async ({ browser
   expect(textOf(reply!).toLowerCase()).not.toContain("finished");
 
   for (const tab of [tabA, tabB]) {
-    await expect(tab.getByTestId("chat-dock")).toHaveAttribute("data-busy", "false", { timeout: 30_000 });
+    await expect(tab.getByTestId("chat-column")).toHaveAttribute("data-busy", "false", { timeout: 30_000 });
     await expect(tab.locator('[data-testid="assistant-message"][data-stopped="true"]')).toHaveCount(1, { timeout: 15_000 });
     await expect(cardIn(tab)).toHaveAttribute("data-state", "output-error");
   }
@@ -53,7 +53,7 @@ test("6. stop mid-stream saves the partial text, then the next prompt is accepte
   expect(partialText.length).toBeGreaterThan(30);
   // Far short of a 500 word story: the stop really cut it.
   expect(partialText.split(/\s+/).length).toBeLessThan(450);
-  await expect(page.getByTestId("chat-dock")).toHaveAttribute("data-busy", "false", { timeout: 30_000 });
+  await expect(page.getByTestId("chat-column")).toHaveAttribute("data-busy", "false", { timeout: 30_000 });
 
   await send(page, "Reply with exactly the word: ok");
   const next = await waitForTurns(request, chatId, 2);
