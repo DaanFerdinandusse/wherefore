@@ -33,7 +33,17 @@ import type {
   TripCard,
   TripsByStage,
 } from "./contracts";
-import { asCategory, asPlaceStatus, asSource, compareSlots, toAsk, toSlot } from "./map";
+import {
+  asCategory,
+  asPlaceStatus,
+  asSource,
+  cardPriceLevel,
+  compareSlots,
+  placeFactsFromProperties,
+  toAsk,
+  toSlot,
+  travelerFavorites,
+} from "./map";
 import { type SharedSlotRow, toSharedTripView } from "./share";
 import { DEV_TRIP_PREFIX } from "./dev";
 import { computeStage, isTripStage, todayIso, tripDayCount } from "./stage";
@@ -80,6 +90,10 @@ function cardsQuery(where: SQL | undefined) {
       lat: places.lat,
       lon: places.lon,
       imageUrl: sql<string | null>`${places.images} -> 0 ->> 'url'`,
+      priceLevel: places.priceLevel,
+      // Only the two blocks the card reads, not the whole properties document.
+      keywordsRaw: sql<unknown>`${places.properties} -> 'keywords'`,
+      dishesRaw: sql<unknown>`${places.properties} -> 'specialty_dishes'`,
       yourPlaceId: advisorPlaces.id,
       yourPlaceNote: advisorPlaces.note,
     })
@@ -115,7 +129,11 @@ function askIdsByTripPlace(rows: { askId: string; tripPlaceId: string }[]): Map<
 
 function toCard(row: CardRow, askIds: string[]): TripPlaceCard {
   const tp = row.tripPlace;
+  const facts = placeFactsFromProperties({ keywords: row.keywordsRaw, specialty_dishes: row.dishesRaw });
+  const priceLevel = cardPriceLevel(row.priceLevel);
   return {
+    ...facts,
+    ...(priceLevel ? { priceLevel } : {}),
     tripPlaceId: tp.id,
     placeId: tp.placeId,
     entityId: row.entityId,
@@ -152,6 +170,16 @@ export const getTripSnapshot: GetTripSnapshot = async (tripId, ownerId) => {
         favoritesCount: sql<number>`(
           select count(*)::int from client_favorites f where f.client_id = ${TRAVELER_CLIENT_ID}
         )`,
+        favorites: sql<unknown>`coalesce((
+          select json_agg(json_build_object(
+            'name', coalesce(p.name, f.query),
+            'entityId', coalesce(p.entity_id, f.entity_id),
+            'imageUrl', p.images -> 0 ->> 'url'
+          ) order by f.position, f.created_at)
+          from client_favorites f
+          left join places p on p.id = f.place_id
+          where f.client_id = ${TRAVELER_CLIENT_ID}
+        ), '[]'::json)`,
       })
       .from(tripTravelers)
       .where(eq(tripTravelers.tripId, tripId))
@@ -188,13 +216,15 @@ export const getTripSnapshot: GetTripSnapshot = async (tripId, ownerId) => {
       seedStatus: asSeedStatus(trip.seedStatus),
       builtFrom: trip.builtFrom ?? undefined,
       chatId: trip.chatId ?? "",
+      party: { adults: trip.adults, children: trip.children },
     },
-    travelers: travelerRows.map(({ traveler, favoritesCount }) => ({
+    travelers: travelerRows.map(({ traveler, favoritesCount, favorites }) => ({
       id: traveler.id,
       name: traveler.name,
       role: traveler.role === "client" ? "client" : "guest",
       clientId: traveler.clientId ?? undefined,
       favoritesCount: traveler.clientId ? favoritesCount : 0,
+      ...(traveler.clientId ? { favorites: travelerFavorites(favorites) } : {}),
     })),
     places: cardRows.map((row) => toCard(row, askIds.get(row.tripPlace.id) ?? [])),
     asks: askRows.map(({ ask, liveCount }) => toAsk(ask, liveCount)),
