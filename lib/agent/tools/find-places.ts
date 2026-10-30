@@ -90,8 +90,8 @@ export type FindPlacesInput = {
   day_hint?: string;
   /** The itinerary slot this search is for: the ask carries it, the workspace highlights it. */
   target?: { day: number; slot: SlotName };
-  /** "less_known": only places below LESS_KNOWN_POPULARITY_MAX. */
-  discovery?: "less_known";
+  /** "less_known": only places below LESS_KNOWN_POPULARITY_MAX. "popular": every place, famous ones included. */
+  discovery?: "less_known" | "popular";
   /** Only places Michelin lists. */
   michelin?: boolean;
   take?: number;

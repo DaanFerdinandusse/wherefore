@@ -9,8 +9,12 @@ import type { RawLocality, RawPlace } from "./types";
 
 // --------------------------------------------------------- less known, open day
 
-/** "Less known" means a popularity percentile (0 to 1) below this. The search filter and the card chip share it. */
-export const LESS_KNOWN_POPULARITY_MAX = 0.6;
+/**
+ * "Less known" means a popularity percentile (0 to 1) below this. High on purpose: it only takes out
+ * the famous places (the main sights score 0.96 to 1.0), and most good neighborhood places sit above
+ * 0.8 in a city with a lot of data. The search filter and the card chip share it.
+ */
+export const LESS_KNOWN_POPULARITY_MAX = 0.95;
 
 /** An unknown popularity is not less known. */
 export function isLessKnown(popularity: number | undefined): boolean {

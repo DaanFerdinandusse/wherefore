@@ -486,7 +486,7 @@ describe("cardForModel facts", () => {
   });
 
   it("says well known from the same constant, and nothing when the fact is unknown", () => {
-    for (const popularity of [0.6, 0.97]) {
+    for (const popularity of [0.95, 0.97]) {
       const out = cardForModel({ ...card, because: [], sharedTags: [], askIds: [], popularity });
       expect(out).toMatchObject({ known: "well known" });
       expect(out).not.toHaveProperty("michelin");

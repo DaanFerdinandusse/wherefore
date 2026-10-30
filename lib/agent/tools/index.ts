@@ -123,9 +123,11 @@ function realTools(turn: TurnRef) {
         day_hint: z.string().max(30).optional().describe("The day or time when it is not a slot, e.g. 'Saturday'. On a trip without dates, the weekday of the target too"),
         target: targetSchema.optional(),
         discovery: z
-          .literal("less_known")
+          .enum(["less_known", "popular"])
           .optional()
-          .describe("'less_known' keeps to places off the usual list. Use it when the brief asks for that, and for at least one pick when planning several slots"),
+          .describe(
+            "Always set this. 'less_known' is the default: it leaves out the main attractions and the most popular spots, so the advisor sees places the client would not find alone. 'popular' searches everything, famous places included: only when the advisor asks for something famous, popular, classic or a must-see, or asks for Michelin",
+          ),
         michelin: z.boolean().optional().describe("True keeps to places Michelin lists. Only when the advisor asks for Michelin"),
         take: z.number().int().min(3).max(8).optional().describe("How many candidates, 3 to 8, default 5"),
       }),
