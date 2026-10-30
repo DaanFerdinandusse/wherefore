@@ -19,7 +19,7 @@ import { ErrorRow, type PlaceHandlers } from "./parts";
 // (skeletons while pending, a "Match" spinner badge while a place has no
 // score yet). Done, it collapses to "Looked at 5 restaurants ..." and a row
 // of compact chips; the ask's pick is marked "92 · Picked". Tiles and chips
-// open the place card, highlight their pin on hover and drag into an
+// switch the inline place card, highlight their pin on hover and drag into an
 // itinerary slot.
 
 const CATEGORY_ICON: Record<Category, typeof Utensils> = {
@@ -40,6 +40,7 @@ type Props = PlaceHandlers & {
   onRetry?: () => void;
   /** The ask's pick (recommend_place), marked in the done row. */
   pickedId?: string;
+  selectedId?: string;
 };
 
 function ArcSpinner({ size = 18, light = false }: { size?: number; light?: boolean }) {
@@ -124,7 +125,7 @@ function SkeletonTile({ index }: { index: number }) {
   );
 }
 
-function Chip({ place, picked, onPlacesHover, onPlaceClick }: { place: TripPlaceCard; picked: boolean } & PlaceHandlers) {
+function Chip({ place, picked, selected, onPlacesHover, onPlaceClick }: { place: TripPlaceCard; picked: boolean; selected: boolean } & PlaceHandlers) {
   const line = [place.score !== undefined ? String(place.score) : null, picked ? "Picked" : place.yourPlace ? "Your place" : null]
     .filter(Boolean)
     .join(" · ");
@@ -137,13 +138,14 @@ function Chip({ place, picked, onPlacesHover, onPlaceClick }: { place: TripPlace
         data-testid="place-chip"
         data-trip-place-id={place.tripPlaceId}
         data-picked={picked ? "true" : "false"}
+        aria-pressed={selected}
         onMouseEnter={() => onPlacesHover?.(place.tripPlaceId)}
         onFocus={() => onPlacesHover?.(place.tripPlaceId)}
         onBlur={() => onPlacesHover?.(null)}
         onClick={() => onPlaceClick?.(place.tripPlaceId)}
         className={cn(
           "flex w-full items-center gap-2 rounded-row p-1.25 text-left transition-colors",
-          picked ? "bg-why ring-[1.5px] ring-amber-dot" : "bg-surface-raised ring-1 ring-ink/6 hover:bg-white",
+          selected ? "bg-why ring-[1.5px] ring-amber-dot" : "bg-surface-raised ring-1 ring-ink/6 hover:bg-white",
         )}
       >
         <span className="relative size-10 shrink-0 overflow-hidden rounded-[10px] bg-avatar">
@@ -164,7 +166,7 @@ function Chip({ place, picked, onPlacesHover, onPlaceClick }: { place: TripPlace
   );
 }
 
-export function SearchRow({ state, preliminary, input, output, errorText, onRetry, pickedId, ...handlers }: Props) {
+export function SearchRow({ state, preliminary, input, output, errorText, onRetry, pickedId, selectedId, ...handlers }: Props) {
   const failed = state === "output-error" || Boolean(output?.error && output.phase === "done" && output.places.length === 0);
   const running = !failed && (state !== "output-available" || preliminary);
   const places = placesByMatch(output?.places ?? []);
@@ -222,7 +224,7 @@ export function SearchRow({ state, preliminary, input, output, errorText, onRetr
       ) : places.length > 0 ? (
         <ul className="flex gap-1.5 overflow-x-auto p-1" data-testid="search-chips" onMouseLeave={() => handlers.onPlacesHover?.(null)}>
           {places.map((place) => (
-            <Chip key={place.tripPlaceId} place={place} picked={place.tripPlaceId === pickedId} {...handlers} />
+            <Chip key={place.tripPlaceId} place={place} picked={place.tripPlaceId === pickedId} selected={place.tripPlaceId === selectedId} {...handlers} />
           ))}
         </ul>
       ) : null}

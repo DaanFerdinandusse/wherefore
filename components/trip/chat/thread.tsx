@@ -12,12 +12,12 @@ import { isInSlot, pickLine } from "../place-profile/card-format";
 
 import { toolErrorText } from "./chat-errors";
 import { readPlacesOutput, readRecommendOutput } from "./chat-places";
-import type { Recommendation } from "./chat-format";
+import { recommendationsOf, type Recommendation } from "./chat-format";
 import { ToolCard } from "./tool-card";
 import { chatActivity } from "./chat-activity";
 import { StreamingText, ThinkingIndicator, ThinkingSummary } from "./streaming-parts";
 import type { PlaceHandlers } from "./tool-cards/parts";
-import { SearchRow } from "./tool-cards/search-row";
+import { SearchResults } from "./search-results";
 
 // The chat thread (Paper G1, S1 to S5): the opening for an empty chat (the
 // "Trip created" line and a greeting composed from facts), advisor messages
@@ -108,6 +108,12 @@ export function Thread({
 }: Props) {
   const visible = messages.filter((m) => !m.metadata?.hidden);
   const last = visible.at(-1);
+  const recommendations = recommendationsOf(visible);
+  const searchAskIds = new Set(visible.flatMap((message) => message.parts.flatMap((part) => {
+    if (!isToolUIPart(part) || getToolName(part) !== "find_places" || part.state !== "output-available") return [];
+    const output = readPlacesOutput(part.output);
+    return output?.places.length && output.askId ? [output.askId] : [];
+  })));
 
   return (
     <ol className="flex flex-col gap-3.5" data-testid="message-list">
@@ -160,7 +166,7 @@ export function Thread({
               if (name === "find_places") {
                 const output: FindPlacesOutput | undefined = part.state === "output-available" ? readPlacesOutput(part.output) : undefined;
                 return (
-                  <SearchRow
+                  <SearchResults
                     key={part.toolCallId}
                     state={part.state}
                     preliminary={preliminary}
@@ -169,6 +175,9 @@ export function Thread({
                     errorText={part.state === "output-error" ? part.errorText : undefined}
                     onRetry={retry}
                     pickedId={output?.askId ? picks.get(output.askId) : undefined}
+                    recommendation={recommendations.findLast((r) => r.askId === output?.askId && Boolean(r.askId))}
+                    liveRecommendationId={liveRecommendationId}
+                    renderCard={renderCard}
                     {...handlers}
                   />
                 );
@@ -188,6 +197,7 @@ export function Thread({
                         : "The pick could not be shown.";
                   return <SmallError key={part.toolCallId} text={toolErrorText(error, "pick")} />;
                 }
+                if (part.toolCallId === liveRecommendationId && output.askId && searchAskIds.has(output.askId)) return null;
                 const recommendation = { ...output, toolCallId: part.toolCallId };
                 return (
                   <div key={part.toolCallId}>

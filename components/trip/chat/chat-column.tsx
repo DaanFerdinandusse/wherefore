@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import type { ChatOpening } from "@/lib/contracts";
+import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/ui/cn";
 
 import type { ChatDockProps } from "../contracts";
@@ -33,7 +34,7 @@ import { useChatSession } from "./use-chat-session";
 // back); the composer is docked at the bottom over a fade. An empty chat
 // opens with a message composed in code from the trip's facts (no model run
 // until the advisor sends the brief). A place selected anywhere (the
-// itinerary, the map, a tile) opens the full place card over the thread;
+// itinerary or map) opens the full place card in a modal;
 // Close or Escape returns to the thread.
 //
 // Must render inside the trip store (TripStoreProvider): it reads the trip,
@@ -197,19 +198,10 @@ export function ChatColumn({
   // ------------------------------------------------- the card over the thread
   const selected = selectedPlaceId ? (places[selectedPlaceId] ?? chatPlaces.get(selectedPlaceId)) : undefined;
   const selectedRecommendation = selected ? byPlace.get(selected.tripPlaceId) : undefined;
-  useEffect(() => {
-    if (!selected) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      event.preventDefault();
-      select(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selected, select]);
 
   const renderCard = (recommendation: Recommendation) => (
     <PlaceCard
+      key={recommendation.card.tripPlaceId}
       card={places[recommendation.card.tripPlaceId] ?? recommendation.card}
       trip={trip}
       slots={slots}
@@ -254,13 +246,14 @@ export function ChatColumn({
         </div>
       </div>
 
-      {selected ? (
-        <div
-          className="absolute inset-0 z-20 overflow-y-auto overscroll-contain bg-canvas pt-9 pb-32"
-          data-testid="place-card-overlay"
-          role="dialog"
-          aria-label={selected.name}
-        >
+      <Sheet
+        open={Boolean(selected)}
+        onClose={() => select(null)}
+        label={selected?.name ?? "Place details"}
+        side="center"
+        className="w-[min(900px,100%)]! bg-canvas! p-6!"
+      >
+        {selected ? (
           <PlaceCard
             key={selected.tripPlaceId}
             card={selected}
@@ -273,8 +266,8 @@ export function ChatColumn({
             actions={actions}
             onHover={hover}
           />
-        </div>
-      ) : null}
+        ) : null}
+      </Sheet>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 bg-linear-to-b from-canvas/0 to-canvas to-45% pt-10 pb-1">
         {showJump && !selected ? (

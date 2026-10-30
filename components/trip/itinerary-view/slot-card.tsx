@@ -198,11 +198,11 @@ export function SlotCard({ view, clientName, countryCode, favoriteImages, action
         drop.over && "outline-2 outline-offset-4 outline-glow outline-dashed",
       )}
     >
-      {/* The whole card opens the place in the chat; the clear button sits above it. */}
+      {/* The whole card opens the place in a modal; the clear button sits above it. */}
       <button
         type="button"
         onClick={() => select(card.tripPlaceId)}
-        aria-label={`Open ${card.name} in the chat`}
+        aria-label={`View ${card.name} details`}
         className="absolute inset-0 z-0 rounded-[18px]"
       />
       <div className="pointer-events-none relative flex flex-col gap-3 [&_button]:pointer-events-auto">
@@ -285,7 +285,7 @@ export function SuggestionStrip({ view, actions }: { view: SlotView & { suggesti
         draggable
         onDragStart={(e) => startPlaceDrag(e, place.tripPlaceId)}
         onClick={() => select(place.tripPlaceId)}
-        aria-label={`Open ${place.name} in the chat`}
+        aria-label={`View ${place.name} details`}
         className="relative h-28 w-[168px] shrink-0 cursor-grab overflow-hidden rounded-[12px] bg-avatar opacity-65 outline-[1.5px] outline-offset-[3px] outline-amber outline-dashed @max-[480px]:w-full"
       >
         {place.imageUrl ? <FilmImage src={place.imageUrl} alt="" sizes="168px" /> : null}

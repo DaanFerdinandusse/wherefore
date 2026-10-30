@@ -17,10 +17,10 @@ import { dayChips, mapPlaces, mapSuggestion, suggestionTitle, topKeyword, type D
 import { TripMap } from "./trip-map";
 
 // The trip panel's map (G2): day chips over the map, the itinerary's places
-// as photo pins numbered by their day, the place open in the chat glowing,
+// as photo pins numbered by their day, the selected place glowing,
 // and a card at the bottom for a place the chat suggested for an open slot
 // ("Suggested for Day 2 lunch", "+ Add to Day 2"). A pin opens its place in
-// the chat (store.select); the map shows no preview card of its own.
+// a modal (store.select); the map shows no preview card of its own.
 
 export function TripMapPanel({ actions, favoriteImages }: { actions: WorkspaceActions; favoriteImages: Map<string, string> }) {
   const trip = useTripStore((s) => s.trip);
@@ -133,7 +133,7 @@ function SuggestionCard({
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Open ${place.name} in the chat`}
+        aria-label={`View ${place.name} details`}
         className="relative h-[84px] w-[126px] shrink-0 overflow-hidden rounded-[16px] bg-avatar"
       >
         {place.imageUrl ? <FilmImage src={place.imageUrl} alt="" sizes="126px" /> : null}
