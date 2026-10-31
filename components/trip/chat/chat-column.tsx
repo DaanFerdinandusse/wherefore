@@ -4,6 +4,7 @@ import { ArrowDown, CircleAlert, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
+import { promptsToOffer } from "@/lib/agent/next-prompt";
 import type { ChatOpening } from "@/lib/contracts";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/ui/cn";
@@ -27,12 +28,13 @@ import { Composer } from "./composer";
 import { isAtBottom } from "./dock-layout";
 import { Thread } from "./thread";
 import { useChatSession } from "./use-chat-session";
-import { useNextPrompt } from "./use-next-prompt";
+import { useNextPrompts } from "./use-next-prompt";
 
 // The v3 chat column (Paper G1, S1 to S5, J1): the left half of the trip
 // workspace. The thread fills the column and scrolls, pinned to the bottom
 // while it streams unless the advisor scrolls up ("Jump to latest" brings it
-// back); the composer is docked at the bottom over a fade. An empty chat
+// back); the composer is docked at the bottom over a fade, with the next
+// prompt pills in Jump to latest's spot when at the bottom. An empty chat
 // opens with a message composed in code from the trip's facts (no model run
 // until the advisor sends the brief). A place selected anywhere (the
 // itinerary or map) opens the full place card in a modal;
@@ -148,7 +150,7 @@ export function ChatColumn({
     destination: trip.destination.name,
     openingPlaceholder: opening?.placeholder,
   });
-  const nextPrompt = useNextPrompt(chatId, messages, !busy && !error && server.status !== "failed");
+  const nextPrompts = useNextPrompts(chatId, messages, !busy && !error && server.status !== "failed");
 
   const problem =
     describeChatError(error) ??
@@ -172,6 +174,10 @@ export function ChatColumn({
   const userScrollAt = useRef(0);
   const pickScrollEnds = useRef(0);
   const [showJump, setShowJump] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
+  // With no reply running, the spot above the composer is the pills at the
+  // bottom and Jump to latest anywhere else, which covers a pick's scroll too.
+  const offerJump = showJump || (!busy && !atBottom);
 
   useEffect(() => {
     const scroller = scrollRef.current;
@@ -179,6 +185,7 @@ export function ChatColumn({
     if (!scroller || !content) return;
     const observer = new ResizeObserver(() => {
       if (pinned.current) scroller.scrollTop = scroller.scrollHeight;
+      setAtBottom(isAtBottom(scroller));
     });
     observer.observe(content);
     observer.observe(scroller);
@@ -191,7 +198,9 @@ export function ChatColumn({
   };
   const onScroll = () => {
     const el = scrollRef.current;
-    if (!el || Date.now() < pickScrollEnds.current) return;
+    if (!el) return;
+    setAtBottom(isAtBottom(el));
+    if (Date.now() < pickScrollEnds.current) return;
     if (isAtBottom(el)) {
       pinned.current = true;
       setShowJump(false);
@@ -287,7 +296,7 @@ export function ChatColumn({
         className="-mr-5 -ml-7 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-5 pl-7 max-xl:-ml-4 max-xl:pl-4"
         style={{ overflowAnchor: "none" }}
       >
-        <div ref={contentRef} className="flex min-h-full flex-col justify-end pt-9 pb-28">
+        <div ref={contentRef} className="flex min-h-full flex-col justify-end pt-9 pb-36">
           <Thread
             messages={messages}
             streaming={busy}
@@ -330,7 +339,7 @@ export function ChatColumn({
       </Sheet>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 bg-linear-to-b from-canvas/0 to-canvas to-45% pt-10 pb-1">
-        {showJump && !selected ? (
+        {offerJump && !selected ? (
           <button
             type="button"
             onClick={jumpToLatest}
@@ -368,7 +377,7 @@ export function ChatColumn({
           busy={busy}
           stopping={stopping}
           placeholder={placeholder}
-          suggestion={nextPrompt}
+          suggestions={atBottom && !offerJump && !selected ? promptsToOffer(nextPrompts) : undefined}
           onSend={sendAndFollow}
           onStop={() => void stop()}
         />

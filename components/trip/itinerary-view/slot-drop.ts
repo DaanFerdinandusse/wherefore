@@ -8,9 +8,10 @@ import { carriesPlace, carriesSlot, draggedCategory, draggedFrom, draggedPlace, 
 import type { SlotRef } from "../workspace/reducer";
 import type { WorkspaceActions } from "../workspace/use-workspace-actions";
 
-import { partDrop, type PartDrop } from "./itinerary-model";
+import { joinsSlot, partDrop, type PartDrop } from "./itinerary-model";
 
-function dropOn(e: DragEvent, target: SlotRef, actions: WorkspaceActions) {
+/** `position` undefined lets addToSlot append, and skip a place already in the slot. */
+function dropOn(e: DragEvent, target: SlotRef, actions: WorkspaceActions, position: number | undefined) {
   const from = draggedSlot(e);
   if (from) {
     e.preventDefault();
@@ -20,7 +21,7 @@ function dropOn(e: DragEvent, target: SlotRef, actions: WorkspaceActions) {
   const tripPlaceId = draggedPlace(e);
   if (tripPlaceId) {
     e.preventDefault();
-    void actions.addToSlot(tripPlaceId, target.day, target.slot, target.position ?? 0);
+    void actions.addToSlot(tripPlaceId, target.day, target.slot, position);
   }
 }
 
@@ -30,7 +31,10 @@ function dropOn(e: DragEvent, target: SlotRef, actions: WorkspaceActions) {
 // A place the slot may not hold (slotHolds) is refused while it hovers: no
 // preventDefault means the browser shows no-drop and the drop never lands, and
 // `refusal` says why, unless the part around the slot takes the place instead.
-export function useSlotDrop(target: SlotRef, actions: WorkspaceActions) {
+// A `filled` row of an open slot leaves a place from elsewhere to the part too
+// (joinsSlot), which adds it next to the row instead of swapping.
+export function useSlotDrop(target: SlotRef, actions: WorkspaceActions, { filled = false }: { filled?: boolean } = {}) {
+  const joins = (e: DragEvent) => filled && joinsSlot(target, draggedFrom(e));
   const [over, setOver] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   return {
@@ -46,6 +50,7 @@ export function useSlotDrop(target: SlotRef, actions: WorkspaceActions) {
           if (!refusal && !(open && slotHolds(open, category))) setRefusal(slotRule(category));
           return;
         }
+        if (joins(e)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = carriesSlot(e) ? "move" : "copy";
         if (!over) setOver(true);
@@ -59,10 +64,10 @@ export function useSlotDrop(target: SlotRef, actions: WorkspaceActions) {
       onDrop: (e: DragEvent) => {
         setOver(false);
         setRefusal(null);
-        // What this slot refuses goes on to the part around it.
+        // What this slot refuses or leaves goes on to the part around it.
         const category = draggedCategory(e);
-        if (category && !slotHolds(target.slot, category)) return;
-        dropOn(e, target, actions);
+        if ((category && !slotHolds(target.slot, category)) || joins(e)) return;
+        dropOn(e, target, actions, target.position ?? 0);
       },
     },
   };
@@ -99,7 +104,7 @@ export function usePartDrop(add: Required<SlotRef>, actions: WorkspaceActions) {
       },
       onDrop: (e: DragEvent) => {
         reset();
-        if (!e.defaultPrevented) dropOn(e, add, actions);
+        if (!e.defaultPrevented) dropOn(e, add, actions, undefined);
       },
     },
   };

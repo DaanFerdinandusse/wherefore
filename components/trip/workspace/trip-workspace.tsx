@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, List, Map as MapIcon } from "lucide-react";
 
 import { MenuButton } from "@/components/shell/top-nav";
@@ -11,6 +11,7 @@ import type { ChatSnapshot, TripSnapshot } from "@/lib/contracts";
 import { cn } from "@/lib/ui/cn";
 
 import { ChatColumn } from "../chat/chat-column";
+import { useDragEdgeScroll } from "../itinerary-view/drag-scroll";
 import { buildDays, firstName } from "../itinerary-view/itinerary-model";
 import { ItineraryPanel } from "../itinerary-view/itinerary-panel";
 import { TripMapPanel } from "../map/trip-map-panel";
@@ -85,6 +86,8 @@ function WorkspaceShell({
   const [panelView, setPanelView] = useState<"itinerary" | "map">(currentPanelView);
   if (!traveler && panelView !== currentPanelView) setPanelView(currentPanelView);
   const client = firstName(trip.clientName);
+  const panelBody = useRef<HTMLDivElement>(null);
+  useDragEdgeScroll(panelBody, panelView === "itinerary" && !traveler);
 
   // The share token follows the server: sharing refreshes the route and the page passes the new token.
   useEffect(() => {
@@ -210,7 +213,7 @@ function WorkspaceShell({
           </div>
         </header>
 
-        <div className={cn("min-h-0 flex-1", panelView === "map" ? "overflow-hidden" : "overflow-y-auto")}>
+        <div ref={panelBody} className={cn("min-h-0 flex-1", panelView === "map" ? "overflow-hidden" : "overflow-y-auto")}>
           {panelView === "map" ? (
             <TripMapPanel actions={actions} favoriteImages={favoriteImages} />
           ) : (

@@ -165,7 +165,7 @@ function PlaceRow({ view, clientName, countryCode, favoriteImages, actions }: Pl
   const setHighlight = useTripStore((s) => s.setHighlight);
   const lit = useTripStore((s) => s.highlightedPlaceId === card.tripPlaceId || s.selectedPlaceId === card.tripPlaceId);
   const ref = { day: view.day, slot: view.slot, position: view.position };
-  const drop = useSlotDrop(ref, actions);
+  const drop = useSlotDrop(ref, actions, { filled: true });
   const [open, setOpen] = useState(false);
   const reasonsId = useId();
   const reasons = slotReasons(card, clientName, { slotNote: view.row, favoriteImages });

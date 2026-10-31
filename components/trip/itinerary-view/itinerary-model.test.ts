@@ -16,6 +16,7 @@ import {
   dayTitle,
   defaultSlots,
   findingLabel,
+  joinsSlot,
   mostCommon,
   openDay,
   partDrop,
@@ -442,5 +443,24 @@ describe("partDrop", () => {
 
   it("takes a drag that names no category", () => {
     expect(partDrop(afternoon, { ...drag, category: null })).toBe("armed");
+  });
+});
+
+describe("joinsSlot", () => {
+  const afternoon = { day: 2, slot: "afternoon" as const };
+
+  it("adds a place from elsewhere to an open slot", () => {
+    expect(joinsSlot(afternoon, null)).toBe(true);
+    expect(joinsSlot(afternoon, { day: 1, slot: "afternoon" })).toBe(true);
+    expect(joinsSlot(afternoon, { day: 2, slot: "morning" })).toBe(true);
+  });
+
+  it("swaps a card of the same slot, to reorder", () => {
+    expect(joinsSlot(afternoon, afternoon)).toBe(false);
+  });
+
+  it("swaps on a meal, which holds one place", () => {
+    expect(joinsSlot({ day: 2, slot: "lunch" }, { day: 1, slot: "lunch" })).toBe(false);
+    expect(joinsSlot({ day: 2, slot: "lunch" }, null)).toBe(false);
   });
 });
