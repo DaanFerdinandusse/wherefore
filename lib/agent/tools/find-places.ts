@@ -65,7 +65,7 @@ import {
   type RankedPlace,
 } from "./search-core";
 import { searchExclusions } from "./signals";
-import { firstName, loadPlacedPoints, loadToolTrip, logCalls, type ToolTrip } from "./trip-data";
+import { firstName, focusedOn, loadPlacedPoints, loadToolTrip, logCalls, type ToolTrip } from "./trip-data";
 
 // find_places (PLAN 7): one ask from the advisor becomes one board and map
 // tab. Three phases, each yielded as a preliminary output the card renders:
@@ -166,7 +166,11 @@ const KIND_WORDS: Record<string, string> = {
 };
 /** Names a category, but also more than it: a museum is not every place to see. */
 const NARROW_NOUNS = new Set(["museum", "museums", "gallery", "galleries", "pub", "pubs"]);
-const FILLER = new Set(["places", "place", "spots", "spot", "option", "options", "ideas", "good", "best", "some", "great", "vibe", "vibes", "like", "a", "an", "the", "more"]);
+const FILLER = new Set([
+  "places", "place", "spots", "spot", "option", "options", "ideas", "good", "best", "some", "great", "vibe", "vibes", "like", "a", "an", "the", "more",
+  // Joining words: left in, "Indian restaurants for dinner" looks up "indian for" and finds no tag.
+  "for", "with", "and", "or", "in", "at", "near", "around", "on", "to", "of",
+]);
 
 /** The category a slot implies when the ask names none: a meal is a restaurant, the stay a hotel. */
 export function slotCategory(slot: SlotName | undefined): SearchCategory | undefined {
@@ -220,6 +224,10 @@ export function isOtherKindTag(tagId: string, category: SearchCategory | undefin
   return categoryOf({ primaryType: null, types: [tagId] }) !== category;
 }
 
+/** Words looked up one by one when a phrase as a whole finds no tag, and tags kept from each. */
+const MAX_WORD_LOOKUPS = 3;
+const TAGS_PER_WORD = 2;
+
 /** Free words to tag ids; ids pass through. At most 4 ids. */
 async function resolveTags(
   texts: string[],
@@ -249,7 +257,15 @@ async function resolveTags(
       const kinds = await matches(singular);
       if (kinds.some((t) => isKindTag(t.tagId))) tags = kinds;
     }
-    for (const tag of tags.slice(0, 3)) {
+    // A phrase the lookup does not know can still hold a word it does: without
+    // this "indian street food" searches every restaurant.
+    if (tags.length === 0) {
+      const words = trimmed.split(/\s+/);
+      if (words.length > 1) {
+        for (const word of words.slice(0, MAX_WORD_LOOKUPS)) tags.push(...(await matches(word)).slice(0, TAGS_PER_WORD));
+      }
+    }
+    for (const tag of tags.slice(0, MAX_WORD_LOOKUPS * TAGS_PER_WORD)) {
       if (!ids.includes(tag.tagId)) ids.push(tag.tagId);
       if (!names.includes(tag.name)) names.push(tag.name);
     }
@@ -399,6 +415,7 @@ const stepSchema = z.object({
 const checkpointSchema = z.object({
   search: z
     .object({
+      focusTags: z.array(z.string()).optional(),
       ranked: z.array(rankedSchema),
       loosened: z.array(z.string()),
       details: z.string(),
@@ -467,7 +484,9 @@ export async function* findPlacesTool(
 ): AsyncGenerator<FindPlacesOutput, FindPlacesOutput> {
   const started = Date.now();
   const elapsed = () => Date.now() - started;
-  const ctx = await loadToolTrip(turn.tripId);
+  const trip = await loadToolTrip(turn.tripId);
+  // Narrows to this search's favorites once its tags are known.
+  let ctx: ToolTrip = trip;
   const take = clampTake(input.take);
   const askedTags = input.tags?.slice(0, MAX_TAGS);
   const split = splitIntent(cleanIntent(input.intent, input.day_hint));
@@ -575,6 +594,7 @@ export async function* findPlacesTool(
     let logged: Promise<unknown> = Promise.resolve();
 
     if (checkpoint.search) {
+      ctx = focusedOn(trip, { tagIds: checkpoint.search.focusTags ?? [], ...(askCategory ? { category: askCategory } : {}) });
       ranked = checkpoint.search.ranked;
       loosened = checkpoint.search.loosened;
       details = checkpoint.search.details;
@@ -621,6 +641,7 @@ export async function* findPlacesTool(
       // amenity, and restaurants with a garden would take every result.
       const kinds = namedKinds(resolved.ids, askCategory);
       const tags = kinds.length > 0 ? kinds : resolved.ids.length > 0 ? resolved.ids : askCategory ? CATEGORY_FILTER_TAGS[askCategory] : [];
+      ctx = focusedOn(trip, { tagIds: tags, ...(askCategory ? { category: askCategory } : {}) });
       // Kept on the ask so remove_place and the UI's replace can rerun the same search.
       await guarded(turn, (guard) =>
         updateAsk(ask.id, { query: { ...askQuery, resolvedTags: tags, searchArea } }, ctx.scope, { turn: guard }),
@@ -764,6 +785,7 @@ export async function* findPlacesTool(
       searchStep = { ...searchStep, state: "done", note };
       checkpoint.search = {
         ranked,
+        focusTags: tags,
         loosened,
         details,
         ...(areaNote ? { areaNote } : {}),

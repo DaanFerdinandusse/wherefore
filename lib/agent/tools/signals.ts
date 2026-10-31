@@ -1,9 +1,10 @@
-import type { BuiltFrom, Explainability, MediaFavorite } from "@/lib/contracts";
+import type { BuiltFrom, Category, Explainability, MediaFavorite } from "@/lib/contracts";
 import type { SignalScore } from "@/lib/qloo/contracts";
 import {
   ADVISOR_DRIVER_ID,
   ADVISOR_DRIVER_NAME,
   explainabilityFor,
+  isCategoryTagFilter,
   isPlainDriver,
   OTHER_FAVORITES_ID,
   TRIP_PICKS_DRIVER_ID,
@@ -30,11 +31,23 @@ import {
 //   the client never named them: their share is one "This trip's picks" entry,
 //   built the same way. An empty itinerary changes nothing, in the signals or
 //   in their hash.
+//
+// A client can hold hundreds of favorites and only some fit one search, so a
+// search brings its focus (signalsForAsk): favorites carrying what it asks for
+// first, then favorites of its category, then the rest in favorite order, up to
+// ASK_FAVORITE_TARGET. A French bakery says little about Indian restaurants, and
+// a card must not credit it. Without a focus the trip's first favorites drive.
 
 /** More signals than this only add noise and length to the request. */
 export const MAX_SIGNALS = 24;
 /** Favorites stop here, so blended places and itinerary picks always have room. */
 export const MAX_FAVORITE_SIGNALS = 20;
+/**
+ * Favorites a focused search tries to reach. Tag matches can go past it, up to
+ * MAX_FAVORITE_SIGNALS; below it the category and the rest top the list up, since
+ * one lone signal gives every result the same score and explains none of them.
+ */
+export const ASK_FAVORITE_TARGET = 10;
 /** Most places in a row before a traveler's next artist or film, when their favorites run past the room. */
 const PLACES_PER_MEDIA = 3;
 /** Itinerary places among the signals, however many favorites there are. */
@@ -57,6 +70,15 @@ export type SignalFavorite = {
   entityId: string | null;
   name: string;
   match: string;
+  /** The place's tags and category, for a focused search. */
+  tagIds?: readonly string[];
+  category?: Category;
+};
+
+/** What one search asks for: its resolved tags, and its category when it has one. */
+export type AskFocus = {
+  tagIds: readonly string[];
+  category?: Category;
 };
 
 /** A client's artists and films, as stored on the client. */
@@ -98,8 +120,12 @@ function claimOrder(own: readonly Favorite[]): Favorite[] {
 }
 
 /** The entities that fit: one traveler at a time takes the next in line, so no list crowds out another. */
-function shareRoom(lists: readonly (readonly Favorite[])[], room: number): Set<string> {
-  const queues = lists.map(claimOrder);
+function shareRoom(
+  lists: readonly (readonly Favorite[])[],
+  room: number,
+  order: (own: readonly Favorite[]) => Favorite[] = claimOrder,
+): Set<string> {
+  const queues = lists.map(order);
   const longest = Math.max(0, ...queues.map((queue) => queue.length));
   const kept = new Set<string>();
   for (let turn = 0; turn < longest; turn++) {
@@ -111,7 +137,47 @@ function shareRoom(lists: readonly (readonly Favorite[])[], room: number): Set<s
   return kept;
 }
 
-export function buildSignals(input: {
+const leafOf = (tagId: string) => tagId.slice(tagId.lastIndexOf(":") + 1).replace(/_restaurant$/, "");
+const GENRE_OR_CATEGORY = /^urn:tag:(genre|category):place:/;
+const CUISINE = /^urn:tag:cuisine:qloo:/;
+
+/**
+ * How well a favorite carries one of the search's tags. "strong": the tag
+ * itself, or the same word as the place's genre or category (the API files
+ * Indian under three families, and a place often has only some of them).
+ * "loose": the same word as a cuisine alone, which also names what a menu
+ * touches on (a food court lists a dozen). Pure.
+ */
+export function tagFit(favoriteTagIds: readonly string[], askTagIds: readonly string[]): "strong" | "loose" | null {
+  if (favoriteTagIds.length === 0 || askTagIds.length === 0) return null;
+  const leaves = new Set(askTagIds.map(leafOf));
+  const family = (pattern: RegExp) => favoriteTagIds.some((id) => pattern.test(id) && leaves.has(leafOf(id)));
+  if (askTagIds.some((id) => favoriteTagIds.includes(id)) || family(GENRE_OR_CATEGORY)) return "strong";
+  return family(CUISINE) ? "loose" : null;
+}
+
+type FocusFit = Pick<SignalFavorite, "tagIds" | "category">;
+
+/** One traveler's favorites for one search, in the order they claim room, cut to the ones it uses. */
+function focusedOrder(own: readonly Favorite[], fitOf: ReadonlyMap<string, FocusFit>, focus: AskFocus): Favorite[] {
+  const strong: Favorite[] = [];
+  const loose: Favorite[] = [];
+  const inCategory: Favorite[] = [];
+  const rest: Favorite[] = [];
+  for (const favorite of own) {
+    const fit = fitOf.get(favorite.entityId);
+    const carried = tagFit(fit?.tagIds ?? [], focus.tagIds);
+    if (carried === "strong") strong.push(favorite);
+    else if (carried === "loose") loose.push(favorite);
+    else if (focus.category && fit?.category === focus.category) inCategory.push(favorite);
+    else rest.push(favorite);
+  }
+  const matched = [...strong, ...loose].slice(0, MAX_FAVORITE_SIGNALS);
+  const topUp = [...inCategory, ...claimOrder(rest)];
+  return [...matched, ...topUp.slice(0, Math.max(0, ASK_FAVORITE_TARGET - matched.length))];
+}
+
+export type SignalInputs = {
   travelers: SignalTraveler[];
   favorites: SignalFavorite[];
   media?: SignalMedia[];
@@ -119,7 +185,22 @@ export function buildSignals(input: {
   blendMyTaste?: boolean;
   /** Entity ids of the places in the itinerary, in trip order. */
   tripPickEntityIds?: string[];
-}): TripSignals {
+};
+
+/**
+ * The signals for one search. A tag that only names a board category (restaurant,
+ * hotel) says nothing a favorite's category does not, so it counts as no tag, or
+ * every restaurant would be a tag match. With neither tags nor a category the
+ * search runs on the trip's own signals.
+ */
+export function signalsForAsk(inputs: SignalInputs, focus: AskFocus): TripSignals {
+  const tagIds = focus.tagIds.filter((tag) => !isCategoryTagFilter([tag]));
+  const category = focus.category === "other" ? undefined : focus.category;
+  if (tagIds.length === 0 && !category) return buildSignals(inputs);
+  return buildSignals(inputs, { tagIds, ...(category ? { category } : {}) });
+}
+
+export function buildSignals(input: SignalInputs, focus?: AskFocus): TripSignals {
   const signals: string[] = [];
   const favorites: TripSignals["favorites"] = [];
   const favoritesUsed: BuiltFrom["favorites"] = [];
@@ -127,6 +208,7 @@ export function buildSignals(input: {
   const doneClients = new Set<string>();
   const claimed = new Set<string>();
   const rows: { traveler: SignalTraveler; own: Favorite[] }[] = [];
+  const fitOf = new Map(input.favorites.flatMap((f) => (f.entityId ? [[f.entityId, f] as const] : [])));
 
   for (const traveler of input.travelers) {
     if (!traveler.clientId) {
@@ -146,10 +228,10 @@ export function buildSignals(input: {
       ),
     ];
     const fresh = own.filter((favorite) => !claimed.has(favorite.entityId) && claimed.add(favorite.entityId));
-    rows.push({ traveler, own: fresh });
+    rows.push({ traveler, own: focus ? focusedOrder(fresh, fitOf, focus) : fresh });
   }
 
-  const kept = shareRoom(rows.map((row) => row.own), MAX_FAVORITE_SIGNALS);
+  const kept = shareRoom(rows.map((row) => row.own), MAX_FAVORITE_SIGNALS, focus ? (own) => [...own] : claimOrder);
   for (const { traveler, own } of rows) {
     const used = own.filter((favorite) => kept.has(favorite.entityId));
     if (used.length === 0) {

@@ -16,7 +16,7 @@ import type { QlooCall } from "@/lib/qloo";
 import { guarded, type TurnRef } from "../writes";
 
 import type { PlacedPoint } from "./search-area";
-import type { TripSignals } from "./signals";
+import { signalsForAsk, type AskFocus, type SignalInputs, type TripSignals } from "./signals";
 
 // What a tool step needs to know about its trip, read once per step: the
 // trip row and its scope, the travelers' signals, the client's taste tags
@@ -35,6 +35,8 @@ export type ToolTrip = {
   rules: string[];
   travelerNames: string[];
   signals: TripSignals;
+  /** What `signals` was built from: a search rebuilds it for its own focus (focusedOn). */
+  signalInputs: SignalInputs;
   /** Favorites saved on the trip's clients, matched or not. */
   savedFavorites: number;
   /** The advisor's saved places in the destination (by city name or distance). */
@@ -55,7 +57,7 @@ export async function loadToolTrip(tripId: string): Promise<ToolTrip> {
   const [trip] = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
   if (!trip) throw new TripGoneError();
   const scope = tripScope(trip);
-  const { travelers, clientIds, clients: clientRows, signals, savedFavorites, advisorPlaces, blendMyTaste, excludeIds } =
+  const { travelers, clientIds, clients: clientRows, signals, signalInputs, savedFavorites, advisorPlaces, blendMyTaste, excludeIds } =
     await loadTripSignals(trip);
 
   const byId = new Map(clientRows.map((c) => [c.id, c]));
@@ -82,11 +84,17 @@ export async function loadToolTrip(tripId: string): Promise<ToolTrip> {
     rules: [...new Set(ordered.flatMap((c) => c.groundRules))],
     travelerNames: travelers.map((t) => t.name),
     signals,
+    signalInputs,
     savedFavorites,
     advisorPlaces,
     blendMyTaste,
     excludeIds,
   };
+}
+
+/** The trip as one search sees it: everything downstream (drivers, reasons, the weighing) reads these signals. */
+export function focusedOn(ctx: ToolTrip, focus: AskFocus): ToolTrip {
+  return { ...ctx, signals: signalsForAsk(ctx.signalInputs, focus) };
 }
 
 /** The itinerary's places that have coordinates: what a search stays close to. */

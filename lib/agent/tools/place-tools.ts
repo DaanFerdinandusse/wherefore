@@ -41,7 +41,7 @@ import {
   type BoardItem,
 } from "./search-core";
 import { searchExclusions } from "./signals";
-import { loadToolTrip, logCalls } from "./trip-data";
+import { focusedOn, loadToolTrip, logCalls } from "./trip-data";
 
 // lookup_place, set_itinerary and remove_place: the small tools.
 
@@ -253,7 +253,7 @@ export async function removePlaceTool(
   if (!input.replace) return { removed };
   // Read again after the removal: a place the advisor just dropped from the
   // itinerary is no longer a pick, so the replacement is not searched for on it.
-  const ctx = await loadToolTrip(turn.tripId);
+  const trip = await loadToolTrip(turn.tripId);
 
   // Where the place came from: its best ranked ask, else its category.
   const [origin] = await db
@@ -265,6 +265,8 @@ export async function removePlaceTool(
     .limit(1);
   const { tags: askTags, priceMax, area: askArea, ...filters } = askRerunOfQuery(origin?.query ?? {});
   const tags = askTags.length > 0 ? askTags : removed.category !== "other" ? CATEGORY_FILTER_TAGS[removed.category] : [];
+  // The same favorites as the search it came from, so the replacement fits the tab it joins.
+  const ctx = focusedOn(trip, { tagIds: tags, category: removed.category });
   // The same circle as the search it came from, so a replacement stays near the day.
   const area = askArea ?? chooseSearchArea({ destination: ctx.destination, placed: [] });
 

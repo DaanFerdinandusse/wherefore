@@ -71,6 +71,11 @@ describe("a named kind of place", () => {
     expect(splitIntent("restaurants")).toEqual({ text: "", category: "eat" });
   });
 
+  it("leaves only what names the place, without joining words", () => {
+    expect(splitIntent("Indian restaurants for dinner")).toEqual({ text: "indian", category: "eat" });
+    expect(splitIntent("romantic dinner with a view")).toEqual({ text: "romantic view", category: "eat" });
+  });
+
   it("holds for places to see and for shops, never for food or drink", () => {
     expect(namedKinds([MUSEUM], "see")).toEqual([MUSEUM]);
     expect(namedKinds(["urn:tag:genre:place:clothing_store"], undefined)).toEqual(["urn:tag:genre:place:clothing_store"]);

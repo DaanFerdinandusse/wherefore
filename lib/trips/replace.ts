@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, eq, ne } from "drizzle-orm";
 
 import { replacementNote } from "@/lib/agent/tools/labels";
-import { driversFor, searchExclusions } from "@/lib/agent/tools/signals";
+import { driversFor, searchExclusions, signalsForAsk } from "@/lib/agent/tools/signals";
 import { NotFoundError } from "@/lib/auth/errors";
 import type { ScopeInput } from "@/lib/auth/scope";
 import type { Category, TripPlaceCard } from "@/lib/contracts";
@@ -164,9 +164,9 @@ export async function replaceTripPlace(
 
   if (removed.status !== "removed") await setTripPlaceStatus(tripPlaceId, "removed", scope, { turn: deps.turn });
 
-  // Same signals as the board, read after the removal: a place just dropped
-  // from the itinerary is no longer a pick.
-  const { signals, clients, excludeIds: leftOut } = await loadTripSignals(trip);
+  // Same favorites as the search it came from, read after the removal: a place
+  // just dropped from the itinerary is no longer a pick.
+  const { signalInputs, clients, excludeIds: leftOut } = await loadTripSignals(trip);
   const tasteTags = clients.find((c) => c.id === trip.clientId)?.tasteTags ?? [];
 
   const category = asCategory(removed.category);
@@ -176,6 +176,7 @@ export async function replaceTripPlace(
     asks: askRows.map((row) => ({ askId: row.askId, rank: row.rank, query: row.query })),
   });
   const onTrip = tripRows.map((row) => row.entityId);
+  const signals = signalsForAsk(signalInputs, { tagIds: query.tags, category });
 
   const find = deps.findPlaces ?? defaultFindPlaces;
   let found: Awaited<ReturnType<FindPlaces>>;
