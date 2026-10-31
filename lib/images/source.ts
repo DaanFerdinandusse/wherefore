@@ -1,5 +1,5 @@
-// How a place photo is loaded, decided from its URL alone, so every image
-// primitive (FilmImage, ArchPhoto, PhotoCard) treats the same source the same way.
+// How a place photo is loaded, decided from its URL alone, so FilmImage treats
+// the same source the same way everywhere.
 //
 // - provider: recommendation images (any host under qloo.com). The origin is
 //   slow and sometimes fails outright, and the dev image optimizer gives up

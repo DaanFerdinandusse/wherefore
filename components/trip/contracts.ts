@@ -40,23 +40,6 @@ export type TripMapProps = {
   className?: string;
 };
 
-/** The place profile sheet (03 and 03b) over a scrim. */
-export type PlaceProfileProps = {
-  trip: TripSnapshot["trip"];
-  card: TripPlaceCard;
-  clientName: string;
-  slots: ItinerarySlot[];
-  open: boolean;
-  onClose: () => void;
-  /** Add to a slot. The sheet offers a slot picker and a default next free slot. */
-  onAddToSlot: (tripPlaceId: string, day: number, slot: ItinerarySlot["slot"]) => Promise<void> | void;
-  /** "Not for Ana": removes the place and asks for a replacement. */
-  onRemove: (tripPlaceId: string, replace: boolean) => Promise<void> | void;
-  /** Toggles the advisor's own library ("In my places"). */
-  onToggleMyPlace: (tripPlaceId: string, saved: boolean) => Promise<void> | void;
-  onEditNote?: (advisorPlaceId: string, note: string) => Promise<void> | void;
-};
-
 /**
  * What a streamed tool output says about the places it carries. `label`,
  * `count`, `elapsedMs` and `loosened` mirror FindPlacesOutput so the ask tab

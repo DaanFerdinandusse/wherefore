@@ -75,7 +75,7 @@ lib/
 components/
   shell/, trip/board/, trip/map/, trip/itinerary/, trip/chat/, trip/place-profile/
   clients/, places/, new-trip/, share/
-  ui/ (pill, button, avatar, arch-photo, match-pill, tabs, menu, calendar)
+  ui/ (pill, button, avatar, match-pill, tabs, menu, calendar)
 drizzle/                             migrations
 scripts/seed-demo.ts                 demo advisor, clients, places (section 13)
 ```
@@ -328,7 +328,7 @@ Conventions: server-only modules import `server-only`; every route handler start
 
 ## 13. Demo data and seeding
 
-`scripts/seed-demo.ts` creates the demo advisor, clients Ana Ruiz (Via Carota, Lilia, Attaboy, Devoción, Khruangbin), Marcus and two more, advisor places in Lisbon (11) and Mexico City, and one trip in each stage. Favorites are resolved live against the API at seed time, so every id is real. Images in `design/images/film/*.jpg` are used only as fallbacks for the Trips overview city cards; places use provider images.
+`scripts/seed-demo.ts` creates the demo advisor, clients Ana Ruiz (Via Carota, Lilia, Attaboy, Devoción, Khruangbin), Marcus and two more, advisor places in Lisbon (11) and Mexico City, and one trip in each stage. Favorites are resolved live against the API at seed time, so every id is real. Places use provider images.
 
 ## 14. Build order
 

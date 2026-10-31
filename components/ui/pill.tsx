@@ -3,7 +3,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/ui/cn";
 
 // The outlined tag pill: taste tags ("Seafood", "Natural light"), ground
-// rules, feature chips. Static text; for a toggle use FilterPill.
+// rules, feature chips. Static text.
 export function Pill({
   size = "sm",
   icon,

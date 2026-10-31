@@ -6,10 +6,10 @@ import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/ui/cn";
 
-// The grouped dropdown under the app bar search: clients, trips, places.
+// The grouped dropdown under the search: clients, trips, places.
 // A shell only: the results come in as props (the fetch lives with the
-// search owner). Rows are options of the combobox in AppBar; the active one
-// is driven by the arrow keys there.
+// search owner). Rows are options of the search combobox; the active one is
+// driven by the arrow keys there.
 export type SearchResult = {
   id: string;
   title: string;

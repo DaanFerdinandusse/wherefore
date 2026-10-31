@@ -9,6 +9,6 @@ Unsplash's API terms, and where each one is met:
 
 - Hotlink the photo: `trips.cover.url` stays on `images.unsplash.com`. `unsplashLoader` in `lib/images/source.ts` asks that host for the size the page needs.
 - Credit the photographer and Unsplash, with utm params: `components/ui/cover-credit.tsx`, on the itinerary cover and the traveler hero.
-- Ping the download endpoint when a photo is used: `POST /api/trips`, the demo seed and the backfill all call `markCoverPhotoUsed`.
+- Ping the download endpoint when a photo is used: `POST /api/trips` and the demo seed call `markCoverPhotoUsed`.
 
-Trips from before covers: `npx tsx --conditions=react-server scripts/backfill-trip-covers.ts`. It looks up each destination once and can be run again. The demo key allows 50 requests an hour.
+The demo key allows 50 requests an hour.
