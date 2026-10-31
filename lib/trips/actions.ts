@@ -1,8 +1,10 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { HOME_PATH } from "@/lib/auth/next-path";
 import { requireUser } from "@/lib/auth/server";
 import { createClient, listClients, type ClientSummary } from "@/lib/clients";
 import { selectClientSummaries } from "@/lib/clients/queries";
@@ -12,6 +14,7 @@ import { advisorCities } from "@/lib/places";
 
 import { clientPastDestinations, listRecentClientsForTripBar, setStageOverride, tripBarCityImages } from "./index";
 import type { PastDestination } from "./contracts";
+import { startExampleTrip } from "./example-trip";
 import { computeStage, isTripStage } from "./stage";
 
 // Server actions for the Trips board and the New trip panel. Every action
@@ -53,6 +56,13 @@ function toTripBarClient(summary: ClientSummary): TripBarClient {
     favoriteImages: summary.favoriteImages,
     nextTrip: summary.nextTrip,
   };
+}
+
+/** The landing page's main action: a new copy of the example trip, opened. */
+export async function startExampleTripAction(): Promise<void> {
+  const user = await requireUser();
+  const tripId = await startExampleTrip(user.userId, user);
+  redirect(tripId ? `/trips/${tripId}` : HOME_PATH);
 }
 
 /** Everything the panel shows before the advisor types: recent clients, cities, the prefill. */

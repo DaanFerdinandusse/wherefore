@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
-
-import { HOME_PATH } from "@/lib/auth/next-path";
+import { LandingPage } from "@/components/landing/landing-page";
 
 export default function Page() {
-  redirect(HOME_PATH);
+  return <LandingPage />;
 }

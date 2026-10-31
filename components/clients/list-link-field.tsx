@@ -1,11 +1,11 @@
 "use client";
 
-import { useId, useState, type SyntheticEvent } from "react";
+import { useId, useState, type ReactNode, type SyntheticEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 
-// The box a shared Google Maps list is pasted into, on the new client screen
-// and on the profile.
+// The box a shared Google Maps list is pasted into, on the new client screen,
+// the profile and the landing page.
 
 export function ListLinkField({
   label,
@@ -14,6 +14,7 @@ export function ListLinkField({
   message,
   onSubmit,
   onCancel,
+  children,
 }: {
   /** Shown above the box. Without one the box is named for screen readers only. */
   label?: string;
@@ -23,6 +24,8 @@ export function ListLinkField({
   message?: string;
   onSubmit: (link: string) => void;
   onCancel?: () => void;
+  /** More fields, inside the form, above the box. */
+  children?: ReactNode;
 }) {
   const id = useId();
   const [link, setLink] = useState("");
@@ -39,6 +42,7 @@ export function ListLinkField({
           {label}
         </label>
       ) : null}
+      {children}
       <div className="flex flex-wrap items-center gap-2">
         <input
           id={id}
