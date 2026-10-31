@@ -204,6 +204,17 @@ export function partDrop(
   return drag.rowTakes ? "offered" : "armed";
 }
 
+/**
+ * Whether a place dropped on a filled row joins its slot. An open slot holds any
+ * number, so a place from elsewhere goes in next to the row and nothing is sent
+ * back. A meal holds one, so it swaps, and a card of the same slot swaps to
+ * reorder.
+ */
+export function joinsSlot(target: Pick<SlotRef, "day" | "slot">, from: Pick<SlotRef, "day" | "slot"> | null): boolean {
+  if (!isOpenSlot(target.slot)) return false;
+  return from?.day !== target.day || from.slot !== target.slot;
+}
+
 /** Most common value, ties to the earliest. Blank values do not count. */
 export function mostCommon(values: (string | undefined)[]): string | undefined {
   const counts = new Map<string, number>();
