@@ -157,9 +157,10 @@ describe("scorePlacesForModel", () => {
 });
 
 describe("recommendPlaceForModel", () => {
-  it("tells the model the card already says why, so its reply does not repeat it", () => {
+  it("asks the model to explain its choice without reading the card back", () => {
     const { value } = recommendPlaceForModel({ card });
-    expect(value).toContain("your line on this place");
-    expect(value).toContain("Do not repeat them");
+    expect(value).toContain("do not read it back");
+    expect(value).toContain("why you chose it over the closest alternative");
+    expect(value).toContain("using only facts from the search");
   });
 });

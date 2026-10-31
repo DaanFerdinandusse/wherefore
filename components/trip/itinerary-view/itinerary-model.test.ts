@@ -6,7 +6,6 @@ import { initialState } from "../workspace/reducer";
 
 import {
   daySentence,
-  tasteWords,
   verdictOf,
   briefSentence,
   buildDays,
@@ -388,18 +387,6 @@ describe("the agent's reasoning in the itinerary", () => {
       ],
     };
     expect(daySentence(day)).toBe("A good lunch, then an Italian dinner.");
-  });
-
-  it("lists the taste the places deliver, most delivered first", () => {
-    const days = [
-      {
-        slots: [
-          { day: 1, slot: "lunch" as const, position: 0, card: card("A", "eat", ["Cozy", "Italian"]) },
-          { day: 1, slot: "dinner" as const, position: 0, card: card("B", "eat", ["Cozy"]) },
-        ],
-      },
-    ];
-    expect(tasteWords(days)).toEqual(["Cozy", "Italian"]);
   });
 });
 

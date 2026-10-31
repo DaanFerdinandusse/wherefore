@@ -157,11 +157,9 @@ type PlaceRowProps = {
   countryCode?: string;
   favoriteImages: Map<string, string>;
   actions: WorkspaceActions;
-  /** The taste word lit on top of the itinerary: rows that deliver it stand out. */
-  litTaste?: string | null;
 };
 
-function PlaceRow({ view, clientName, countryCode, favoriteImages, actions, litTaste }: PlaceRowProps) {
+function PlaceRow({ view, clientName, countryCode, favoriteImages, actions }: PlaceRowProps) {
   const { card, verdict } = view;
   const select = useTripStore((s) => s.select);
   const setHighlight = useTripStore((s) => s.setHighlight);
@@ -178,18 +176,15 @@ function PlaceRow({ view, clientName, countryCode, favoriteImages, actions, litT
   const inOpenSlot = isOpenSlot(view.slot);
   const label = inOpenSlot ? CATEGORY_NOUN[card.category] : undefined;
   const sub = subLine(card, countryCode, { noun: !inOpenSlot });
-  const delivers = card.sharedTags.some((t) => t.name.trim() === litTaste);
 
   return (
     <li
       {...drop.handlers}
       onMouseEnter={() => setHighlight(card.tripPlaceId)}
       onMouseLeave={() => setHighlight(null)}
-      data-lit={litTaste ? (delivers ? "true" : "false") : undefined}
       className={cn(
         "transition-[background-color,opacity] duration-200",
         drop.over && "bg-why/70 outline-2 -outline-offset-2 outline-glow outline-dashed",
-        litTaste && (delivers ? "bg-why" : "opacity-45"),
       )}
     >
       <div

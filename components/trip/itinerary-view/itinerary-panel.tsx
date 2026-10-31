@@ -8,7 +8,6 @@ import { CoverCredit } from "@/components/ui/cover-credit";
 import type { TravelerFavorite } from "@/lib/contracts";
 import { cn } from "@/lib/ui/cn";
 
-import { FavoritePlaceSheet, type FavoriteRef } from "../place-profile/favorite-place";
 import { useTripStore } from "../store";
 import type { WorkspaceActions } from "../workspace/use-workspace-actions";
 
@@ -23,7 +22,6 @@ import {
   firstName,
   findingLabel,
   openDay,
-  tasteWords,
   usesCover,
   type DayView,
   type SlotView,
@@ -33,8 +31,8 @@ import { SlotRow } from "./slot-row";
 
 // The itinerary panel: an overview of the days and what is added to them.
 // It opens with the cover: the destination's photo under the title. Before
-// two slots hold a place the brief (S1) follows it: one sentence of facts and
-// the client's favorites. From two places on the cover carries the facts line
+// two slots hold a place the brief (S1) follows it: one sentence of facts. From
+// two places on the cover carries the facts line
 // instead. A trip without a cover photo starts from the title and uses a place
 // photo once two are added. Below that, every day is the same
 // header with its parts beneath (Morning, Afternoon, Night, each with its meal
@@ -65,17 +63,12 @@ export function ItineraryPanel({ actions }: PanelProps) {
   const cover = usesCover(days);
   const first = openDay(days);
   const [toggled, setToggled] = useState<Record<number, boolean>>({});
-  const [openFavorite, setOpenFavorite] = useState<FavoriteRef | null>(null);
   // A day opens on its own while the chat searches for one of its slots or suggests a place for one.
   const busy = (day: DayView) => day.slots.some((s) => s.finding || s.suggestion);
   const isOpen = (day: DayView) => toggled[day.day] ?? (day.filled > 0 || (!cover && day.day === first) || busy(day));
   const toggle = (day: DayView) => setToggled((t) => ({ ...t, [day.day]: !isOpen(day) }));
 
   const client = firstName(trip.clientName);
-  // The taste the added places deliver: click a word and the rows behind it light up.
-  const words = useMemo(() => tasteWords(days), [days]);
-  const [picked, setPicked] = useState<string | null>(null);
-  const lit = picked && words.includes(picked) ? picked : null;
   // The first open slot says how to fill one; the others just say Open.
   const firstOpen = days.flatMap((d) => d.slots).find((s) => !s.card && !s.finding && !s.suggestion);
 
@@ -90,68 +83,8 @@ export function ItineraryPanel({ actions }: PanelProps) {
             </h2>
           )}
           <p className="text-body-lg leading-[25px] text-text-3">{briefSentence(trip, travelers, days)}</p>
-          {favorites.length > 0 ? (
-            <>
-              <p className="label-caps pt-2 text-text-3">Matched to {client}&rsquo;s favorites</p>
-              <ul className="flex flex-wrap gap-2">
-                {favorites.map((f) => {
-                  const { entityId, name } = f;
-                  const chip = "flex items-center gap-[7px] rounded-pill border border-ink/14 py-1 pr-3 pl-1 text-ui-sm leading-[17px] font-medium text-ink";
-                  const face = (
-                    <>
-                      <span className="relative size-6 shrink-0 overflow-hidden rounded-pill bg-avatar">
-                        {f.imageUrl ? <FilmImage src={f.imageUrl} alt="" sizes="24px" /> : null}
-                      </span>
-                      {name}
-                    </>
-                  );
-                  return entityId ? (
-                    <li key={entityId}>
-                      <button
-                        type="button"
-                        aria-haspopup="dialog"
-                        onClick={() => setOpenFavorite({ entityId, name })}
-                        data-testid="favorite-open"
-                        className={cn(chip, "cursor-pointer transition-colors hover:border-ink/40")}
-                      >
-                        {face}
-                      </button>
-                    </li>
-                  ) : (
-                    <li key={name} className={chip}>
-                      {face}
-                    </li>
-                  );
-                })}
-              </ul>
-              <FavoritePlaceSheet favorite={openFavorite} client={client} onClose={() => setOpenFavorite(null)} />
-            </>
-          ) : null}
         </section>
       )}
-
-      {words.length > 1 ? (
-        <section aria-label={`${client}'s taste in this trip`} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-1" data-testid="trip-taste">
-          <p className="label-caps text-text-3">{client}&rsquo;s taste</p>
-          <ul className="flex flex-wrap gap-1.5">
-            {words.map((word) => (
-              <li key={word}>
-                <button
-                  type="button"
-                  aria-pressed={lit === word}
-                  onClick={() => setPicked(lit === word ? null : word)}
-                  className={cn(
-                    "cursor-pointer rounded-pill border px-2.75 py-0.75 text-ui-sm leading-5 font-semibold transition-colors",
-                    lit === word ? "border-amber-dot bg-amber-dot text-white" : "border-ink/20 text-text-3 hover:border-ink/45 hover:text-ink",
-                  )}
-                >
-                  {word}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
 
       <div className="grid items-start gap-x-6 border-b border-ink/8 @[900px]:grid-cols-2">
         {days.map((day) => (
@@ -165,7 +98,6 @@ export function ItineraryPanel({ actions }: PanelProps) {
             countryCode={trip.destination.countryCode}
             favoriteImages={favoriteImages}
             actions={actions}
-            litTaste={lit}
             onToggle={() => toggle(day)}
           />
         ))}
@@ -174,7 +106,7 @@ export function ItineraryPanel({ actions }: PanelProps) {
   );
 }
 
-/** The client's favorites, for the chips of the brief and the small photos in a row's reasons. */
+/** The client's favorites, for the small photos in a row's reasons. */
 function clientFavorites(travelers: { role: string; favorites?: TravelerFavorite[] }[]): TravelerFavorite[] {
   return travelers.find((t) => t.role === "client")?.favorites ?? [];
 }
@@ -211,7 +143,6 @@ type DayProps = {
   countryCode?: string;
   favoriteImages: Map<string, string>;
   actions: WorkspaceActions;
-  litTaste: string | null;
   onToggle: () => void;
 };
 

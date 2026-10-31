@@ -139,7 +139,7 @@ export function recommendPlaceForModel(output: RecommendPlaceOutput): ModelText 
     recommended: cardForModel(output.card),
     ...(output.target ? { for_slot: output.target.label, in_itinerary: false } : {}),
     shown_to_advisor:
-      "The card in the chat shows the photos, the match, your line on this place and the visit facts. Do not repeat them. Reply with one short question about what to plan next and nothing about this place, unless a ground rule could not be confirmed.",
+      "The card shows this, so do not read it back. In two or three sentences, using only facts from the search, say why you chose it over the closest alternative. Flag an unconfirmed ground rule. End with a short question on what to plan next.",
   });
 }
 

@@ -313,20 +313,6 @@ export function daySentence(day: Pick<DayView, "slots">): string | null {
   return `${body[0]!.toUpperCase()}${body.slice(1)}.`;
 }
 
-/** The taste the added places deliver, most delivered first: the client's words on top of the itinerary. */
-export function tasteWords(days: readonly Pick<DayView, "slots">[], limit = 5): string[] {
-  const counts = new Map<string, number>();
-  for (const day of days) {
-    for (const slot of day.slots) {
-      for (const tag of slot.card?.sharedTags ?? []) {
-        const name = tag.name.trim();
-        if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
-      }
-    }
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([name]) => name);
-}
-
 /** The cover carries the facts once two slots hold a place; before that, the brief (S1) does. */
 export function usesCover(days: DayView[]): boolean {
   return days.reduce((n, d) => n + d.filled, 0) >= 2;

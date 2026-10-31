@@ -50,6 +50,8 @@ vi.mock("@/lib/codex/provider", () => ({ agentModelRef: () => "test", agentProvi
 const run = testRun();
 const template = insightsFixture.results.entities[0]!;
 let turn: TurnRef;
+// tool_call_id is unique across the database, and other runs share it.
+const runCalls = randomUUID();
 let call = 0;
 
 /** A search answer. `perResult`: what the results themselves needed, when that is less than the search tried. */
@@ -112,7 +114,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
       findPlacesTool(
         { intent: "dinner", target: { day: 3, slot: "dinner" }, discovery: "less_known", michelin: true },
         turn,
-        `call-${++call}`,
+        `${runCalls}-${++call}`,
       ),
     );
     expect(searchInput(0)).toMatchObject({ popularityMax: 0.95, michelin: true, openDay: "sunday", openSlot: "dinner" });
@@ -127,13 +129,13 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
       ...results,
       results: results.results.map((r) => (r.place.name === "kind-cafe" ? { ...r, category: "coffee" as const } : r)),
     });
-    const output = await drain(findPlacesTool({ intent: "dinner", target: { day: 2, slot: "dinner" } }, turn, `call-${++call}`));
+    const output = await drain(findPlacesTool({ intent: "dinner", target: { day: 2, slot: "dinner" } }, turn, `${runCalls}-${++call}`));
     expect(output.places.map((p) => p.name)).toEqual(["kind-a", "kind-b"]);
     expect(output.places.map((p) => p.score)).toEqual([94, 60]);
 
     // A place found again on the same signals takes this search's score.
     mocks.findPlaces.mockResolvedValue(found(["kind-new", "kind-a", "kind-b"]));
-    const again = await drain(findPlacesTool({ intent: "another dinner" }, turn, `call-${++call}`));
+    const again = await drain(findPlacesTool({ intent: "another dinner" }, turn, `${runCalls}-${++call}`));
     const scores = again.places.map((p) => p.score ?? 0);
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
   });
@@ -141,7 +143,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
   it("keeps the first few tags of a long list instead of failing the search", async () => {
     mocks.findPlaces.mockResolvedValue(found(["tags-a"]));
     const tags = ["one", "two", "three", "four", "five"];
-    const output = await drain(findPlacesTool({ intent: "dinner", tags }, turn, `call-${++call}`));
+    const output = await drain(findPlacesTool({ intent: "dinner", tags }, turn, `${runCalls}-${++call}`));
     expect(output.error).toBeUndefined();
     const [ask] = await db.select({ query: tripAsks.query }).from(tripAsks).where(eq(tripAsks.id, output.askId!));
     expect(ask?.query).toMatchObject({ tags: ["one", "two", "three", "four"] });
@@ -157,7 +159,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
 
   it("reads the facts back through the card query and puts the ground rules beside them", async () => {
     mocks.findPlaces.mockResolvedValue(found(["facts-a"]));
-    const output = await drain(findPlacesTool({ intent: "dinner" }, turn, `call-${++call}`));
+    const output = await drain(findPlacesTool({ intent: "dinner" }, turn, `${runCalls}-${++call}`));
     const facts = placeFactsOf(normalizePlace(template));
     const [card] = output.places;
     expect(card).toMatchObject({ rating: facts.rating, about: facts.about, practical: facts.practical });
@@ -173,7 +175,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
 
   it("sends no open day for the stay slot, and nothing unasked", async () => {
     mocks.findPlaces.mockResolvedValue(found(["stay-a"]));
-    await drain(findPlacesTool({ intent: "hotels", target: { day: 1, slot: "stay" } }, turn, `call-${++call}`));
+    await drain(findPlacesTool({ intent: "hotels", target: { day: 1, slot: "stay" } }, turn, `${runCalls}-${++call}`));
     const input = searchInput(0);
     expect(input.openDay).toBeUndefined();
     expect(input.popularityMax).toBeUndefined();
@@ -182,7 +184,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
 
   it("reads the open day from a day hint", async () => {
     mocks.findPlaces.mockResolvedValue(found(["hint-a"]));
-    await drain(findPlacesTool({ intent: "lunch", day_hint: "Saturday" }, turn, `call-${++call}`));
+    await drain(findPlacesTool({ intent: "lunch", day_hint: "Saturday" }, turn, `${runCalls}-${++call}`));
     expect(searchInput(0).openDay).toBe("saturday");
   });
 
@@ -196,7 +198,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
       findPlacesTool(
         { intent: "seafood restaurants", tags: ["seafood"], target: { day: 1, slot: "dinner" }, discovery: "less_known", michelin: true },
         turn,
-        `call-${++call}`,
+        `${runCalls}-${++call}`,
       ),
     );
     expect(searchInput(1)).toMatchObject({ popularityMax: 0.95, michelin: true, openDay: "friday" });
@@ -210,7 +212,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
       .mockResolvedValueOnce(found(["kept-a"], ["michelin", "hours"], []));
     mocks.findTags.mockResolvedValue({ tags: [{ tagId: template.tags[0]!.id, name: "Seafood" }], calls: [] });
     const output = await drain(
-      findPlacesTool({ intent: "seafood restaurants", tags: ["seafood"], target: { day: 1, slot: "dinner" }, michelin: true }, turn, `call-${++call}`),
+      findPlacesTool({ intent: "seafood restaurants", tags: ["seafood"], target: { day: 1, slot: "dinner" }, michelin: true }, turn, `${runCalls}-${++call}`),
     );
     expect(output.loosened).toEqual([WIDENED_IN_CATEGORY]);
   });
@@ -219,7 +221,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
     const answer = found(["hours-known", "hours-none"]);
     answer.results[1] = { ...answer.results[1]!, place: { ...answer.results[1]!.place, properties: {} } };
     mocks.findPlaces.mockResolvedValue(answer);
-    const output = await drain(findPlacesTool({ intent: "dinner", target: { day: 1, slot: "dinner" } }, turn, `call-${++call}`));
+    const output = await drain(findPlacesTool({ intent: "dinner", target: { day: 1, slot: "dinner" } }, turn, `${runCalls}-${++call}`));
     const none = output.places.find((c) => c.name === "hours-none")!;
     expect(output.hoursUnknown).toEqual([none.tripPlaceId]);
     const { value } = findPlacesForModel(output);
@@ -237,7 +239,7 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
       const [row] = await db.select({ askId: askPlaces.askId }).from(askPlaces).where(eq(askPlaces.tripPlaceId, tripPlaceId));
       await addAskPlaces(row!.askId, [{ tripPlaceId: replacement, rank: 1 }], run.owner);
     };
-    const output = await drain(findPlacesTool({ intent: "dinner" }, turn, `call-${++call}`));
+    const output = await drain(findPlacesTool({ intent: "dinner" }, turn, `${runCalls}-${++call}`));
     const rows = await db.select({ tripPlaceId: askPlaces.tripPlaceId }).from(askPlaces).where(eq(askPlaces.askId, output.askId!));
     expect(rows.map((r) => r.tripPlaceId)).toContain(replacement);
     expect(rows).toHaveLength(3);
@@ -246,10 +248,10 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
   it("reruns the ask's options on remove_place and says what it loosened", async () => {
     mocks.findPlaces.mockResolvedValueOnce(found(["rerun-a"]));
     const first = await drain(
-      findPlacesTool({ intent: "dinner", target: { day: 1, slot: "dinner" }, discovery: "less_known", michelin: true }, turn, `call-${++call}`),
+      findPlacesTool({ intent: "dinner", target: { day: 1, slot: "dinner" }, discovery: "less_known", michelin: true }, turn, `${runCalls}-${++call}`),
     );
     mocks.findPlaces.mockResolvedValueOnce(found(["rerun-b"], ["hours"]));
-    const removed = await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `call-${++call}`);
+    const removed = await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `${runCalls}-${++call}`);
     expect(searchInput(1)).toMatchObject({ popularityMax: 0.95, michelin: true, openDay: "friday" });
     expect(removed.replacement?.name).toBe("rerun-b");
     expect(removed.note).toBe("Too few places are listed as open on Friday, so check the hours of this one.");
@@ -262,10 +264,10 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
     });
     mocks.findPlaces.mockResolvedValueOnce(found(["area-a"]));
     const first = await drain(
-      findPlacesTool({ intent: "seafood restaurants", tags: ["seafood"], price_max: 2, area: "Alfama" }, turn, `call-${++call}`),
+      findPlacesTool({ intent: "seafood restaurants", tags: ["seafood"], price_max: 2, area: "Alfama" }, turn, `${runCalls}-${++call}`),
     );
     mocks.findPlaces.mockResolvedValueOnce(found(["area-b"]));
-    await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `call-${++call}`);
+    await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `${runCalls}-${++call}`);
     expect(searchInput(1)).toMatchObject({
       tags: searchInput(0).tags,
       priceMax: 2,
@@ -275,20 +277,20 @@ describe.skipIf(!hasDatabase)("search options through the tools", () => {
 
   it("keeps quiet about a drop the replacement did not need", async () => {
     mocks.findPlaces.mockResolvedValueOnce(found(["quiet-a"]));
-    const first = await drain(findPlacesTool({ intent: "dinner", target: { day: 1, slot: "dinner" } }, turn, `call-${++call}`));
+    const first = await drain(findPlacesTool({ intent: "dinner", target: { day: 1, slot: "dinner" } }, turn, `${runCalls}-${++call}`));
     mocks.findPlaces.mockResolvedValueOnce(found(["quiet-b"], ["popularity", "hours"], []));
-    const removed = await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `call-${++call}`);
+    const removed = await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `${runCalls}-${++call}`);
     expect(removed.replacement?.name).toBe("quiet-b");
     expect(removed.note).toBeUndefined();
   });
 
   it("skips a place already on the trip when the search returns it, and says when the pick is another kind", async () => {
     mocks.findPlaces.mockResolvedValueOnce(found(["dup-a", "dup-b"]));
-    const first = await drain(findPlacesTool({ intent: "dinner" }, turn, `call-${++call}`));
+    const first = await drain(findPlacesTool({ intent: "dinner" }, turn, `${runCalls}-${++call}`));
     const answer = found(["dup-b", "dup-c"]);
     answer.results[1] = { ...answer.results[1]!, category: "stay" };
     mocks.findPlaces.mockResolvedValueOnce(answer);
-    const removed = await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `call-${++call}`);
+    const removed = await removePlaceTool({ place_id: first.places[0]!.tripPlaceId, replace: true }, turn, `${runCalls}-${++call}`);
     expect(removed.replacement?.name).toBe("dup-c");
     expect(removed.note).toBe("Nothing of the same kind was left, so this one is a different kind of place.");
   });
