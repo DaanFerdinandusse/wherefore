@@ -123,6 +123,7 @@ Running 12 paging loops in parallel returned empty pages for some of them (proba
 - Qloo to Google: use `place_id` directly. Link: `https://www.google.com/maps/search/?api=1&query=<name>&query_place_id=<place_id>`.
 - Google to Qloo (client favorites): get name, coordinates and CID from the Google data, run `/search?query=<name>&filter.location=<lat>,<lon>`, and accept the candidate whose `google_place.id` equals the CID in hex. Fall back to distance plus name similarity when there is no CID, and flag weak matches for the advisor.
 - Not verified yet: the exact Takeout export format (where the CID or place_id appears in it).
+- Shared Google Maps lists (tested 30 Oct on a 177 place and a 64 place list): the undocumented `/maps/preview/entitylist/getlist` returns name, coordinates and CID with no key. Its CID is signed, so convert it with `BigInt.asUintN(64, ...)` before comparing. 155 of 177 and 48 of 64 matched on the CID through `/search?query=<name>&filter.location=<lat>,<lon>`. Near matches with a different name were wrong 3 times in 15, so the import keeps only the same id, or the same name within 150 m. See `lib/google/shared-list.ts`.
 
 ### 14. Client-to-client similarity (tested)
 No "similar users" endpoint (Qloo stores no users). Tested with A (Via Carota, Lilia, Death & Co, Ace Hotel), B (Peter Luger, The Ritz London, Nobu Malibu, Cipriani), C (Buvette, Attaboy, The Standard High Line, I Sodi; expected close to A).

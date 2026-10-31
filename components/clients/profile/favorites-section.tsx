@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
 import type { FavoriteTile } from "@/lib/clients/candidates";
 import type { MediaFavorite } from "@/lib/contracts";
 
@@ -7,12 +10,17 @@ import { isMatched } from "../favorites";
 import { plural } from "../format";
 import { FavoriteSearch } from "./favorite-search";
 import { MatchedTile, MediaTile, UnmatchedTile } from "./favorite-tiles";
+import { ListImport } from "./list-import";
 import { layoutMosaic, type MosaicShape } from "./mosaic";
 import type { ClientTaste } from "./use-client-taste";
 
 // C2 left column: "Places Ana loves · 5 places", the search that adds a
 // place, artist or film, and the photo grid of everything they love: places
-// first in the advisor's order, then artists and films.
+// first in the advisor's order, then artists and films. A long list (an
+// imported one) shows its first places until the advisor asks for the rest.
+
+/** Places shown before "Show all". */
+const FIRST_PLACES = 24;
 
 type Cell = { kind: "favorite"; favorite: FavoriteTile; index: number } | { kind: "media"; item: MediaFavorite; index: number };
 
@@ -32,8 +40,10 @@ export function FavoritesSection({
   taste: ClientTaste;
 }) {
   const { favorites, media, pending } = taste;
+  const [showAll, setShowAll] = useState(false);
+  const shownPlaces = showAll ? favorites : favorites.slice(0, FIRST_PLACES);
   const cells: Cell[] = [
-    ...favorites.map((favorite, index): Cell => ({ kind: "favorite", favorite, index })),
+    ...shownPlaces.map((favorite, index): Cell => ({ kind: "favorite", favorite, index })),
     ...media.map((item, index): Cell => ({ kind: "media", item, index })),
   ];
   const rows = layoutMosaic(cells, shapeOf);
@@ -54,6 +64,8 @@ export function FavoritesSection({
           onKeepTyped={taste.addTyped}
         />
       </div>
+
+      <ListImport clientId={taste.clientId} onAdded={taste.addImported} onFinished={taste.refreshTaste} />
 
       {cells.length === 0 ? (
         <p className="flex min-h-[220px] items-center justify-center rounded-[18px] border-[1.5px] border-dashed border-ink/20 px-8 text-center text-body text-text-2">
@@ -102,6 +114,13 @@ export function FavoritesSection({
               {row.spacer > 0 ? <li aria-hidden style={{ flexGrow: row.spacer, flexBasis: 0 }} /> : null}
             </ul>
           ))}
+          {favorites.length > FIRST_PLACES ? (
+            <div>
+              <Button variant="outline" size="sm" onClick={() => setShowAll(!showAll)}>
+                {showAll ? `Show the first ${FIRST_PLACES}` : `Show all ${plural(favorites.length, "place")}`}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
     </section>

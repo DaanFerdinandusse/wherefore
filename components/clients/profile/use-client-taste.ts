@@ -99,6 +99,11 @@ export function useClientTaste({
     if (ok) scheduleTaste();
   }
 
+  /** Favorites a list import already saved: shown as they arrive, the taste tags follow once at the end. */
+  function addImported(tiles: FavoriteTile[]) {
+    setFavorites((list) => tiles.reduce((next, tile) => upsertById(next, tile), list));
+  }
+
   function addPlace(candidate: TypedCandidate, query: string) {
     if (favorites.some((favorite) => favorite.entityId === candidate.entityId)) return;
     const text = query || candidate.name;
@@ -198,6 +203,7 @@ export function useClientTaste({
   }
 
   return {
+    clientId,
     favorites,
     pending,
     media,
@@ -205,6 +211,8 @@ export function useClientTaste({
     tags,
     tagsUpdating,
     matched: matchedCount(favorites),
+    addImported,
+    refreshTaste: scheduleTaste,
     addPlace,
     addTyped,
     resolve: (favorite: FavoriteTile, candidate: FavoriteCandidate) => void resolve(favorite, candidate),

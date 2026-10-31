@@ -6,11 +6,13 @@ import { z } from "zod";
 import { isAppError } from "@/lib/auth/errors";
 import { type AuthUser, requireUser } from "@/lib/auth/server";
 import type { MediaFavorite, TasteTag } from "@/lib/contracts";
+import { readSharedList } from "@/lib/google/shared-list";
 import { getEntities, type NormalizedPlace, QlooError, searchEntities } from "@/lib/qloo";
 import { upsertPlaces } from "@/lib/places";
 
 import { type FavoriteTile, unmatchedCandidates } from "./candidates";
 import type { ClientFavorite } from "./contracts";
+import { exactMatch, LIST_IMPORT_BATCH, spreadByArea, type ListPlaceRef } from "./list-import";
 import {
   addFavorite,
   createClient,
@@ -21,6 +23,7 @@ import {
   updateClientFields,
   updateFavorite,
 } from "./mutations";
+import { listFavorites } from "./queries";
 import { recomputeTasteTags } from "./taste";
 
 // Server actions for the client profile: every edit in place lands here.
@@ -54,6 +57,8 @@ const id = z.uuid();
 const name = z.string().trim().min(1, "Give the client a name.").max(120);
 const near = z.object({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180) }).nullish();
 const query = z.string().trim().min(1).max(120);
+/** A shared list holds up to 500 places. */
+const MAX_REORDERED = 1000;
 
 const fieldsSchema = z
   .object({
@@ -279,8 +284,73 @@ export async function removeFavoriteAction(favoriteId: string): Promise<ActionRe
 /** Saves the grid order after a drag. */
 export async function reorderFavoritesAction(clientId: string, favoriteIds: string[]): Promise<ActionResult> {
   return run(async (user) => {
-    await reorderFavorites(id.parse(clientId), z.array(id).max(200).parse(favoriteIds), user);
+    await reorderFavorites(id.parse(clientId), z.array(id).max(MAX_REORDERED).parse(favoriteIds), user);
     return undefined;
+  });
+}
+
+const linkSchema = z.string().trim().min(1).max(2000);
+
+/** Reads a shared Google Maps list, its places in the order they will be saved. */
+export async function readSharedListAction(pasted: string): Promise<ActionResult<{ title: string; places: ListPlaceRef[] }>> {
+  return run(async () => {
+    const list = await readSharedList(linkSchema.parse(pasted));
+    return { title: list.title, places: spreadByArea(list.places) };
+  });
+}
+
+const listBatchSchema = z
+  .array(
+    z.object({
+      name: z.string().trim().min(1).max(300),
+      lat: z.number().min(-90).max(90),
+      lon: z.number().min(-180).max(180),
+      googleId: z.string().regex(/^\d{1,20}$/).nullable(),
+    }),
+  )
+  .min(1)
+  .max(LIST_IMPORT_BATCH);
+
+/**
+ * Saves the places of one batch that match exactly, one search at a time (the
+ * upstream drops parallel calls), and leaves the rest out. A place the client
+ * already has counts as matched and stays as it is, so an import can run twice.
+ */
+export async function importListPlacesAction(
+  clientId: string,
+  input: z.input<typeof listBatchSchema>,
+): Promise<ActionResult<{ added: FavoriteTile[]; matched: number }>> {
+  return run(async (user) => {
+    const owner = id.parse(clientId);
+    const batch = listBatchSchema.parse(input);
+    const saved = new Set((await listFavorites(owner, user)).flatMap((favorite) => favorite.entityId ?? []));
+    const added: FavoriteTile[] = [];
+    let matched = 0;
+    let failed = 0;
+    let failure: unknown;
+    for (const item of batch) {
+      const search = await searchEntities(item.name.slice(0, 120), {
+        types: [PLACE_TYPE],
+        take: PICKER_TAKE,
+        near: { lat: item.lat, lon: item.lon },
+      }).catch((error: unknown) => {
+        console.warn("[clients] a list place could not be searched", item.name, error);
+        failure = error;
+        failed += 1;
+        return null;
+      });
+      const place = search ? exactMatch(item, search.candidates) : null;
+      if (!place) continue;
+      matched += 1;
+      if (saved.has(place.entityId)) continue;
+      saved.add(place.entityId);
+      const placeId = await savePlace(place);
+      const favorite = await addFavorite(owner, { query: item.name, entityId: place.entityId, placeId, match: "resolved", candidates: [] }, user);
+      added.push(tileFromPlace(favorite, place));
+    }
+    // One place can miss; a whole batch missing means the search is down, not that nothing matched.
+    if (failed === batch.length) throw failure;
+    return { added, matched };
   });
 }
 
