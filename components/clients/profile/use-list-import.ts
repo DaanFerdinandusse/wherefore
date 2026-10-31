@@ -13,8 +13,7 @@ import { LIST_IMPORT_BATCH } from "@/lib/clients/list-import";
 export type ListImportState =
   | { step: "idle" }
   | { step: "reading" }
-  | { step: "importing"; title: string; total: number; checked: number; matched: number }
-  | { step: "done"; title: string; total: number; matched: number; added: number; failed: number }
+  | { step: "importing"; title: string; percent: number }
   | { step: "failed"; message: string };
 
 export function useListImport({
@@ -47,35 +46,30 @@ export function useListImport({
     }
     const { title, places } = list.data;
     const total = places.length;
-    let checked = 0;
-    let matched = 0;
-    let added = 0;
-    let failed = 0;
-    setState({ step: "importing", title, total, checked, matched });
+    let added = false;
+    setState({ step: "importing", title, percent: 0 });
 
     for (let start = 0; start < total; start += LIST_IMPORT_BATCH) {
       const batch = places.slice(start, start + LIST_IMPORT_BATCH);
-      // A saved place is matched on a retry without being added twice.
+      // A saved place is not added twice on a retry.
       const result =
         (await importListPlacesAction(clientId, batch).catch(() => null)) ??
         (await importListPlacesAction(clientId, batch).catch(() => null));
       if (left.current) return;
       if (!result?.ok) {
-        if (added > 0) onFinished();
-        const saved = added > 0 ? ` ${added} ${added === 1 ? "place was" : "places were"} saved. Import the list again to add the rest.` : "";
-        setState({ step: "failed", message: `${result?.error ?? "The import stopped."}${saved}` });
+        if (added) onFinished();
+        setState({ step: "failed", message: `${result?.error ?? "The import stopped."} Import the list again to pick up the rest.` });
         return;
       }
-      checked += batch.length;
-      matched += result.data.matched;
-      added += result.data.added.length;
-      failed += result.data.failed;
-      if (result.data.added.length > 0) onAdded(result.data.added);
-      setState({ step: "importing", title, total, checked, matched });
+      if (result.data.added.length > 0) {
+        added = true;
+        onAdded(result.data.added);
+      }
+      setState({ step: "importing", title, percent: Math.round(((start + batch.length) / total) * 100) });
     }
 
-    if (added > 0) onFinished();
-    setState({ step: "done", title, total, matched, added, failed });
+    if (added) onFinished();
+    setState({ step: "idle" });
   }
 
   return {

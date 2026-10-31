@@ -7,7 +7,7 @@ import { ArrowRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClientWithFavoritesAction } from "@/lib/clients/actions";
 
-import { firstName, plural } from "../format";
+import { firstName } from "../format";
 import { holdListImport } from "../held-list-import";
 import { ListLinkField } from "../list-link-field";
 import { useClientModal } from "../modal/client-modal";
@@ -113,12 +113,9 @@ export function NewClientForm() {
         </div>
 
         <section aria-labelledby={`${ids.places}-title`} className="flex flex-col gap-3.5">
-          <div className="flex items-baseline justify-between gap-4">
-            <h3 id={`${ids.places}-title`} className="font-display text-[28px] leading-[34px] tracking-[-0.01em] text-ink">
-              <label htmlFor={ids.places}>{first ? `Places ${first} loves` : "Places they love"}</label>
-            </h3>
-            <span className="text-ui text-text-2">{picks.length === 0 ? "0 added" : `${plural(picks.length, "place")} added`}</span>
-          </div>
+          <h3 id={`${ids.places}-title`} className="font-display text-[28px] leading-[34px] tracking-[-0.01em] text-ink">
+            <label htmlFor={ids.places}>{first ? `Places ${first} loves` : "Places they love"}</label>
+          </h3>
           <PlacesPicker
             inputId={ids.places}
             near={null}

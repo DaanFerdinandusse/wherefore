@@ -7,28 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { FavoriteTile } from "@/lib/clients/candidates";
 
-import { plural } from "../format";
 import { takeListImport } from "../held-list-import";
 import { ListLinkField } from "../list-link-field";
-import { useListImport, type ListImportState } from "./use-list-import";
+import { useListImport } from "./use-list-import";
 
-// "Import a Google Maps list": paste the link a client shared, and every place
-// that matches exactly joins their favorites while the count runs. Nothing to
-// review: a place without an exact match is left out, and the summary says how
-// many.
-
-function summary(state: Extract<ListImportState, { step: "done" }>): string {
-  const missed = state.total - state.matched - state.failed;
-  const known = state.matched - state.added;
-  return [
-    state.added > 0 ? `Added ${plural(state.added, "place")} from ${state.title}.` : `No new places from ${state.title}.`,
-    known > 0 ? `${plural(known, "place")} already saved.` : null,
-    missed > 0 ? `${plural(missed, "place")} had no match and ${missed === 1 ? "was" : "were"} left out.` : null,
-    state.failed > 0 ? `${plural(state.failed, "place")} could not be checked. Import the list again to add ${state.failed === 1 ? "it" : "them"}.` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
+// "Import a Google Maps list": paste the link a client shared, and the places
+// that match exactly join their favorites while the bar fills. Nothing to review,
+// and no tally: the places appearing are the result.
 
 export function ListImport({
   clientId,
@@ -55,20 +40,13 @@ export function ListImport({
   }
 
   if (state.step === "reading" || state.step === "importing") {
-    const percent = state.step === "importing" && state.total > 0 ? Math.round((state.checked / state.total) * 100) : 0;
+    const percent = state.step === "importing" ? state.percent : 0;
     return (
       <div role="status" className="flex flex-col gap-2 rounded-card bg-surface-raised px-4 py-3">
-        <div className="flex items-center justify-between gap-3 text-ui">
-          <span className="flex min-w-0 items-center gap-2 text-ink">
-            <Spinner size={14} label="Importing" />
-            <span className="truncate">{state.step === "reading" ? "Reading the list" : `Importing ${state.title}`}</span>
-          </span>
-          {state.step === "importing" ? (
-            <span className="shrink-0 text-text-2 tabular-nums">
-              {state.checked} of {state.total} checked · {state.matched} matched
-            </span>
-          ) : null}
-        </div>
+        <span className="flex min-w-0 items-center gap-2 text-ui text-ink">
+          <Spinner size={14} label="Importing" />
+          <span className="truncate">{state.step === "reading" ? "Reading the list" : `Importing ${state.title}`}</span>
+        </span>
         <div
           role="progressbar"
           aria-label="Import progress"
@@ -79,17 +57,6 @@ export function ListImport({
         >
           <div className="h-full rounded-pill bg-ink transition-[width] duration-300" style={{ width: `${percent}%` }} />
         </div>
-      </div>
-    );
-  }
-
-  if (state.step === "done") {
-    return (
-      <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface-raised px-4 py-3">
-        <p className="min-w-0 text-ui text-ink">{summary(state)}</p>
-        <Button variant="ghost" size="sm" onClick={reset}>
-          Done
-        </Button>
       </div>
     );
   }
@@ -105,5 +72,15 @@ export function ListImport({
     );
   }
 
-  return <ListLinkField autoFocus onSubmit={start} onCancel={reset} message={state.step === "failed" ? state.message : undefined} />;
+  return (
+    <ListLinkField
+      autoFocus
+      onSubmit={(link) => {
+        setOpen(false);
+        start(link);
+      }}
+      onCancel={reset}
+      message={state.step === "failed" ? state.message : undefined}
+    />
+  );
 }

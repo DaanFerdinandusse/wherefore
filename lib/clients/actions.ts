@@ -295,14 +295,13 @@ async function searchListPlace(item: ListPlaceRef) {
 
 /**
  * Saves the places of one batch that match exactly, in one write, and leaves the
- * rest out. A place the client already has counts as matched and stays as it is,
- * so an import can run twice. A place whose search failed counts as `failed`, not
- * as unmatched: importing the list again picks it up.
+ * rest out. A place the client already has stays as it is, so an import can run
+ * twice, which also picks up a place whose search failed.
  */
 export async function importListPlacesAction(
   clientId: string,
   input: z.input<typeof listBatchSchema>,
-): Promise<ActionResult<{ added: FavoriteTile[]; matched: number; failed: number }>> {
+): Promise<ActionResult<{ added: FavoriteTile[] }>> {
   return run(async (user) => {
     const owner = id.parse(clientId);
     const batch = listBatchSchema.parse(input);
@@ -324,10 +323,8 @@ export async function importListPlacesAction(
     if (failed === batch.length) throw failure;
 
     const fresh = new Map<string, { query: string; place: NormalizedPlace }>();
-    let matched = 0;
     for (const [index, place] of found.entries()) {
       if (!place) continue;
-      matched += 1;
       if (saved.has(place.entityId) || fresh.has(place.entityId)) continue;
       fresh.set(place.entityId, { query: batch[index].name, place });
     }
@@ -342,7 +339,7 @@ export async function importListPlacesAction(
       const row = favorite.entityId ? fresh.get(favorite.entityId) : undefined;
       return row ? [tileFromPlace(favorite, row.place)] : [];
     });
-    return { added, matched, failed };
+    return { added };
   });
 }
 

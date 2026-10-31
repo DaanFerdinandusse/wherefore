@@ -64,7 +64,7 @@ export function ClientCard({
       <div className="flex grow flex-col gap-3.5 px-3 py-[18px]">
         <Detail label="Loves">
           {client.favoriteNames.length > 0 ? (
-            <p className="line-clamp-2 text-ui leading-[19px] text-ink">{namesLine(client.favoriteNames, client.favoritesCount)}</p>
+            <p className="line-clamp-2 text-ui leading-[19px] text-ink">{namesLine(client.favoriteNames)}</p>
           ) : (
             <p className="text-ui leading-[19px] text-text-muted">No favorite places yet</p>
           )}

@@ -4,10 +4,9 @@ import { FilmImage } from "@/components/ui/film-image";
 import { Spinner } from "@/components/ui/spinner";
 import type { TasteTag } from "@/lib/contracts";
 
-import { plural } from "../format";
 
 // C2 "Ana's taste": the taste tags computed from the places they love, and
-// where they come from (the matched favorites' photos and their count).
+// where they come from (the matched favorites' photos).
 // "Ana's taste so far" with fewer than three matched places.
 
 const SHOWN_TAGS = 8;
@@ -68,7 +67,7 @@ export function TasteCard({
             </span>
           ) : null}
           <p className="text-ui leading-[19px] text-text-3">
-            From {first}&apos;s {plural(matched, "favorite")}. Add more to sharpen it.
+            From {first}&apos;s favorites. Add more to sharpen it.
           </p>
         </div>
       ) : null}

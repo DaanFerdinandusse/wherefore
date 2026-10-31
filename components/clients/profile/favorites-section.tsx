@@ -7,7 +7,6 @@ import type { FavoriteTile } from "@/lib/clients/candidates";
 import type { MediaFavorite } from "@/lib/contracts";
 
 import { isMatched } from "../favorites";
-import { plural } from "../format";
 import { FavoriteSearch } from "./favorite-search";
 import { MatchedTile, MediaTile, UnmatchedTile } from "./favorite-tiles";
 import { ListImport } from "./list-import";
@@ -51,12 +50,9 @@ export function FavoritesSection({
   return (
     <section aria-labelledby="places-they-love" className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <h3 id="places-they-love" className="font-display text-[28px] leading-[34px] tracking-[-0.01em] text-ink">
-            {title}
-          </h3>
-          <span className="shrink-0 text-ui text-text-2">{plural(favorites.length, "place")}</span>
-        </div>
+        <h3 id="places-they-love" className="min-w-0 font-display text-[28px] leading-[34px] tracking-[-0.01em] text-ink">
+          {title}
+        </h3>
         <FavoriteSearch
           near={near}
           onPickPlace={taste.addPlace}
@@ -117,7 +113,7 @@ export function FavoritesSection({
           {favorites.length > FIRST_PLACES ? (
             <div>
               <Button variant="outline" size="sm" onClick={() => setShowAll(!showAll)}>
-                {showAll ? `Show the first ${FIRST_PLACES}` : `Show all ${plural(favorites.length, "place")}`}
+                {showAll ? "Show fewer" : "Show all"}
               </Button>
             </div>
           ) : null}

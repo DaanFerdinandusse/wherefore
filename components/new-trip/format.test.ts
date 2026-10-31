@@ -32,22 +32,20 @@ describe("client rows", () => {
     expect(clientLine({ name: "Tom", nextTrip: null })).toBeNull();
   });
 
-  it("describes a client match with the favorites count", () => {
+  it("describes a client match by their next trip", () => {
     expect(
       clientDescription({
         name: "Ana Ruiz",
-        favoritesCount: 6,
         nextTrip: { title: "Mexico City for Ana", startDate: "2026-11-12" },
       }),
-    ).toBe("6 favorites · Mexico City in Nov");
-    expect(clientDescription({ name: "Tom", favoritesCount: 1, nextTrip: null })).toBe("1 favorite");
+    ).toBe("Mexico City in Nov");
+    expect(clientDescription({ name: "Tom", nextTrip: null })).toBe("");
   });
 });
 
 describe("traveler notes", () => {
   it("says whose favorites drive the search, by first name", () => {
-    expect(clientTravelerNote("Ana Ruiz", 5)).toEqual({ text: "Ana's 5 favorites drive the search", warning: false });
-    expect(clientTravelerNote("Ana Ruiz", 1).text).toBe("Ana's 1 favorite drives the search");
+    expect(clientTravelerNote("Ana Ruiz", 5)).toEqual({ text: "Ana's favorites drive the search", warning: false });
     expect(clientTravelerNote("Ana Ruiz", 0)).toEqual({ text: "Ana has no favorites yet", warning: true });
   });
 
@@ -55,7 +53,7 @@ describe("traveler notes", () => {
     expect(companionNote({ name: "Clara", clientId: null, favoritesCount: 0 }, "Ana Ruiz")).toBe("Travels with Ana");
     expect(companionNote({ name: "Clara", clientId: null, favoritesCount: 0 }, null)).toBeNull();
     expect(companionNote({ name: "Marcus Lee", clientId: "c", favoritesCount: 3 }, "Ana Ruiz")).toBe(
-      "Marcus's 3 favorites join the search",
+      "Marcus's favorites join the search",
     );
     expect(companionNote({ name: "Marcus Lee", clientId: "c", favoritesCount: 0 }, "Ana Ruiz")).toBe("No favorites yet");
   });

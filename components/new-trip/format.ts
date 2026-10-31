@@ -2,7 +2,7 @@
 // and the line under the bar. Every part comes from a stored fact; a part
 // without one is left out (null), never guessed.
 
-import { firstName, plural } from "@/components/trips/format";
+import { firstName } from "@/components/trips/format";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
@@ -32,9 +32,9 @@ export function clientLine(client: { name: string; nextTrip: NextTrip }, today?:
   return nextTripLabel(client.nextTrip, client.name, today);
 }
 
-/** A client match under "Add a traveler": "6 favorites · Mexico City in Nov". */
-export function clientDescription(client: { name: string; favoritesCount: number; nextTrip: NextTrip }): string {
-  return [plural(client.favoritesCount, "favorite"), nextTripLabel(client.nextTrip, client.name)]
+/** A client match under "Add a traveler": their next trip, when they have one. */
+export function clientDescription(client: { name: string; nextTrip: NextTrip }): string {
+  return [nextTripLabel(client.nextTrip, client.name)]
     .filter(Boolean)
     .join(" · ");
 }
@@ -43,8 +43,7 @@ export function clientDescription(client: { name: string; favoritesCount: number
 export function clientTravelerNote(name: string, favoritesCount: number): { text: string; warning: boolean } {
   const first = firstName(name);
   if (favoritesCount === 0) return { text: `${first} has no favorites yet`, warning: true };
-  const verb = favoritesCount === 1 ? "drives" : "drive";
-  return { text: `${first}'s ${plural(favoritesCount, "favorite")} ${verb} the search`, warning: false };
+  return { text: `${first}'s favorites drive the search`, warning: false };
 }
 
 /**
@@ -57,8 +56,7 @@ export function companionNote(
 ): string | null {
   if (!companion.clientId) return clientName ? `Travels with ${firstName(clientName)}` : null;
   if (companion.favoritesCount === 0) return "No favorites yet";
-  const verb = companion.favoritesCount === 1 ? "joins" : "join";
-  return `${firstName(companion.name)}'s ${plural(companion.favoritesCount, "favorite")} ${verb} the search`;
+  return `${firstName(companion.name)}'s favorites join the search`;
 }
 
 /** The line under the bar once the trip can be created. */
