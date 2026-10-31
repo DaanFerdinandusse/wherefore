@@ -73,6 +73,18 @@ describe("normalizePlace", () => {
     expect(place.tags.every((t) => t.name.length > 0)).toBe(true);
   });
 
+  it("keeps a place whose genre has a null id, so one place cannot fail a whole search", () => {
+    const [first, ...rest] = insightsFixture.results.entities;
+    const parsed = insightsPlacesResponseSchema.parse({
+      ...insightsFixture,
+      results: {
+        ...insightsFixture.results,
+        entities: [{ ...first, properties: { ...first.properties, primary_genre: { id: null, name: "Garden" } } }, ...rest],
+      },
+    });
+    expect(normalizePlace(parsed.results.entities[0]).primaryType).toBeNull();
+  });
+
   it("maps a /v2/insights result (google_place as an array under top-level external)", () => {
     const raw = insights.results.entities[0];
     const place = normalizePlace(raw);

@@ -28,7 +28,8 @@ export const externalSchema = z.looseObject({
   google_place: nullish(z.union([googlePlaceRefSchema, z.array(googlePlaceRefSchema)])),
 });
 
-const genreSchema = z.looseObject({ id: z.string(), name: z.string().nullish() });
+// The id can be null (gardens in Turin): one such place must not fail the search.
+const genreSchema = z.looseObject({ id: z.string().nullish(), name: z.string().nullish() });
 
 export const placePropertiesSchema = z.looseObject({
   address: nullish(z.string()),
