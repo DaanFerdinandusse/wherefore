@@ -65,7 +65,7 @@ export function picksByAsk(messages: readonly AppUIMessage[]): Map<string, strin
 
 /**
  * The composer's placeholder: the brief while the chat is empty, otherwise a
- * plain line until a suggestion is ready to take its place.
+ * plain line.
  */
 export function composerPlaceholder(input: {
   empty: boolean;

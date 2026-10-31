@@ -23,7 +23,7 @@ the Workflow run, its stream and a conditional UPDATE.
 | `history.ts` | `trimHistory` for `prepareStep`; `budgetHistory`, the total token budget of the history a turn starts from. Pure. |
 | `prompt.ts`, `trip-context.ts` | System prompt with the trip header (as a `<trip_data>` block) and the seed-turn brief; `TripContextOutput`, capped under about 3k tokens. |
 | `writes.ts` | Every tool write: the turn guard inside the write statement (`lib/trips/turn-guard.ts`), keyed upserts. |
-| `next-prompt.ts`, `next-prompt-data.ts` | The follow-up the composer offers after a reply: pure selection and cleanup, then one model call outside the workflow with no thinking, no tools and only the last exchange as input. Writes nothing. |
+| `next-prompt.ts`, `next-prompt-data.ts` | The pills the composer offers after a reply, each a short label and a longer message: pure selection and cleanup, then one model call outside the workflow with no thinking, no tools and only the last exchange as input. Writes nothing. |
 | `explain.ts` | explainStep: one model call per ask that only picks favorites, shared tags and one snippet index from the input; the sentence is a template rendered in code. |
 | `taste-overlap.ts` | Which favorite a place is most like and on which tags: `withOverlap`, `likeLine` ("Like Via Carota: Italian, warm, stylish"), `mediaDriver`, `tagPhrase`. Pure and client safe: the cards render the same line. |
 | `tools/index.ts` | The tool set for a turn (`toModelOutput` per tool), `activeToolsFor` (seed turn). |

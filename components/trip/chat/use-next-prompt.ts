@@ -1,43 +1,39 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { z } from "zod";
 
-import { lastExchange } from "@/lib/agent/next-prompt";
+import { lastExchange, nextPromptsSchema, type NextPrompt } from "@/lib/agent/next-prompt";
 import type { AppUIMessage } from "@/lib/contracts";
 
-const nextPromptSchema = z.object({ prompt: z.string().nullable() });
-
 /**
- * The message to offer in the composer: asked for once per reply, as soon as
+ * The pills to offer above the composer: asked for once per reply, as soon as
  * its stream ends, and dropped when the transcript moves on. The request is
  * not cancelled when the session flips back to busy to re-read the turn: an
  * answer for an older reply is simply never shown. A failed request offers
  * nothing.
  */
-export function useNextPrompt(chatId: string, messages: readonly AppUIMessage[], idle: boolean): string | undefined {
+export function useNextPrompts(chatId: string, messages: readonly AppUIMessage[], idle: boolean): readonly NextPrompt[] {
   const exchange = idle ? lastExchange(messages) : undefined;
   const after = exchange?.id;
-  const ask = exchange?.ask;
-  const reply = exchange?.reply;
+  const body = exchange && JSON.stringify({ ask: exchange.ask, reply: exchange.reply, earlier: exchange.earlier });
   const asked = useRef<string | undefined>(undefined);
-  const [loaded, setLoaded] = useState<{ after: string; prompt: string | null } | null>(null);
+  const [loaded, setLoaded] = useState<{ after: string; prompts: NextPrompt[] } | null>(null);
 
   useEffect(() => {
-    if (!after || !reply || asked.current === after) return;
+    if (!after || !body || asked.current === after) return;
     asked.current = after;
     fetch(`/api/chats/${encodeURIComponent(chatId)}/next-prompt`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ask: ask ?? "", reply }),
+      body,
     })
       .then(async (response) => {
         if (!response.ok) return;
-        const parsed = nextPromptSchema.safeParse(await response.json());
-        if (parsed.success) setLoaded({ after, prompt: parsed.data.prompt });
+        const parsed = nextPromptsSchema.safeParse(await response.json());
+        if (parsed.success) setLoaded({ after, prompts: parsed.data.prompts });
       })
       .catch(() => {});
-  }, [chatId, after, ask, reply]);
+  }, [chatId, after, body]);
 
-  return loaded && loaded.after === after ? (loaded.prompt ?? undefined) : undefined;
+  return loaded && loaded.after === after ? loaded.prompts : [];
 }

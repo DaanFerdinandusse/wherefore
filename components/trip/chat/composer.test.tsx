@@ -1,23 +1,33 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import type { NextPrompt } from "@/lib/agent/next-prompt";
+
 import { Composer } from "./composer";
 
-const render = (props: { suggestion?: string; busy?: boolean } = {}) =>
+const render = (props: { suggestions?: readonly NextPrompt[]; busy?: boolean } = {}) =>
   renderToStaticMarkup(
-    <Composer busy={props.busy ?? false} stopping={false} placeholder="Ask for a change" suggestion={props.suggestion} onSend={() => {}} onStop={() => {}} />,
+    <Composer busy={props.busy ?? false} stopping={false} placeholder="Ask for a change" suggestions={props.suggestions} onSend={() => {}} onStop={() => {}} />,
   );
 
-describe("the composer's suggestion", () => {
-  it("shows the placeholder and no Tab key without a suggestion", () => {
+describe("the composer's suggestions", () => {
+  it("shows no pills without suggestions", () => {
     const html = render();
     expect(html).toContain('placeholder="Ask for a change"');
-    expect(html).not.toContain("suggestion-tab");
+    expect(html).not.toContain("next-prompts");
   });
 
-  it("takes the placeholder's place, with a Tab key to use it", () => {
-    const html = render({ suggestion: "Dinner on day 2 near Alfama" });
-    expect(html).toContain('placeholder="Dinner on day 2 near Alfama"');
-    expect(html).toContain('data-testid="suggestion-tab"');
+  it("shows one pill per suggestion above the field and keeps the placeholder", () => {
+    const html = render({
+      suggestions: [
+        { label: "Dinner nearby", prompt: "Find dinner on day 2 near Alfama" },
+        { label: "Coffee stop", prompt: "Now a quiet coffee stop near the lunch spot" },
+      ],
+    });
+    expect(html.match(/data-testid="next-prompt"/g)).toHaveLength(2);
+    expect(html).toContain(">Dinner nearby</button>");
+    expect(html).toContain('title="Find dinner on day 2 near Alfama"');
+    expect(html).toContain('placeholder="Ask for a change"');
+    expect(html.indexOf("next-prompts")).toBeLessThan(html.indexOf("<form"));
   });
 });
