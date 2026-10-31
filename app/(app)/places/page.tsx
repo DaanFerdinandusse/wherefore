@@ -94,7 +94,7 @@ async function PlacesContent({ searchParams }: { searchParams: SearchParams }) {
     id: c.id,
     name: c.name,
     avatarUrl: c.avatarUrl,
-    line: (city ? clientTripLine(trips, c.id, city, today) : null) ?? c.homeCity,
+    line: city ? clientTripLine(trips, c.id, city, today) : null,
   }));
 
   const query: PlacesQuery = { city, category: filter, client: clientParam || null, list };

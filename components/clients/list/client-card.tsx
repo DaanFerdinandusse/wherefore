@@ -34,7 +34,7 @@ export function ClientCard({
   today: string;
   now: Date;
 }) {
-  const where = client.status === "guest" ? "Guest" : client.homeCity;
+  const where = client.status === "guest" ? "Guest" : null;
   const meta = [where, plural(client.tripCount, "trip"), activityLine(new Date(client.lastActivityAt), new Date(client.createdAt), now)]
     .filter(Boolean)
     .join(" · ");

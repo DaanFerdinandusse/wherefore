@@ -7,14 +7,15 @@ import { isAppError } from "@/lib/auth/errors";
 import { type AuthUser, requireUser } from "@/lib/auth/server";
 import type { MediaFavorite, TasteTag } from "@/lib/contracts";
 import { readSharedList } from "@/lib/google/shared-list";
-import { getEntities, type NormalizedPlace, QlooError, searchEntities } from "@/lib/qloo";
+import { getEntities, type NormalizedPlace, QlooError, QlooHttpError, searchEntities } from "@/lib/qloo";
 import { upsertPlaces } from "@/lib/places";
 
 import { type FavoriteTile, unmatchedCandidates } from "./candidates";
 import type { ClientFavorite } from "./contracts";
-import { exactMatch, LIST_IMPORT_BATCH, spreadByArea, type ListPlaceRef } from "./list-import";
+import { exactMatch, LIST_IMPORT_BATCH, LIST_SEARCHES_AT_ONCE, mapLimited, spreadByArea, type ListPlaceRef } from "./list-import";
 import {
   addFavorite,
+  addFavorites,
   createClient,
   removeFavorite,
   reorderFavorites,
@@ -63,10 +64,6 @@ const MAX_REORDERED = 1000;
 const fieldsSchema = z
   .object({
     name,
-    homeCity: z.string().trim().max(120).nullable(),
-    homeLat: z.number().min(-90).max(90).nullable(),
-    homeLon: z.number().min(-180).max(180).nullable(),
-    email: z.union([z.literal(""), z.email().max(200)]).nullable(),
     notes: z.string().max(5000),
   })
   .partial();
@@ -75,10 +72,6 @@ export type ClientFieldsInput = z.input<typeof fieldsSchema>;
 
 const newClientSchema = z.object({
   name,
-  homeCity: z.string().trim().max(120).nullable(),
-  homeLat: z.number().min(-90).max(90).nullable(),
-  homeLon: z.number().min(-180).max(180).nullable(),
-  email: z.union([z.literal(""), z.email().max(200)]).nullable(),
   favorites: z.array(z.object({ query, entityId: z.string().min(1).max(80), near })).max(50),
 });
 
@@ -93,16 +86,7 @@ export type NewClientInput = z.input<typeof newClientSchema>;
 export async function createClientWithFavoritesAction(input: NewClientInput): Promise<ActionResult<{ id: string }>> {
   return run(async (user) => {
     const fields = newClientSchema.parse(input);
-    const client = await createClient(
-      {
-        name: fields.name,
-        homeCity: fields.homeCity || null,
-        homeLat: fields.homeLat,
-        homeLon: fields.homeLon,
-        email: fields.email || null,
-      },
-      user,
-    );
+    const client = await createClient({ name: fields.name }, user);
 
     const seen = new Set<string>();
     let matched = 0;
@@ -137,31 +121,10 @@ export async function createClientWithFavoritesAction(input: NewClientInput): Pr
   });
 }
 
-/** Creates the client on the first keystroke of the name (/clients/new). */
-export async function createClientAction(input: ClientFieldsInput): Promise<ActionResult<{ id: string }>> {
-  return run(async (user) => {
-    const fields = fieldsSchema.extend({ name }).parse(input);
-    const client = await createClient(
-      {
-        name: fields.name,
-        homeCity: fields.homeCity || null,
-        homeLat: fields.homeLat ?? null,
-        homeLon: fields.homeLon ?? null,
-        email: fields.email || null,
-        notes: fields.notes ?? "",
-      },
-      user,
-    );
-    return { id: client.id };
-  });
-}
-
-/** Saves a debounced edit of the name, home city (with coordinates) or notes. */
+/** Saves a debounced edit of the name or notes. */
 export async function updateClientFieldsAction(clientId: string, input: ClientFieldsInput): Promise<ActionResult> {
   return run(async (user) => {
     const fields = fieldsSchema.parse(input);
-    if (fields.homeCity === "") fields.homeCity = null;
-    if (fields.email === "") fields.email = null;
     await updateClientFields(id.parse(clientId), fields, user);
     return undefined;
   });
@@ -290,6 +253,9 @@ export async function reorderFavoritesAction(clientId: string, favoriteIds: stri
 }
 
 const linkSchema = z.string().trim().min(1).max(2000);
+/** Waits grow with each try, and the last covers the API's allowance coming back. */
+const RATE_LIMIT_TRIES = 4;
+const RATE_LIMIT_WAIT_MS = 2000;
 
 /** Reads a shared Google Maps list, its places in the order they will be saved. */
 export async function readSharedListAction(pasted: string): Promise<ActionResult<{ title: string; places: ListPlaceRef[] }>> {
@@ -311,46 +277,72 @@ const listBatchSchema = z
   .min(1)
   .max(LIST_IMPORT_BATCH);
 
+/** A list search the API turned away for going too fast: wait and try it again. */
+async function searchListPlace(item: ListPlaceRef) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await searchEntities(item.name.slice(0, 120), {
+        types: [PLACE_TYPE],
+        take: PICKER_TAKE,
+        near: { lat: item.lat, lon: item.lon },
+      });
+    } catch (error) {
+      if (!(error instanceof QlooHttpError) || error.status !== 429 || attempt === RATE_LIMIT_TRIES) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_WAIT_MS * attempt));
+    }
+  }
+}
+
 /**
- * Saves the places of one batch that match exactly, one search at a time (the
- * upstream drops parallel calls), and leaves the rest out. A place the client
- * already has counts as matched and stays as it is, so an import can run twice.
+ * Saves the places of one batch that match exactly, in one write, and leaves the
+ * rest out. A place the client already has counts as matched and stays as it is,
+ * so an import can run twice. A place whose search failed counts as `failed`, not
+ * as unmatched: importing the list again picks it up.
  */
 export async function importListPlacesAction(
   clientId: string,
   input: z.input<typeof listBatchSchema>,
-): Promise<ActionResult<{ added: FavoriteTile[]; matched: number }>> {
+): Promise<ActionResult<{ added: FavoriteTile[]; matched: number; failed: number }>> {
   return run(async (user) => {
     const owner = id.parse(clientId);
     const batch = listBatchSchema.parse(input);
     const saved = new Set((await listFavorites(owner, user)).flatMap((favorite) => favorite.entityId ?? []));
-    const added: FavoriteTile[] = [];
-    let matched = 0;
     let failed = 0;
     let failure: unknown;
-    for (const item of batch) {
-      const search = await searchEntities(item.name.slice(0, 120), {
-        types: [PLACE_TYPE],
-        take: PICKER_TAKE,
-        near: { lat: item.lat, lon: item.lon },
-      }).catch((error: unknown) => {
-        console.warn("[clients] a list place could not be searched", item.name, error);
-        failure = error;
-        failed += 1;
-        return null;
-      });
-      const place = search ? exactMatch(item, search.candidates) : null;
-      if (!place) continue;
-      matched += 1;
-      if (saved.has(place.entityId)) continue;
-      saved.add(place.entityId);
-      const placeId = await savePlace(place);
-      const favorite = await addFavorite(owner, { query: item.name, entityId: place.entityId, placeId, match: "resolved", candidates: [] }, user);
-      added.push(tileFromPlace(favorite, place));
-    }
+    const found = await mapLimited(batch, LIST_SEARCHES_AT_ONCE, (item) =>
+      searchListPlace(item).then(
+        (search) => exactMatch(item, search.candidates),
+        (error: unknown) => {
+          console.warn("[clients] a list place could not be searched", item.name, error);
+          failure = error;
+          failed += 1;
+          return null;
+        },
+      ),
+    );
     // One place can miss; a whole batch missing means the search is down, not that nothing matched.
     if (failed === batch.length) throw failure;
-    return { added, matched };
+
+    const fresh = new Map<string, { query: string; place: NormalizedPlace }>();
+    let matched = 0;
+    for (const [index, place] of found.entries()) {
+      if (!place) continue;
+      matched += 1;
+      if (saved.has(place.entityId) || fresh.has(place.entityId)) continue;
+      fresh.set(place.entityId, { query: batch[index].name, place });
+    }
+    const rows = [...fresh.values()];
+    const placeIds = rows.length ? await upsertPlaces(rows.map((row) => row.place)) : {};
+    const favorites = await addFavorites(
+      owner,
+      rows.map(({ query: name, place }) => ({ query: name, entityId: place.entityId, placeId: placeIds[place.entityId], match: "resolved" as const, candidates: [] })),
+      user,
+    );
+    const added = favorites.flatMap((favorite) => {
+      const row = favorite.entityId ? fresh.get(favorite.entityId) : undefined;
+      return row ? [tileFromPlace(favorite, row.place)] : [];
+    });
+    return { added, matched, failed };
   });
 }
 

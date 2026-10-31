@@ -11,7 +11,6 @@ import { InitialsAvatar } from "../initials-avatar";
 import { useClientModal } from "../modal/client-modal";
 import { FavoritesSection } from "./favorites-section";
 import { GroundRules } from "./ground-rules";
-import { HomeCityField, type HomeCity } from "./home-city-field";
 import { InlineText } from "./inline-text";
 import { NotesField } from "./notes-field";
 import { ProfileFooter } from "./profile-footer";
@@ -23,13 +22,11 @@ import { useClientTaste } from "./use-client-taste";
 import { useSaveTracker } from "./use-save-tracker";
 
 // C2 the client profile, in its sheet over the Clients list: who they are
-// (name and home city edit in place), the places, artists and films they
+// (the name edits in place), the places, artists and films they
 // love, the taste those add up to, your private notes and ground rules, and
 // their trips. Everything saves as you type; the header says so.
 
 const FIELDS_DEBOUNCE_MS = 600;
-
-type Near = { lat: number; lon: number } | null;
 
 export function ClientProfile({ initial, today }: { initial: ClientProfileData; today: string }) {
   const modal = useClientModal();
@@ -39,10 +36,7 @@ export function ClientProfile({ initial, today }: { initial: ClientProfileData; 
   const [name, setName] = useState(initial.name);
   const [savedName, setSavedName] = useState(initial.name);
   const nameAtFocus = useRef(initial.name);
-  const [city, setCity] = useState(initial.homeCity);
-  const [near, setNear] = useState<Near>(
-    initial.homeLat !== null && initial.homeLon !== null ? { lat: initial.homeLat, lon: initial.homeLon } : null,
-  );
+  const near = initial.homeLat !== null && initial.homeLon !== null ? { lat: initial.homeLat, lon: initial.homeLon } : null;
 
   const taste = useClientTaste({
     clientId,
@@ -88,15 +82,13 @@ export function ClientProfile({ initial, today }: { initial: ClientProfileData; 
     else fields.cancel();
   }
 
-  function onCityCommit(next: HomeCity) {
-    setCity(next.name);
-    setNear(next.lat !== null && next.lon !== null ? { lat: next.lat, lon: next.lon } : null);
-    fields.schedule({ homeCity: next.name || null, homeLat: next.lat, homeLon: next.lon }, { immediate: true });
-  }
-
   const shownName = name.trim() || savedName;
   const first = firstName(shownName);
   const tripCount = initial.trips.upcoming.length + initial.trips.past.length;
+  const facts = [
+    initial.createdAt ? `Client since ${monthYear(new Date(initial.createdAt))}` : null,
+    tripCount > 0 ? `${plural(tripCount, "trip")} with you` : null,
+  ].filter(Boolean);
   const photos = taste.favorites.flatMap((favorite) =>
     favorite.match === "resolved" && favorite.imageUrl ? [favorite.imageUrl] : [],
   );
@@ -122,18 +114,7 @@ export function ClientProfile({ initial, today }: { initial: ClientProfileData; 
                 className="self-start"
                 inputClassName="font-display text-[40px] leading-[44px] tracking-[-0.02em] text-ink"
               />
-              <p className="flex flex-wrap items-baseline gap-x-1 text-body leading-5 text-text-2">
-                <span>Lives in</span>
-                <HomeCityField
-                  value={city}
-                  disabled={false}
-                  placeholder="add home city"
-                  onEditingChange={() => undefined}
-                  onCommit={onCityCommit}
-                />
-                {initial.createdAt ? <span>· Client since {monthYear(new Date(initial.createdAt))}</span> : null}
-                {tripCount > 0 ? <span>· {plural(tripCount, "trip")} with you</span> : null}
-              </p>
+              {facts.length > 0 ? <p className="text-body leading-5 text-text-2">{facts.join(" · ")}</p> : null}
             </div>
           </div>
 

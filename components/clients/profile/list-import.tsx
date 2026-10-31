@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type SyntheticEvent } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { MapPin } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Spinner } from "@/components/ui/spinner";
 import type { FavoriteTile } from "@/lib/clients/candidates";
 
 import { plural } from "../format";
+import { takeListImport } from "../held-list-import";
+import { ListLinkField } from "../list-link-field";
 import { useListImport, type ListImportState } from "./use-list-import";
 
 // "Import a Google Maps list": paste the link a client shared, and every place
@@ -16,12 +18,13 @@ import { useListImport, type ListImportState } from "./use-list-import";
 // many.
 
 function summary(state: Extract<ListImportState, { step: "done" }>): string {
-  const missed = state.total - state.matched;
+  const missed = state.total - state.matched - state.failed;
   const known = state.matched - state.added;
   return [
     state.added > 0 ? `Added ${plural(state.added, "place")} from ${state.title}.` : `No new places from ${state.title}.`,
     known > 0 ? `${plural(known, "place")} already saved.` : null,
     missed > 0 ? `${plural(missed, "place")} had no match and ${missed === 1 ? "was" : "were"} left out.` : null,
+    state.failed > 0 ? `${plural(state.failed, "place")} could not be checked. Import the list again to add ${state.failed === 1 ? "it" : "them"}.` : null,
   ]
     .filter(Boolean)
     .join(" ");
@@ -38,17 +41,17 @@ export function ListImport({
 }) {
   const { state, start, dismiss } = useListImport({ clientId, onAdded, onFinished });
   const [open, setOpen] = useState(false);
-  const [link, setLink] = useState("");
 
-  function submit(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (link.trim()) start(link);
-  }
+  // A link pasted on the new client screen, which had no client to import into yet.
+  const startHeld = useEffectEvent(() => {
+    const link = takeListImport(clientId);
+    if (link) start(link);
+  });
+  useEffect(() => startHeld(), []);
 
   function reset() {
     dismiss();
     setOpen(false);
-    setLink("");
   }
 
   if (state.step === "reading" || state.step === "importing") {
@@ -102,31 +105,5 @@ export function ListImport({
     );
   }
 
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={link}
-          onChange={(event) => setLink(event.target.value)}
-          placeholder="Paste the link to a shared list"
-          aria-label="Link to a shared Google Maps list"
-          autoComplete="off"
-          autoFocus
-          maxLength={2000}
-          className="h-10 min-w-0 grow basis-64 rounded-pill border border-ink/14 bg-surface-raised px-4 text-ui text-ink placeholder:text-text-muted focus-visible:border-ink focus-visible:outline-none"
-        />
-        <Button type="submit" size="md" disabled={!link.trim()}>
-          Import list
-        </Button>
-        <Button type="button" variant="ghost" size="md" onClick={reset}>
-          Cancel
-        </Button>
-      </div>
-      {state.step === "failed" ? (
-        <p role="alert" className="text-ui-sm text-text-2">
-          {state.message}
-        </p>
-      ) : null}
-    </form>
-  );
+  return <ListLinkField autoFocus onSubmit={start} onCancel={reset} message={state.step === "failed" ? state.message : undefined} />;
 }

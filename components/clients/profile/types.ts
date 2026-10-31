@@ -6,7 +6,6 @@ import type { MediaFavorite, TasteTag } from "@/lib/contracts";
 export type ClientProfileData = {
   id: string;
   name: string;
-  homeCity: string;
   homeLat: number | null;
   homeLon: number | null;
   notes: string;

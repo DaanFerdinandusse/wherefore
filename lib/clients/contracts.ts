@@ -121,6 +121,8 @@ export type CreateClient = (input: CreateClientInput, scope: ScopeInput) => Prom
 export type UpdateClientFields = (id: string, patch: ClientFieldsPatch, scope: ScopeInput) => Promise<Client>;
 export type ArchiveClient = (id: string, scope: ScopeInput) => Promise<Client>;
 export type AddFavorite = (clientId: string, input: AddFavoriteInput, scope: ScopeInput) => Promise<ClientFavorite>;
+/** Adds several at the end of the list in one write, in the order given. */
+export type AddFavorites = (clientId: string, inputs: AddFavoriteInput[], scope: ScopeInput) => Promise<ClientFavorite[]>;
 export type UpdateFavorite = (favoriteId: string, patch: FavoritePatch, scope: ScopeInput) => Promise<ClientFavorite>;
 export type RemoveFavorite = (favoriteId: string, scope: ScopeInput) => Promise<void>;
 /** Positions follow the order of `favoriteIds`; ids of other clients are ignored. */

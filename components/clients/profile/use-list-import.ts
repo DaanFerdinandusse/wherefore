@@ -14,7 +14,7 @@ export type ListImportState =
   | { step: "idle" }
   | { step: "reading" }
   | { step: "importing"; title: string; total: number; checked: number; matched: number }
-  | { step: "done"; title: string; total: number; matched: number; added: number }
+  | { step: "done"; title: string; total: number; matched: number; added: number; failed: number }
   | { step: "failed"; message: string };
 
 export function useListImport({
@@ -50,6 +50,7 @@ export function useListImport({
     let checked = 0;
     let matched = 0;
     let added = 0;
+    let failed = 0;
     setState({ step: "importing", title, total, checked, matched });
 
     for (let start = 0; start < total; start += LIST_IMPORT_BATCH) {
@@ -68,12 +69,13 @@ export function useListImport({
       checked += batch.length;
       matched += result.data.matched;
       added += result.data.added.length;
+      failed += result.data.failed;
       if (result.data.added.length > 0) onAdded(result.data.added);
       setState({ step: "importing", title, total, checked, matched });
     }
 
     if (added > 0) onFinished();
-    setState({ step: "done", title, total, matched, added });
+    setState({ step: "done", title, total, matched, added, failed });
   }
 
   return {

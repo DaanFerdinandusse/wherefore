@@ -24,7 +24,6 @@ export async function ClientProfileLoader({ params }: { params: Promise<{ id: st
   const data: ClientProfileData = {
     id: client.id,
     name: client.name,
-    homeCity: client.homeCity ?? "",
     homeLat: client.homeLat,
     homeLon: client.homeLon,
     notes: client.notes,

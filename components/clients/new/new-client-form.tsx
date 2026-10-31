@@ -3,68 +3,52 @@
 import { useSearchParams } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { ArrowRight, X } from "lucide-react";
-import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { createClientWithFavoritesAction } from "@/lib/clients/actions";
 
 import { firstName, plural } from "../format";
-import type { HomeCity } from "../localities";
+import { holdListImport } from "../held-list-import";
+import { ListLinkField } from "../list-link-field";
 import { useClientModal } from "../modal/client-modal";
-import { CityField } from "./city-field";
 import { fieldBoxClasses, fieldLabelClasses } from "./field";
 import { PlacesPicker, type PlacePick } from "./places-picker";
 import { planTripHref, safeReturn, withClient } from "./return-to";
 
-// C1 New client: name, home city, an optional email, and the places they
-// love, saved together. "Save client" closes back to the list (or to the New
-// trip panel that asked, with the client chosen); "Save and plan a trip"
-// opens the New trip panel for them.
+// C1 New client: a name and the places they love, searched one by one or
+// imported from a shared Google Maps list. "Save client" closes back to the list
+// (or to the New trip panel that asked, with the client chosen); "Save and plan
+// a trip" opens the New trip panel for them; "Import list" saves the client and
+// opens their profile, where the import runs with its count on screen.
 
-const emailSchema = z.email();
-
-type Intent = "save" | "plan";
+type Intent = "save" | "plan" | "import";
 
 export function NewClientForm() {
   const modal = useClientModal();
   const params = useSearchParams();
   const returnTo = safeReturn(params.get("return"));
-  const ids = { name: useId(), city: useId(), email: useId(), places: useId() };
+  const ids = { name: useId(), places: useId() };
   const nameRef = useRef<HTMLInputElement>(null);
-  const emailRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
-  const [city, setCity] = useState<HomeCity>({ name: "", lat: null, lon: null });
-  const [email, setEmail] = useState("");
   const [picks, setPicks] = useState<PlacePick[]>([]);
   const [saving, setSaving] = useState<Intent | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const first = name.trim() ? firstName(name) : null;
-  const near = city.lat !== null && city.lon !== null ? { lat: city.lat, lon: city.lon } : null;
 
-  async function save(intent: Intent) {
+  async function save(intent: Intent, listLink?: string) {
     if (saving) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError("Add a name to save the client.");
+      setError(intent === "import" ? "Add a name, then import the list." : "Add a name to save the client.");
       nameRef.current?.focus();
-      return;
-    }
-    const trimmedEmail = email.trim();
-    if (trimmedEmail && !emailSchema.safeParse(trimmedEmail).success) {
-      setError("That email address does not look right. Fix it or leave it empty.");
-      emailRef.current?.focus();
       return;
     }
     setError(null);
     setSaving(intent);
     const result = await createClientWithFavoritesAction({
       name: trimmedName,
-      homeCity: city.name.trim() || null,
-      homeLat: city.lat,
-      homeLon: city.lon,
-      email: trimmedEmail || null,
       favorites: picks.map((pick) => ({ query: pick.query, entityId: pick.entityId, near: pick.near })),
     }).catch(() => ({ ok: false as const, error: "Could not save. Check your connection and try again." }));
     if (!result.ok) {
@@ -73,7 +57,10 @@ export function NewClientForm() {
       return;
     }
     const id = result.data.id;
-    if (intent === "plan") modal.leaveTo(planTripHref(returnTo, id));
+    if (intent === "import" && listLink) {
+      holdListImport(id, listLink);
+      modal.leaveTo(`/clients/${id}`);
+    } else if (intent === "plan") modal.leaveTo(planTripHref(returnTo, id));
     else if (returnTo) modal.leaveTo(withClient(returnTo, id));
     else modal.close({ refresh: true });
   }
@@ -101,58 +88,27 @@ export function NewClientForm() {
           </button>
         </header>
 
-        <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
-          <div className="flex flex-col gap-2">
-            <label htmlFor={ids.name} className={fieldLabelClasses}>
-              Name
-            </label>
-            <div className={fieldBoxClasses}>
-              <input
-                ref={nameRef}
-                id={ids.name}
-                value={name}
-                autoFocus
-                required
-                maxLength={120}
-                autoComplete="off"
-                placeholder="Full name"
-                aria-invalid={error !== null && !name.trim() ? true : undefined}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  if (error && event.target.value.trim()) setError(null);
-                }}
-                className="h-full min-w-0 grow bg-transparent text-body-lg leading-5 font-medium text-ink placeholder:font-normal placeholder:text-text-muted focus-visible:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label htmlFor={ids.city} className={fieldLabelClasses}>
-              Home city
-            </label>
-            <CityField id={ids.city} value={city} onChange={setCity} />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-baseline justify-between">
-              <label htmlFor={ids.email} className={fieldLabelClasses}>
-                Email
-              </label>
-              <span className="text-meta text-text-muted">Optional</span>
-            </div>
-            <div className={fieldBoxClasses}>
-              <input
-                ref={emailRef}
-                id={ids.email}
-                type="email"
-                value={email}
-                maxLength={200}
-                autoComplete="off"
-                placeholder={first ? `For sending ${first} the trip link` : "For sending the trip link"}
-                onChange={(event) => setEmail(event.target.value)}
-                className="h-full min-w-0 grow bg-transparent text-body-lg leading-5 font-medium text-ink placeholder:font-normal placeholder:text-text-muted focus-visible:outline-none"
-              />
-            </div>
+        <div className="flex flex-col gap-2">
+          <label htmlFor={ids.name} className={fieldLabelClasses}>
+            Name
+          </label>
+          <div className={fieldBoxClasses}>
+            <input
+              ref={nameRef}
+              id={ids.name}
+              value={name}
+              autoFocus
+              required
+              maxLength={120}
+              autoComplete="off"
+              placeholder="Full name"
+              aria-invalid={error !== null && !name.trim() ? true : undefined}
+              onChange={(event) => {
+                setName(event.target.value);
+                if (error && event.target.value.trim()) setError(null);
+              }}
+              className="h-full min-w-0 grow bg-transparent text-body-lg leading-5 font-medium text-ink placeholder:font-normal placeholder:text-text-muted focus-visible:outline-none"
+            />
           </div>
         </div>
 
@@ -165,11 +121,16 @@ export function NewClientForm() {
           </div>
           <PlacesPicker
             inputId={ids.places}
-            near={near}
+            near={null}
             picks={picks}
             placeholder="Search a restaurant, bar or hotel by name"
             onAdd={(pick) => setPicks((list) => (list.some((p) => p.entityId === pick.entityId) ? list : [...list, pick]))}
             onRemove={(entityId) => setPicks((list) => list.filter((p) => p.entityId !== entityId))}
+          />
+          <ListLinkField
+            label="Or import a Google Maps list"
+            busy={saving === "import"}
+            onSubmit={(link) => void save("import", link)}
           />
         </section>
       </div>

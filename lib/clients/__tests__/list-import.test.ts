@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { NormalizedPlace } from "@/lib/qloo/contracts";
 
-import { exactMatch, sameName, spreadByArea } from "../list-import";
+import { exactMatch, mapLimited, sameName, spreadByArea } from "../list-import";
 
 function place(overrides: Partial<NormalizedPlace>): { place: NormalizedPlace } {
   return { place: { name: "Somewhere", lat: 19.4, lon: -99.1, googleCid: null, ...overrides } as NormalizedPlace };
@@ -24,6 +24,26 @@ describe("spreadByArea", () => {
 
   it("handles an empty list", () => {
     expect(spreadByArea([])).toEqual([]);
+  });
+});
+
+describe("mapLimited", () => {
+  it("keeps the order of the items, and never runs more than the limit", async () => {
+    let running = 0;
+    let most = 0;
+    const out = await mapLimited([30, 5, 20, 1, 10], 2, async (ms) => {
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      running -= 1;
+      return ms * 2;
+    });
+    expect(out).toEqual([60, 10, 40, 2, 20]);
+    expect(most).toBe(2);
+  });
+
+  it("handles an empty list", async () => {
+    expect(await mapLimited([], 2, async (item) => item)).toEqual([]);
   });
 });
 

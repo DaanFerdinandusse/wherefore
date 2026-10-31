@@ -25,27 +25,22 @@ describe("client rows", () => {
     expect(nextTripLabel(trip, "Priya Shah", "2026-10-26")).toBe("Lisbon in Oct");
   });
 
-  it("joins home city and next trip for the recent client row", () => {
-    expect(
-      clientLine(
-        { name: "Ana Ruiz", homeCity: "New York", nextTrip: { title: "Mexico City for Ana", startDate: "2026-11-12" } },
-        "2026-10-29",
-      ),
-    ).toBe("New York · Mexico City in Nov");
-    expect(clientLine({ name: "Tom", homeCity: "Amsterdam", nextTrip: null })).toBe("Amsterdam");
-    expect(clientLine({ name: "Tom", homeCity: null, nextTrip: null })).toBeNull();
+  it("names the next trip on the recent client row", () => {
+    expect(clientLine({ name: "Ana Ruiz", nextTrip: { title: "Mexico City for Ana", startDate: "2026-11-12" } }, "2026-10-29")).toBe(
+      "Mexico City in Nov",
+    );
+    expect(clientLine({ name: "Tom", nextTrip: null })).toBeNull();
   });
 
   it("describes a client match with the favorites count", () => {
     expect(
       clientDescription({
         name: "Ana Ruiz",
-        homeCity: "New York",
         favoritesCount: 6,
         nextTrip: { title: "Mexico City for Ana", startDate: "2026-11-12" },
       }),
-    ).toBe("New York · 6 favorites · Mexico City in Nov");
-    expect(clientDescription({ name: "Tom", homeCity: null, favoritesCount: 1, nextTrip: null })).toBe("1 favorite");
+    ).toBe("6 favorites · Mexico City in Nov");
+    expect(clientDescription({ name: "Tom", favoritesCount: 1, nextTrip: null })).toBe("1 favorite");
   });
 });
 

@@ -6,8 +6,15 @@ import { haversineM } from "@/lib/qloo/normalize";
 // put a place the client never named into their taste. Pure, so the profile
 // and the server action share it.
 
-/** Places per server action: small enough that the count moves every few seconds. */
+/** Places per server action: small enough that the count moves every second or two. */
 export const LIST_IMPORT_BATCH = 8;
+
+/**
+ * Searches at once. The API allows about 200 a minute and answers 429 past that
+ * (tested on a 177 place list: 2 at once lost 13 searches to it, 3 lost 79), and
+ * the agent's own searches share the same allowance. So 2, with a wait on a 429.
+ */
+export const LIST_SEARCHES_AT_ONCE = 2;
 
 /** How far apart the same place can sit in the two data sets. */
 export const SAME_SPOT_M = 150;
@@ -40,6 +47,20 @@ export function spreadByArea<T extends { lat: number; lon: number }>(items: read
     }
   }
   return out;
+}
+
+/** `work` over `items` with at most `limit` running at once, results in the order of `items`. */
+export async function mapLimited<T, R>(items: readonly T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await work(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 /** Case, accents and punctuation aside. */

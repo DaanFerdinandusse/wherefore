@@ -12,6 +12,7 @@ import { clientFavorites, clients, trips } from "@/lib/db/schema";
 
 import type {
   AddFavorite,
+  AddFavorites,
   ArchiveClient,
   Client,
   CreateClient,
@@ -133,6 +134,31 @@ export const addFavorite: AddFavorite = async (clientId, input, scope) => {
     .returning();
   if (!row) throw new NotFoundError("client");
   return row;
+};
+
+export const addFavorites: AddFavorites = async (clientId, inputs, scope) => {
+  await requireClientId(clientId, scope);
+  if (inputs.length === 0) return [];
+  const [last] = await db
+    .select({ position: sql<number>`coalesce(max(${clientFavorites.position}) + 1, 0)` })
+    .from(clientFavorites)
+    .where(eq(clientFavorites.clientId, clientId));
+  const start = Number(last?.position ?? 0);
+  const rows = await db
+    .insert(clientFavorites)
+    .values(
+      inputs.map((input, index) => ({
+        clientId,
+        query: input.query.trim(),
+        entityId: input.entityId ?? null,
+        placeId: input.placeId ?? null,
+        match: input.match,
+        candidates: input.candidates,
+        position: start + index,
+      })),
+    )
+    .returning();
+  return rows.sort((a, b) => a.position - b.position);
 };
 
 export const updateFavorite: UpdateFavorite = async (favoriteId, patch, scope) => {

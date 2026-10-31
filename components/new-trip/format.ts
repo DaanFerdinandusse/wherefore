@@ -27,23 +27,14 @@ export function nextTripLabel(nextTrip: NextTrip, clientName: string, today?: st
   return `${base} in ${monthShort(nextTrip.startDate)}`;
 }
 
-/** The recent client row: "New York · Mexico City in Nov". Null when neither is known. */
-export function clientLine(
-  client: { name: string; homeCity: string | null; nextTrip: NextTrip },
-  today?: string,
-): string | null {
-  const parts = [client.homeCity, nextTripLabel(client.nextTrip, client.name, today)].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
+/** The recent client row: "Mexico City in Nov". Null with no trip ahead. */
+export function clientLine(client: { name: string; nextTrip: NextTrip }, today?: string): string | null {
+  return nextTripLabel(client.nextTrip, client.name, today);
 }
 
-/** A client match under "Add a traveler": "New York · 6 favorites · Mexico City in Nov". */
-export function clientDescription(client: {
-  name: string;
-  homeCity: string | null;
-  favoritesCount: number;
-  nextTrip: NextTrip;
-}): string {
-  return [client.homeCity, plural(client.favoritesCount, "favorite"), nextTripLabel(client.nextTrip, client.name)]
+/** A client match under "Add a traveler": "6 favorites · Mexico City in Nov". */
+export function clientDescription(client: { name: string; favoritesCount: number; nextTrip: NextTrip }): string {
+  return [plural(client.favoritesCount, "favorite"), nextTripLabel(client.nextTrip, client.name)]
     .filter(Boolean)
     .join(" · ");
 }
